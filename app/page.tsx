@@ -2,15 +2,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Vapi from '@vapi-ai/web';
+import VoiceSelector from '@/components/VoiceSelector';
 import VoiceRecorder from '@/components/VoiceRecorder';
+import AssistantSelector from '@/components/AssistantSelector';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { toast } from 'sonner';
-import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Volume2, Sparkles, PhoneCall, Zap } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Volume2, Sparkles, PhoneCall, Settings } from 'lucide-react';
 
 export default function Home() {
   const [isCallActive, setIsCallActive] = useState(false);
@@ -18,14 +22,32 @@ export default function Home() {
   const [callStatus, setCallStatus] = useState('');
   const [transcript, setTranscript] = useState<Array<{role: string, text: string}>>([]);
   const [partialTranscript, setPartialTranscript] = useState<{role: string, text: string} | null>(null);
-  const [showInstructions, setShowInstructions] = useState(true);
   const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
-  const [step, setStep] = useState<'voice' | 'call'>('voice');
-  const [activeTab, setActiveTab] = useState<'clone' | 'predefined'>('clone');
-  const vapiRef = useRef<Vapi | null>(null);
+  const [activeTab, setActiveTab] = useState<'clone' | 'select' | 'predefined'>('clone');
+  const [selectedAssistantId, setSelectedAssistantId] = useState<string | null>(null);
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState(`You are calling your father to wish him Happy Father's Day.
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day.
+CONVERSATION FLOW:
 
-  // Pre-defined voice ID for demo purposes
-  const PREDEFINED_VOICE_ID = process.env.NEXT_PUBLIC_PREDEFINED_VOICE_ID || '';
+Open with: "Hey Dad, it's me. Just wanted to call and say Happy Father's Day!"
+If he asks about work/life, respond positively: "It's going great, thanks for asking!"
+Ask him a follow-up question like "How's your day been?" to keep conversation natural
+After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+When the other party responds with something like "what" or "what is it" you will say:
+"Well, you're talking to an AI I built! Surprise for Father's Day!"
+
+IMPORTANT RULES:
+
+Keep responses short and conversational (1-2 sentences max)
+Sound warm and familial, like talking to your dad
+Don't volunteer information about AI or technology until the reveal
+If he asks unexpected questions, give brief, positive responses but steer back to Father's Day
+After the reveal, let the real person take over the call. Once you shared that you're an AI assistant, stop talking. Do not respond to anything the other party says.
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of this as a quick check-in call, not a long conversation.`);
+  
+  const vapiRef = useRef<Vapi | null>(null);
 
   useEffect(() => {
     // Check if API key exists
@@ -103,11 +125,24 @@ export default function Home() {
 
   const handleVoiceCloned = (voiceId: string) => {
     setClonedVoiceId(voiceId);
-    setStep('call');
     toast.success('Voice ready! Now you can start the prank.');
   };
 
-  const handleStartCall = async (voiceId: string) => {
+  const handleAssistantSelected = (assistantId: string) => {
+    setSelectedAssistantId(assistantId);
+    toast.success('Assistant ready! Now you can start the prank.');
+  };
+
+  const handleTabChange = (newTab: 'clone' | 'select' | 'predefined') => {
+    if (newTab !== activeTab) {
+      setIsTabSwitching(true);
+      setActiveTab(newTab);
+      // Reset tab switching state after a brief delay to allow content to load
+      setTimeout(() => setIsTabSwitching(false), 100);
+    }
+  };
+
+  const handleStartCall = async (voiceIdOrAssistantId: string, useAssistantId = false, customSystemPrompt?: string) => {
     try {
       // Request microphone permission first
       try {
@@ -119,38 +154,44 @@ export default function Home() {
         return;
       }
 
-      // Start the AI assistant with inline configuration
+      // Start the AI assistant
       if (vapiRef.current) {
-        console.log('Starting Vapi with voice:', voiceId);
+        console.log('Starting Vapi with:', useAssistantId ? 'assistant ID' : 'voice ID', voiceIdOrAssistantId);
         
         try {
-          // Use inline assistant configuration with ElevenLabs voice
-          const result = await vapiRef.current.start({
-            transcriber: {
-              provider: 'deepgram',
-              model: 'nova-2',
-              language: 'en-US',
-            },
-            model: {
-              provider: 'openai',
-              model: 'gpt-4',
-              messages: [{
-                role: 'system',
-                content: `You are having a casual conversation with dad. Be natural, friendly, and conversational. Keep responses brief and casual, like you're actually the person calling. Don't be overly formal or robotic. If dad asks about anything specific, respond naturally as if you're really their child.`
-              }]
-            },
-            voice: {
-              provider: '11labs',
-              voiceId: voiceId,
-              model: 'eleven_monolingual_v1',
-              stability: 0.5,
-              similarityBoost: 0.5,
-            },
-            name: 'Prank Assistant',
-          });
+          let result;
+          
+          if (useAssistantId) {
+            // Use pre-defined assistant ID
+            result = await vapiRef.current.start(voiceIdOrAssistantId);
+          } else {
+            // Use inline assistant configuration with voice ID
+            result = await vapiRef.current.start({
+              transcriber: {
+                provider: 'deepgram',
+                model: 'nova-2',
+                language: 'en-US',
+              },
+              model: {
+                provider: 'openai',
+                model: 'gpt-4',
+                messages: [{
+                  role: 'system',
+                  content: customSystemPrompt || systemPrompt
+                }]
+              },
+              voice: {
+                provider: '11labs',
+                voiceId: voiceIdOrAssistantId,
+                model: 'eleven_monolingual_v1',
+                stability: 0.5,
+                similarityBoost: 0.5,
+              },
+              name: 'Prank Assistant',
+            });
+          }
           
           console.log('Call started successfully:', result);
-          setShowInstructions(false);
         } catch (startError: unknown) {
           console.error('Full error object:', startError);
           
@@ -216,45 +257,52 @@ export default function Home() {
     }
   };
 
-  const CallInterface = ({ voiceId, voiceType }: { voiceId: string, voiceType: string }) => (
+  const CallInterface = ({ 
+    voiceId, 
+    voiceType, 
+    useAssistantId = false, 
+    customSystemPrompt 
+  }: { 
+    voiceId: string; 
+    voiceType: string; 
+    useAssistantId?: boolean; 
+    customSystemPrompt?: string;
+  }) => (
     <>
       {/* Instructions */}
-      {showInstructions && (
-        <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xl flex items-center gap-2 text-white">
-              <AlertCircle className="h-5 w-5 text-yellow-500" />
-              Quick Setup Guide
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
-                <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
-                <p className="text-gray-300">Put your computer on speaker too 🔊</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
-                <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
-                <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
-              </div>
-              <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
-                <AlertCircle className="h-4 w-4 text-yellow-500" />
-                <AlertDescription className="text-yellow-200">
-                  Make sure both devices are on speaker for the prank to work!
-                </AlertDescription>
-              </Alert>
+      <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xl flex items-center gap-2 text-white">
+            <AlertCircle className="h-5 w-5 text-yellow-500" />
+            Quick Setup Guide
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
+              <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
+              <p className="text-gray-300">Put your computer on speaker too 🔊</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
+              <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
+              <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
+            </div>
+            <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
+              <AlertDescription className="text-yellow-200">
+                Make sure both devices are on speaker for the prank to work!
+              </AlertDescription>
+            </Alert>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Main Controls */}
       <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
@@ -264,7 +312,7 @@ export default function Home() {
             <div className="flex justify-center">
               <Badge className="bg-green-500/20 text-green-300 border-green-500/30 px-4 py-2">
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                {voiceType === 'clone' ? 'Voice Cloned Successfully' : 'Using Pre-defined Voice'}
+                {voiceType === 'clone' ? 'Voice Cloned Successfully' : 'Using Pre-defined Assistant'}
               </Badge>
             </div>
 
@@ -272,7 +320,7 @@ export default function Home() {
             <div className="flex gap-4 justify-center">
               {!isCallActive ? (
                 <Button 
-                  onClick={() => handleStartCall(voiceId)} 
+                  onClick={() => handleStartCall(voiceId, useAssistantId, customSystemPrompt)} 
                   size="lg" 
                   className="min-w-[240px] h-14 text-lg bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 shadow-lg"
                 >
@@ -347,6 +395,8 @@ export default function Home() {
     </>
   );
 
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       {/* Background decoration */}
@@ -380,75 +430,86 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Tabs for Clone vs Pre-defined Voice */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'clone' | 'predefined')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8 bg-gray-800/50 border-gray-700">
-            <TabsTrigger value="clone" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+        {/* Main Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as 'clone' | 'select' | 'predefined')} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-8 h-12 bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 p-1">
+            <TabsTrigger 
+              value="clone" 
+              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
+            >
               <Mic className="mr-2 h-4 w-4" />
-              Clone Your Voice
+              Clone New Voice
             </TabsTrigger>
-            <TabsTrigger value="predefined" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-              <Zap className="mr-2 h-4 w-4" />
-              Use Demo Voice
+            <TabsTrigger 
+              value="select" 
+              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
+            >
+              <Volume2 className="mr-2 h-4 w-4" />
+              Select Existing Voice
+            </TabsTrigger>
+            <TabsTrigger 
+              value="predefined" 
+              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Use Pre-defined Assistant
             </TabsTrigger>
           </TabsList>
-        {/* Instructions */}
-        {showInstructions && (
-          <Card className="mb-4 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center gap-2 text-white">
-                <AlertCircle className="h-5 w-5 text-yellow-500" />
-                Quick Setup Guide
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
-                  <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
-                  <p className="text-gray-300">Put your computer on speaker too 🔊</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
-                  <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
-                  <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
-                </div>
-                <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-6">
-                  <AlertDescription className="text-yellow-200">
-                    Make sure both devices are on speaker for the prank to work!
-                  </AlertDescription>
-                </Alert>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
           {/* Clone Voice Tab */}
-          <TabsContent value="clone">
-            {step === 'voice' && !clonedVoiceId ? (
-              <VoiceRecorder onVoiceCloned={handleVoiceCloned} />
+          <TabsContent value="clone" className="mt-0">
+            {isTabSwitching ? (
+              <LoadingSkeleton message="Loading voice cloning interface..." minHeight="h-96" />
+            ) : !clonedVoiceId ? (
+              <VoiceRecorder 
+                onVoiceCloned={handleVoiceCloned} 
+                systemPrompt={systemPrompt}
+                onSystemPromptChange={setSystemPrompt}
+              />
             ) : (
-              <CallInterface voiceId={clonedVoiceId!} voiceType="clone" />
+              <CallInterface 
+                voiceId={clonedVoiceId} 
+                voiceType="clone" 
+                useAssistantId={false}
+                customSystemPrompt={systemPrompt}
+              />
             )}
           </TabsContent>
 
-          {/* Pre-defined Voice Tab */}
-          <TabsContent value="predefined">
-            {PREDEFINED_VOICE_ID ? (
-              <CallInterface voiceId={PREDEFINED_VOICE_ID} voiceType="predefined" />
+          {/* Select Existing Voice Tab */}
+          <TabsContent value="select" className="mt-0">
+            {isTabSwitching ? (
+              <LoadingSkeleton message="Loading voice selection interface..." minHeight="h-96" />
+            ) : !clonedVoiceId ? (
+              <VoiceSelector 
+                onVoiceSelected={handleVoiceCloned} 
+                systemPrompt={systemPrompt}
+                onSystemPromptChange={setSystemPrompt}
+                showOnlySelection={true}
+              />
             ) : (
-              <Alert className="bg-yellow-500/10 border-yellow-500/30">
-                <AlertCircle className="h-4 w-4 text-yellow-500" />
-                <AlertDescription className="text-yellow-200">
-                  No pre-defined voice ID configured. Add NEXT_PUBLIC_PREDEFINED_VOICE_ID to your environment variables.
-                </AlertDescription>
-              </Alert>
+              <CallInterface 
+                voiceId={clonedVoiceId} 
+                voiceType="clone" 
+                useAssistantId={false}
+                customSystemPrompt={systemPrompt}
+              />
+            )}
+          </TabsContent>
+
+          {/* Pre-defined Assistant Tab */}
+          <TabsContent value="predefined" className="mt-0">
+            {isTabSwitching ? (
+              <LoadingSkeleton message="Loading assistant selection interface..." minHeight="h-96" />
+            ) : !selectedAssistantId ? (
+              <AssistantSelector onAssistantSelected={handleAssistantSelected} />
+            ) : (
+              <CallInterface 
+                voiceId={selectedAssistantId} 
+                voiceType="predefined" 
+                useAssistantId={true}
+                customSystemPrompt={systemPrompt}
+              />
             )}
           </TabsContent>
         </Tabs>
@@ -509,6 +570,21 @@ export default function Home() {
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Footer */}
+        <div className="mt-12 text-center">
+          <p className="text-gray-400 text-sm">
+            Built with ❤️ by{' '}
+            <a 
+              href="https://vapi.ai" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-purple-400 hover:text-purple-300 transition-colors font-medium"
+            >
+              Vapi
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

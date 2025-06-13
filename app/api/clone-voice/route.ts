@@ -28,10 +28,30 @@ export async function POST(request: NextRequest) {
     elevenLabsFormData.append('remove_background_noise', 'true');
     elevenLabsFormData.append('description', 'Voice cloned for Prank Your Dad app');
     
-    // Add all audio files
-    for (const file of files) {
-      elevenLabsFormData.append('files[]', file);
+    // Add all audio files - ElevenLabs expects 'files' not 'files[]'
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`Processing file ${i}:`, {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+      
+      // Convert WebM to a more compatible format name if needed
+      const fileName = file.name.replace('.webm', '.wav');
+      const newFile = new File([file], fileName, { 
+        type: file.type.includes('webm') ? 'audio/wav' : file.type 
+      });
+      
+      elevenLabsFormData.append('files', newFile);
     }
+    
+    // Log what we're sending
+    console.log('Sending to ElevenLabs:', {
+      name,
+      fileCount: files.length,
+      files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
+    });
 
     // Make request to ElevenLabs
     const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
@@ -43,10 +63,26 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('ElevenLabs error:', error);
+      const errorText = await response.text();
+      console.error('ElevenLabs error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(errorText);
+      } catch {
+        errorDetails = errorText;
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to clone voice', details: error },
+        { 
+          error: 'Failed to clone voice', 
+          details: errorDetails,
+          status: response.status 
+        },
         { status: response.status }
       );
     }
