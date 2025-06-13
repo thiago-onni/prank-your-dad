@@ -1,32 +1,32 @@
 # Prank Your Dad - AI Voice Demo
 
-An AI-powered Father's Day surprise app that allows seamless transitions between an AI assistant (using your cloned voice) and yourself during a phone call.
+An AI-powered voice assistant demo that showcases seamless transitions between an AI agent and yourself during a phone call, built with Vapi.
 
-## 🎬 Demo Script Reference
+## Demo Concept
 
-This app was built for the Vapi Father's Day ad:
+This application was built to demonstrate the Vapi platform's capabilities through a Father's Day scenario:
 
-> "This Father's Day, I decided to build an AI agent to call dad for me… using my voice. And he didn't notice."
+"This Father's Day, I decided to build an AI agent to call dad for me... using my voice. And he didn't notice."
 
-## 🚀 Features
+## Features
 
-- **Voice Cloning**: Uses Vapi AI with your pre-cloned voice
-- **Seamless Control**: Mute/unmute AI assistant at any time
-- **Real-time Transcript**: See the conversation as it happens
-- **Simple Setup**: Clear instructions for the speaker-based prank
+- **Voice AI Integration**: Uses Vapi with pre-configured voice cloning
+- **Real-time Control**: Mute and unmute the AI assistant during live calls
+- **Live Transcript**: View conversation in real-time
+- **Simple Setup**: Clear instructions for demonstration purposes
 
-## 📋 Prerequisites
+## Prerequisites
 
-- Vapi account with API keys
+- Vapi account with API credentials
 - Pre-configured assistant with voice clone (Assistant ID)
-- Node.js 18+ installed
-- Two devices: your phone and computer
+- Node.js 18 or higher
+- Two devices: phone and computer with speakers
 
-## 🛠️ Setup
+## Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/VapiAI/prank-your-dad.git
    cd prank-your-dad
    ```
 
@@ -39,11 +39,8 @@ This app was built for the Vapi Father's Day ad:
    
    Create a `.env.local` file with your Vapi credentials:
    ```
-   # Vapi API Keys
    NEXT_PUBLIC_VAPI_PUBLIC_KEY=your-public-key
    VAPI_PRIVATE_KEY=your-private-key
-   
-   # Assistant ID (with voice clone)
    NEXT_PUBLIC_VAPI_ASSISTANT_ID=your-assistant-id
    ```
 
@@ -52,41 +49,39 @@ This app was built for the Vapi Father's Day ad:
    npm run dev
    ```
 
-5. **Open the app**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+5. **Access the application**
+   Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## 🎭 How to Use
+## Usage Instructions
 
-1. **Call Dad from Your Phone**: Use your regular phone and put it on speaker
-2. **Computer on Speaker**: Make sure your computer audio is also on speaker
-3. **Start AI Assistant**: Click the button to activate the AI voice
-4. **Control the Conversation**: 
-   - Click "AI Muted" when you want to speak
-   - Click "AI Active" to let the AI continue
-   - The transcript shows in real-time
+1. Call your dad from a phone and enable speaker mode
+2. Ensure your computer audio is also set to speaker output
+3. Click "Start AI Assistant" to begin the demonstration
+4. Use the mute/unmute controls to switch between AI and personal speech
+5. Monitor the live conversation transcript
 
-## 🔧 Technical Details
+## Technical Implementation
 
-- **Frontend**: Next.js 15 with TypeScript
-- **Styling**: Tailwind CSS
-- **Voice AI**: Vapi Web SDK
-- **Architecture**: Client-side voice control with optional server API
+- **Framework**: Next.js 15 with TypeScript
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **Voice AI**: Vapi Web SDK, ElevenLabs API
+- **Architecture**: Client-side voice control with server-side validation
 
-## 📝 Important Notes
+## Important Notes
 
-- Both devices must be on speaker for the prank to work
-- The AI uses your pre-cloned voice from Vapi
-- Ensure good internet connection for best results
-- Test the setup before the actual call
+- Both devices must use speaker output for proper demonstration
+- Requires stable internet connection for optimal performance
+- Test the setup before live demonstrations
+- The AI uses your pre-configured voice clone from Vapi
 
-## 🤝 Contributing
+## Contributing
 
-Feel free to submit issues and enhancement requests!
+Issues and pull requests are welcome. Please ensure any changes maintain the demo's simplicity and effectiveness.
 
-## 📄 License
+## License
 
-MIT License - feel free to use this for your own pranks!
+MIT License - See LICENSE file for details
 
 ---
 
-Built with ❤️ for Father's Day using [Vapi AI](https://vapi.ai)
+Built with ❤️ for Father's Day using [Vapi AI](https://vapi.ai/)
