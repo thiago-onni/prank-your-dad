@@ -5,7 +5,6 @@ import Vapi from '@vapi-ai/web';
 import VoiceSelector from '@/components/VoiceSelector';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import AssistantSelector from '@/components/AssistantSelector';
-import LoadingSkeleton from '@/components/LoadingSkeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -25,7 +24,6 @@ export default function Home() {
   const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'select' | 'predefined'>('clone');
   const [selectedAssistantId, setSelectedAssistantId] = useState<string | null>(null);
-  const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(`You are calling your father to wish him Happy Father's Day.
 YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day.
 CONVERSATION FLOW:
@@ -131,15 +129,6 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
   const handleAssistantSelected = (assistantId: string) => {
     setSelectedAssistantId(assistantId);
     toast.success('Assistant ready! Now you can start the prank.');
-  };
-
-  const handleTabChange = (newTab: 'clone' | 'select' | 'predefined') => {
-    if (newTab !== activeTab) {
-      setIsTabSwitching(true);
-      setActiveTab(newTab);
-      // Reset tab switching state after a brief delay to allow content to load
-      setTimeout(() => setIsTabSwitching(false), 100);
-    }
   };
 
   const handleStartCall = async (voiceIdOrAssistantId: string, useAssistantId = false, customSystemPrompt?: string) => {
@@ -431,7 +420,7 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
         </div>
 
         {/* Main Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as 'clone' | 'select' | 'predefined')} className="w-full">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'clone' | 'select' | 'predefined')} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8 h-12 bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 p-1">
             <TabsTrigger 
               value="clone" 
@@ -458,9 +447,7 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
 
           {/* Clone Voice Tab */}
           <TabsContent value="clone" className="mt-0">
-            {isTabSwitching ? (
-              <LoadingSkeleton message="Loading voice cloning interface..." minHeight="h-96" />
-            ) : !clonedVoiceId ? (
+            {!clonedVoiceId ? (
               <VoiceRecorder 
                 onVoiceCloned={handleVoiceCloned} 
                 systemPrompt={systemPrompt}
@@ -478,9 +465,7 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
 
           {/* Select Existing Voice Tab */}
           <TabsContent value="select" className="mt-0">
-            {isTabSwitching ? (
-              <LoadingSkeleton message="Loading voice selection interface..." minHeight="h-96" />
-            ) : !clonedVoiceId ? (
+            {!clonedVoiceId ? (
               <VoiceSelector 
                 onVoiceSelected={handleVoiceCloned} 
                 systemPrompt={systemPrompt}
@@ -499,9 +484,7 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
 
           {/* Pre-defined Assistant Tab */}
           <TabsContent value="predefined" className="mt-0">
-            {isTabSwitching ? (
-              <LoadingSkeleton message="Loading assistant selection interface..." minHeight="h-96" />
-            ) : !selectedAssistantId ? (
+            {!selectedAssistantId ? (
               <AssistantSelector onAssistantSelected={handleAssistantSelected} />
             ) : (
               <CallInterface 
