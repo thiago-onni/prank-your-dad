@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Vapi from '@vapi-ai/web';
+import VoiceRecorder from '@/components/VoiceRecorder';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Volume2, Sparkles, PhoneCall } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Volume2, Sparkles, PhoneCall, Zap } from 'lucide-react';
 
 export default function Home() {
   const [isCallActive, setIsCallActive] = useState(false);
@@ -17,7 +19,13 @@ export default function Home() {
   const [transcript, setTranscript] = useState<Array<{role: string, text: string}>>([]);
   const [partialTranscript, setPartialTranscript] = useState<{role: string, text: string} | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
+  const [step, setStep] = useState<'voice' | 'call'>('voice');
+  const [activeTab, setActiveTab] = useState<'clone' | 'predefined'>('clone');
   const vapiRef = useRef<Vapi | null>(null);
+
+  // Pre-defined voice ID for demo purposes
+  const PREDEFINED_VOICE_ID = process.env.NEXT_PUBLIC_PREDEFINED_VOICE_ID || '';
 
   useEffect(() => {
     // Check if API key exists
@@ -93,39 +101,14 @@ export default function Home() {
     };
   }, []);
 
-  const handleStartCall = async () => {
+  const handleVoiceCloned = (voiceId: string) => {
+    setClonedVoiceId(voiceId);
+    setStep('call');
+    toast.success('Voice ready! Now you can start the prank.');
+  };
+
+  const handleStartCall = async (voiceId: string) => {
     try {
-      // Check assistant ID
-      const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
-      if (!assistantId) {
-        toast.error('Missing assistant ID. Please check your environment variables.');
-        setCallStatus('Error: Missing assistant ID');
-        return;
-      }
-
-      // Validate assistant exists
-      setCallStatus('Validating assistant...');
-      try {
-        const validateResponse = await fetch('/api/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assistantId })
-        });
-        
-        const validateResult = await validateResponse.json();
-        if (!validateResult.success) {
-          console.error('Assistant validation failed:', validateResult);
-          setCallStatus('Error: Invalid assistant ID');
-          toast.error('The assistant ID is invalid or not found.');
-          return;
-        }
-        console.log('Assistant validated:', validateResult.assistant);
-      } catch (validateError) {
-        console.error('Validation error:', validateError);
-        setCallStatus('Error: Failed to validate assistant');
-        return;
-      }
-
       // Request microphone permission first
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -136,17 +119,36 @@ export default function Home() {
         return;
       }
 
-      // Start the AI assistant
+      // Start the AI assistant with inline configuration
       if (vapiRef.current) {
-        console.log('Starting Vapi with:');
-        console.log('- Assistant ID:', assistantId);
-        console.log('- API Key:', process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.substring(0, 10) + '...');
+        console.log('Starting Vapi with voice:', voiceId);
         
         try {
-          // According to Vapi docs, start() accepts either:
-          // 1. A string (assistantId)
-          // 2. An assistant configuration object
-          const result = await vapiRef.current.start(assistantId);
+          // Use inline assistant configuration with ElevenLabs voice
+          const result = await vapiRef.current.start({
+            transcriber: {
+              provider: 'deepgram',
+              model: 'nova-2',
+              language: 'en-US',
+            },
+            model: {
+              provider: 'openai',
+              model: 'gpt-4',
+              messages: [{
+                role: 'system',
+                content: `You are having a casual conversation with dad. Be natural, friendly, and conversational. Keep responses brief and casual, like you're actually the person calling. Don't be overly formal or robotic. If dad asks about anything specific, respond naturally as if you're really their child.`
+              }]
+            },
+            voice: {
+              provider: '11labs',
+              voiceId: voiceId,
+              model: 'eleven_monolingual_v1',
+              stability: 0.5,
+              similarityBoost: 0.5,
+            },
+            name: 'Prank Assistant',
+          });
+          
           console.log('Call started successfully:', result);
           setShowInstructions(false);
         } catch (startError: unknown) {
@@ -157,9 +159,6 @@ export default function Home() {
           if (errorStr.includes('401') || errorStr.includes('403') || errorStr.includes('auth')) {
             setCallStatus('Error: Authentication failed - check API key');
             toast.error('Authentication failed. Please verify your Vapi API key.');
-          } else if (errorStr.includes('404')) {
-            setCallStatus('Error: Assistant not found');
-            toast.error('Assistant not found. Please verify the assistant ID.');
           } else {
             setCallStatus('Error: Failed to start call');
             toast.error('Failed to start the AI call. Check console for details.');
@@ -217,6 +216,137 @@ export default function Home() {
     }
   };
 
+  const CallInterface = ({ voiceId, voiceType }: { voiceId: string, voiceType: string }) => (
+    <>
+      {/* Instructions */}
+      {showInstructions && (
+        <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl flex items-center gap-2 text-white">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              Quick Setup Guide
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
+                <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
+                <p className="text-gray-300">Put your computer on speaker too 🔊</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
+                <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
+                <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
+              </div>
+              <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
+                <AlertDescription className="text-yellow-200">
+                  Make sure both devices are on speaker for the prank to work!
+                </AlertDescription>
+              </Alert>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Controls */}
+      <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+        <CardContent className="pt-8 pb-8">
+          <div className="flex flex-col gap-6">
+            {/* Voice Ready Badge */}
+            <div className="flex justify-center">
+              <Badge className="bg-green-500/20 text-green-300 border-green-500/30 px-4 py-2">
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                {voiceType === 'clone' ? 'Voice Cloned Successfully' : 'Using Pre-defined Voice'}
+              </Badge>
+            </div>
+
+            {/* Control Buttons */}
+            <div className="flex gap-4 justify-center">
+              {!isCallActive ? (
+                <Button 
+                  onClick={() => handleStartCall(voiceId)} 
+                  size="lg" 
+                  className="min-w-[240px] h-14 text-lg bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 shadow-lg"
+                >
+                  <Phone className="mr-2 h-6 w-6" />
+                  Start AI Assistant
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    onClick={handleEndCall} 
+                    size="lg" 
+                    variant="destructive"
+                    className="min-w-[160px] h-14 text-lg shadow-lg"
+                  >
+                    <PhoneOff className="mr-2 h-6 w-6" />
+                    End Call
+                  </Button>
+                  <Button 
+                    onClick={toggleMute}
+                    size="lg"
+                    variant={isMuted ? "outline" : "secondary"}
+                    className={`min-w-[160px] h-14 text-lg shadow-lg ${
+                      isMuted 
+                        ? 'bg-yellow-500/10 hover:bg-yellow-500/20 border-yellow-500/50 text-yellow-300' 
+                        : 'bg-gray-700 hover:bg-gray-600 text-white'
+                    }`}
+                  >
+                    {isMuted ? (
+                      <>
+                        <MicOff className="mr-2 h-6 w-6" />
+                        AI Muted
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="mr-2 h-6 w-6" />
+                        AI Active
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* Status Display */}
+            {callStatus && (
+              <div className="flex items-center justify-center gap-3 text-sm">
+                <Badge 
+                  variant="outline"
+                  className={`px-4 py-2 flex items-center gap-2 ${
+                    callStatus.includes('Error') 
+                      ? 'bg-red-500/10 text-red-300 border-red-500/30' 
+                      : callStatus.includes('Connected') 
+                        ? 'bg-green-500/10 text-green-300 border-green-500/30'
+                        : 'bg-gray-700/50 text-gray-300 border-gray-600'
+                  }`}
+                >
+                  {callStatus.includes('Speaking') && <Volume2 className="h-4 w-4 animate-pulse" />}
+                  {callStatus.includes('Connected') && <CheckCircle2 className="h-4 w-4" />}
+                  {callStatus.includes('Error') && <AlertCircle className="h-4 w-4" />}
+                  {callStatus}
+                </Badge>
+                {isCallActive && isMuted && (
+                  <Badge variant="outline" className="px-4 py-2 animate-pulse bg-yellow-500/10 text-yellow-300 border-yellow-500/30">
+                    ⚠️ AI is silent - Dad only hears you
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       {/* Background decoration */}
@@ -250,128 +380,46 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Instructions */}
-        {showInstructions && (
-          <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-2 text-white">
-                <AlertCircle className="h-5 w-5 text-yellow-500" />
-                Quick Setup Guide
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
-                  <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
-                  <p className="text-gray-300">Put your computer on speaker too 🔊</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
-                  <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
-                  <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
-                </div>
-                <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
-                  <AlertDescription className="text-yellow-200">
-                    Make sure both devices are on speaker for the prank to work!
-                  </AlertDescription>
-                </Alert>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Tabs for Clone vs Pre-defined Voice */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'clone' | 'predefined')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-8 bg-gray-800/50 border-gray-700">
+            <TabsTrigger value="clone" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+              <Mic className="mr-2 h-4 w-4" />
+              Clone Your Voice
+            </TabsTrigger>
+            <TabsTrigger value="predefined" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+              <Zap className="mr-2 h-4 w-4" />
+              Use Demo Voice
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Main Controls */}
-        <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-          <CardContent className="pt-8 pb-8">
-            <div className="flex flex-col gap-6">
-              {/* Control Buttons */}
-              <div className="flex gap-4 justify-center">
-                {!isCallActive ? (
-                  <Button 
-                    onClick={handleStartCall} 
-                    size="lg" 
-                    className="min-w-[240px] h-14 text-lg bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 shadow-lg"
-                  >
-                    <Phone className="mr-2 h-6 w-6" />
-                    Start AI Assistant
-                  </Button>
-                ) : (
-                  <>
-                    <Button 
-                      onClick={handleEndCall} 
-                      size="lg" 
-                      variant="destructive"
-                      className="min-w-[160px] h-14 text-lg shadow-lg"
-                    >
-                      <PhoneOff className="mr-2 h-6 w-6" />
-                      End Call
-                    </Button>
-                    <Button 
-                      onClick={toggleMute}
-                      size="lg"
-                      variant={isMuted ? "outline" : "secondary"}
-                      className={`min-w-[160px] h-14 text-lg shadow-lg ${
-                        isMuted 
-                          ? 'bg-yellow-500/10 hover:bg-yellow-500/20 border-yellow-500/50 text-yellow-300' 
-                          : 'bg-gray-700 hover:bg-gray-600 text-white'
-                      }`}
-                    >
-                      {isMuted ? (
-                        <>
-                          <MicOff className="mr-2 h-6 w-6" />
-                          AI Muted
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="mr-2 h-6 w-6" />
-                          AI Active
-                        </>
-                      )}
-                    </Button>
-                  </>
-                )}
-              </div>
+          {/* Clone Voice Tab */}
+          <TabsContent value="clone">
+            {step === 'voice' && !clonedVoiceId ? (
+              <VoiceRecorder onVoiceCloned={handleVoiceCloned} />
+            ) : (
+              <CallInterface voiceId={clonedVoiceId!} voiceType="clone" />
+            )}
+          </TabsContent>
 
-              {/* Status Display */}
-              {callStatus && (
-                <div className="flex items-center justify-center gap-3 text-sm">
-                  <Badge 
-                    variant="outline"
-                    className={`px-4 py-2 flex items-center gap-2 ${
-                      callStatus.includes('Error') 
-                        ? 'bg-red-500/10 text-red-300 border-red-500/30' 
-                        : callStatus.includes('Connected') 
-                          ? 'bg-green-500/10 text-green-300 border-green-500/30'
-                          : 'bg-gray-700/50 text-gray-300 border-gray-600'
-                    }`}
-                  >
-                    {callStatus.includes('Speaking') && <Volume2 className="h-4 w-4 animate-pulse" />}
-                    {callStatus.includes('Connected') && <CheckCircle2 className="h-4 w-4" />}
-                    {callStatus.includes('Error') && <AlertCircle className="h-4 w-4" />}
-                    {callStatus}
-                  </Badge>
-                  {isCallActive && isMuted && (
-                    <Badge variant="outline" className="px-4 py-2 animate-pulse bg-yellow-500/10 text-yellow-300 border-yellow-500/30">
-                      ⚠️ AI is silent - Dad only hears you
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          {/* Pre-defined Voice Tab */}
+          <TabsContent value="predefined">
+            {PREDEFINED_VOICE_ID ? (
+              <CallInterface voiceId={PREDEFINED_VOICE_ID} voiceType="predefined" />
+            ) : (
+              <Alert className="bg-yellow-500/10 border-yellow-500/30">
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
+                <AlertDescription className="text-yellow-200">
+                  No pre-defined voice ID configured. Add NEXT_PUBLIC_PREDEFINED_VOICE_ID to your environment variables.
+                </AlertDescription>
+              </Alert>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {/* Transcript */}
         {(transcript.length > 0 || partialTranscript) && (
-          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl mt-8">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl text-white">Live Conversation</CardTitle>
             </CardHeader>
