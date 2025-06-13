@@ -252,8 +252,8 @@ export default function Home() {
 
         {/* Instructions */}
         {showInstructions && (
-          <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader className="pb-4">
+          <Card className="mb-4 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+            <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2 text-white">
                 <AlertCircle className="h-5 w-5 text-yellow-500" />
                 Quick Setup Guide
@@ -261,24 +261,23 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
                   <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
                 </div>
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
                   <p className="text-gray-300">Put your computer on speaker too 🔊</p>
                 </div>
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
                   <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
                 </div>
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
                   <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
                 </div>
-                <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
+                <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-6">
                   <AlertDescription className="text-yellow-200">
                     Make sure both devices are on speaker for the prank to work!
                   </AlertDescription>
