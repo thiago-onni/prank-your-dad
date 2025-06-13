@@ -2,13 +2,13 @@
 
 An AI-powered Father's Day surprise app that allows you to clone your voice on the spot and use it with an AI assistant to prank your dad.
 
-## 🎬 Demo Script Reference
+## Demo Concept
 
-This app was built for the Vapi Father's Day ad:
+This application was built to demonstrate the Vapi platform's capabilities through a Father's Day scenario:
 
-> "This Father's Day, I decided to build an AI agent to call dad for me… using my voice. And he didn't notice."
+"This Father's Day, I decided to build an AI agent to call dad for me... using my voice. And he didn't notice."
 
-## 🚀 Features
+## Features
 
 - **Instant Voice Cloning**: Clone your voice directly in the web app using ElevenLabs
 - **Real-time AI Assistant**: Creates a Vapi assistant on the fly with your cloned voice
@@ -16,7 +16,7 @@ This app was built for the Vapi Father's Day ad:
 - **Real-time Transcript**: See the conversation as it happens
 - **Simple Setup**: Clear instructions for the speaker-based prank
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Vapi account with API keys
 - ElevenLabs account with API key
@@ -24,18 +24,19 @@ This app was built for the Vapi Father's Day ad:
 - Two devices: your phone and computer
 - Microphone for voice recording
 
-## 🛠️ Setup
+## Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/VapiAI/prank-your-dad.git
    cd prank-your-dad
    ```
 
 2. **Install dependencies**
    ```bash
    bun install
-   # or npm install
+   # -or-
+   npm install
    ```
 
 3. **Configure environment variables**
@@ -68,10 +69,10 @@ This app was built for the Vapi Father's Day ad:
    # or npm run dev
    ```
 
-5. **Open the app**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+5. **Access the application**
+   Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## 🎭 How to Use
+## Usage Instructions
 
 ### Option 1: Clone Your Voice (Default Tab)
 1. Enter a name for your voice (e.g., "My Voice")
@@ -93,7 +94,7 @@ This app was built for the Vapi Father's Day ad:
    - Click "AI Active" to let the AI continue speaking
    - The transcript shows in real-time
 
-## 🔧 Technical Details
+## Technical Implementation
 
 - **Frontend**: Next.js 15 with TypeScript
 - **UI Components**: shadcn/ui with Tailwind CSS v4
@@ -101,7 +102,7 @@ This app was built for the Vapi Father's Day ad:
 - **Voice AI**: Vapi Web SDK with inline assistant configuration
 - **Architecture**: Client-side voice control with server-side voice cloning
 
-## 📝 Important Notes
+## Important Notes
 
 - Both devices must be on speaker for the prank to work
 - The AI uses your freshly cloned voice from ElevenLabs
@@ -109,13 +110,13 @@ This app was built for the Vapi Father's Day ad:
 - Ensure good internet connection for real-time voice synthesis
 - Test the setup before the actual call
 
-## 🤝 Contributing
+## Contributing
 
-Feel free to submit issues and enhancement requests!
+Issues and pull requests are welcome. Please ensure any changes maintain the demo's simplicity and effectiveness.
 
-## 📄 License
+## License
 
-MIT License - feel free to use this for your own pranks!
+MIT License - See LICENSE file for details
 
 ---
 
