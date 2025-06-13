@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Prank Your Dad - AI Voice Demo
 
-## Getting Started
+An AI-powered Father's Day surprise app that allows seamless transitions between an AI assistant (using your cloned voice) and yourself during a phone call.
 
-First, run the development server:
+## 🎬 Demo Script Reference
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+This app was built for the Vapi Father's Day ad:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> "This Father's Day, I decided to build an AI agent to call dad for me… using my voice. And he didn't notice."
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Voice Cloning**: Uses Vapi AI with your pre-cloned voice
+- **Seamless Control**: Mute/unmute AI assistant at any time
+- **Real-time Transcript**: See the conversation as it happens
+- **Simple Setup**: Clear instructions for the speaker-based prank
 
-## Learn More
+## 📋 Prerequisites
 
-To learn more about Next.js, take a look at the following resources:
+- Vapi account with API keys
+- Pre-configured assistant with voice clone (Assistant ID)
+- Node.js 18+ installed
+- Two devices: your phone and computer
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠️ Setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd prank-your-dad
+   ```
 
-## Deploy on Vercel
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. **Configure environment variables**
+   
+   Create a `.env.local` file with your Vapi credentials:
+   ```
+   # Vapi API Keys
+   NEXT_PUBLIC_VAPI_PUBLIC_KEY=your-public-key
+   VAPI_PRIVATE_KEY=your-private-key
+   
+   # Assistant ID (with voice clone)
+   NEXT_PUBLIC_VAPI_ASSISTANT_ID=your-assistant-id
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
+
+5. **Open the app**
+   Navigate to [http://localhost:3000](http://localhost:3000)
+
+## 🎭 How to Use
+
+1. **Call Dad from Your Phone**: Use your regular phone and put it on speaker
+2. **Computer on Speaker**: Make sure your computer audio is also on speaker
+3. **Start AI Assistant**: Click the button to activate the AI voice
+4. **Control the Conversation**: 
+   - Click "AI Muted" when you want to speak
+   - Click "AI Active" to let the AI continue
+   - The transcript shows in real-time
+
+## 🔧 Technical Details
+
+- **Frontend**: Next.js 15 with TypeScript
+- **Styling**: Tailwind CSS
+- **Voice AI**: Vapi Web SDK
+- **Architecture**: Client-side voice control with optional server API
+
+## 📝 Important Notes
+
+- Both devices must be on speaker for the prank to work
+- The AI uses your pre-cloned voice from Vapi
+- Ensure good internet connection for best results
+- Test the setup before the actual call
+
+## 🤝 Contributing
+
+Feel free to submit issues and enhancement requests!
+
+## 📄 License
+
+MIT License - feel free to use this for your own pranks!
+
+---
+
+Built with ❤️ for Father's Day using [Vapi AI](https://vapi.ai)
