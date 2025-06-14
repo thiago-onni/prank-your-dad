@@ -2,48 +2,164 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Vapi from '@vapi-ai/web';
-import VoiceSelector from '@/components/VoiceSelector';
 import VoiceRecorder from '@/components/VoiceRecorder';
-import AssistantSelector from '@/components/AssistantSelector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Mic, MicOff, Phone, PhoneOff, AlertCircle, CheckCircle2, Volume2, Sparkles, PhoneCall, Settings } from 'lucide-react';
+import { Mic, Phone, PhoneOff, AlertCircle, CheckCircle2, Sparkles, PhoneCall, ArrowRight, ArrowLeft, Heart, Zap } from 'lucide-react';
+
+// Pre-defined prank scenarios
+const PRANK_SCENARIOS = [
+  {
+    id: 'lost-phone',
+    title: 'Lost My Phone',
+    description: 'Calling from a friend\'s phone because I lost mine',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a friend's phone because you lost yours.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me. I'm calling from my friend's phone because I lost mine. Just wanted to call and say Happy Father's Day!"
+2. If he asks about the lost phone, say: "Yeah, I think I left it at a restaurant earlier. But I didn't want to miss calling you today!"
+3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
+4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
+6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  },
+  {
+    id: 'highway-stuck',
+    title: 'Stuck on Highway',
+    description: 'Calling from roadside assistance phone while stuck',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a roadside assistance phone because you're stuck on the highway.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me. I'm stuck on the highway and had to use the roadside assistance phone. Just wanted to call and say Happy Father's Day!"
+2. If he asks about being stuck, say: "Yeah, flat tire, but the tow truck is coming. I didn't want to miss calling you today though!"
+3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
+4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
+6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  },
+  {
+    id: 'friends-phone',
+    title: 'Friend\'s Phone',
+    description: 'Borrowing a friend\'s phone to make the call',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're using a friend's phone.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me. I'm borrowing my friend's phone to call you. Just wanted to say Happy Father's Day!"
+2. If he asks about the phone, say: "Yeah, mine died and I forgot my charger. But I had to call you today!"
+3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
+4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
+6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  },
+  {
+    id: 'work-phone',
+    title: 'Work Phone',
+    description: 'Calling from work because personal phone is broken',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from your work phone because your personal phone is broken.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me. I'm calling from my work phone because mine is broken. Just wanted to say Happy Father's Day!"
+2. If he asks about the broken phone, say: "Yeah, dropped it this morning and the screen is completely shattered. But I had to call you today!"
+3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
+4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
+6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  },
+  {
+    id: 'new-number',
+    title: 'New Number',
+    description: 'Calling from a new temporary number',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a new temporary number.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me. I'm calling from a new number - it's temporary while I sort out my phone situation. Just wanted to say Happy Father's Day!"
+2. If he asks about the new number, say: "Yeah, long story with my carrier, but I didn't want to miss calling you today!"
+3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
+4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
+5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
+6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  }
+];
 
 export default function Home() {
+  const [currentStep, setCurrentStep] = useState<'voice' | 'dad-phone' | 'prank' | 'transfer' | 'calling'>('voice');
+  const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
+  const [dadPhoneNumber, setDadPhoneNumber] = useState('');
+  const [selectedPrank, setSelectedPrank] = useState<string | null>(null);
+  const [transferPhoneNumber, setTransferPhoneNumber] = useState('');
+  const [skipTransfer, setSkipTransfer] = useState(false);
+  
+  // Call state
   const [isCallActive, setIsCallActive] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [callStatus, setCallStatus] = useState('');
   const [transcript, setTranscript] = useState<Array<{role: string, text: string}>>([]);
   const [partialTranscript, setPartialTranscript] = useState<{role: string, text: string} | null>(null);
-  const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'clone' | 'select' | 'predefined'>('clone');
-  const [selectedAssistantId, setSelectedAssistantId] = useState<string | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState(`You are calling your father to wish him Happy Father's Day.
-YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day.
-CONVERSATION FLOW:
-
-Open with: "Hey Dad, it's me. Just wanted to call and say Happy Father's Day!"
-If he asks about work/life, respond positively: "It's going great, thanks for asking!"
-Ask him a follow-up question like "How's your day been?" to keep conversation natural
-After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-When the other party responds with something like "what" or "what is it" you will say:
-"Well, you're talking to an AI I built! Surprise for Father's Day!"
-
-IMPORTANT RULES:
-
-Keep responses short and conversational (1-2 sentences max)
-Sound warm and familial, like talking to your dad
-Don't volunteer information about AI or technology until the reveal
-If he asks unexpected questions, give brief, positive responses but steer back to Father's Day
-After the reveal, let the real person take over the call. Once you shared that you're an AI assistant, stop talking. Do not respond to anything the other party says.
-
-PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of this as a quick check-in call, not a long conversation.`);
   
   const vapiRef = useRef<Vapi | null>(null);
 
@@ -71,14 +187,14 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
     vapi.on('call-start', () => {
       setCallStatus('AI Connected');
       setIsCallActive(true);
-      toast.success('AI Assistant connected!');
+      toast.success('Prank call started!');
     });
 
     vapi.on('call-end', () => {
-      setCallStatus('AI Disconnected');
+      setCallStatus('Call Ended');
       setIsCallActive(false);
-      setPartialTranscript(null); // Clear any partial transcript
-      toast.info('AI Assistant disconnected');
+      setPartialTranscript(null);
+      toast.info('Prank call ended');
     });
 
     vapi.on('speech-start', () => {
@@ -95,11 +211,9 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
         const text = message.transcript;
         
         if (message.transcriptType === 'final') {
-          // Add final transcript to history
           setTranscript(prev => [...prev, { role, text }]);
-          setPartialTranscript(null); // Clear partial
+          setPartialTranscript(null);
         } else if (message.transcriptType === 'partial') {
-          // Update partial transcript
           setPartialTranscript({ role, text });
         }
       }
@@ -114,7 +228,6 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
     });
 
     return () => {
-      // Cleanup
       if (vapi) {
         vapi.stop();
       }
@@ -123,84 +236,74 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
 
   const handleVoiceCloned = (voiceId: string) => {
     setClonedVoiceId(voiceId);
-    toast.success('Voice ready! Now you can start the prank.');
+    setCurrentStep('dad-phone');
+    toast.success('Voice cloned! Now enter your dad\'s phone number.');
   };
 
-  const handleAssistantSelected = (assistantId: string) => {
-    setSelectedAssistantId(assistantId);
-    toast.success('Assistant ready! Now you can start the prank.');
+  const handleDadPhoneSubmit = () => {
+    if (!dadPhoneNumber.trim()) {
+      toast.error('Please enter your dad\'s phone number');
+      return;
+    }
+    setCurrentStep('prank');
+    toast.success('Phone number saved! Now choose your prank scenario.');
   };
 
-  const handleStartCall = async (voiceIdOrAssistantId: string, useAssistantId = false, customSystemPrompt?: string) => {
+  const handlePrankSelect = (prankId: string) => {
+    setSelectedPrank(prankId);
+    setCurrentStep('transfer');
+    toast.success('Prank selected! Almost ready to call.');
+  };
+
+  const handleTransferSubmit = () => {
+    setCurrentStep('calling');
+    startPrankCall();
+  };
+
+  const startPrankCall = async () => {
+    if (!clonedVoiceId || !dadPhoneNumber || !selectedPrank) {
+      toast.error('Missing required information');
+      return;
+    }
+
+    const selectedPrankData = PRANK_SCENARIOS.find(p => p.id === selectedPrank);
+    if (!selectedPrankData) {
+      toast.error('Invalid prank selection');
+      return;
+    }
+
     try {
-      // Request microphone permission first
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (micError) {
-        console.error('Microphone permission error:', micError);
-        toast.error('Please allow microphone access to use this app.');
-        setCallStatus('Error: Microphone access denied');
-        return;
+      setCallStatus('Starting prank call...');
+      
+      const response = await fetch('/api/prank-call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dadPhoneNumber,
+          voiceId: clonedVoiceId,
+          systemPrompt: selectedPrankData.systemPrompt,
+          transferPhoneNumber: skipTransfer ? null : transferPhoneNumber,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to start prank call');
       }
 
-      // Start the AI assistant
-      if (vapiRef.current) {
-        console.log('Starting Vapi with:', useAssistantId ? 'assistant ID' : 'voice ID', voiceIdOrAssistantId);
-        
-        try {
-          let result;
-          
-          if (useAssistantId) {
-            // Use pre-defined assistant ID
-            result = await vapiRef.current.start(voiceIdOrAssistantId);
-          } else {
-            // Use inline assistant configuration with voice ID
-            result = await vapiRef.current.start({
-              transcriber: {
-                provider: 'deepgram',
-                model: 'nova-2',
-                language: 'en-US',
-              },
-              model: {
-                provider: 'openai',
-                model: 'gpt-4',
-                messages: [{
-                  role: 'system',
-                  content: customSystemPrompt || systemPrompt
-                }]
-              },
-              voice: {
-                provider: '11labs',
-                voiceId: voiceIdOrAssistantId,
-                model: 'eleven_monolingual_v1',
-                stability: 0.5,
-                similarityBoost: 0.5,
-              },
-              name: 'Prank Assistant',
-            });
-          }
-          
-          console.log('Call started successfully:', result);
-        } catch (startError: unknown) {
-          console.error('Full error object:', startError);
-          
-          // Check if it's an authentication error
-          const errorStr = JSON.stringify(startError);
-          if (errorStr.includes('401') || errorStr.includes('403') || errorStr.includes('auth')) {
-            setCallStatus('Error: Authentication failed - check API key');
-            toast.error('Authentication failed. Please verify your Vapi API key.');
-          } else {
-            setCallStatus('Error: Failed to start call');
-            toast.error('Failed to start the AI call. Check console for details.');
-          }
-        }
-      } else {
-        toast.error('Vapi not initialized. Please refresh the page.');
-        setCallStatus('Error: Vapi not initialized');
-      }
+      setCallStatus('Prank call started!');
+      setIsCallActive(true);
+      toast.success('Prank call started! Your dad should be receiving the call now.');
+      
     } catch (error) {
-      console.error('Error starting call:', error);
-      setCallStatus('Failed to start');
+      console.error('Failed to start prank call:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to start the prank call: ${errorMessage}`);
+      setCallStatus('Failed to start call');
+      setCurrentStep('transfer');
     }
   };
 
@@ -208,183 +311,38 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
     if (vapiRef.current) {
       vapiRef.current.stop();
     }
-    setTranscript([]);
-    setPartialTranscript(null);
   };
 
-  const toggleMute = () => {
-    if (vapiRef.current) {
-      const newMutedState = !isMuted;
-      
-      // Mute/unmute the microphone
-      vapiRef.current.setMuted(newMutedState);
-      
-      // Send a system message to control the AI behavior
-      if (newMutedState) {
-        // When muting, tell the AI to pause
-        vapiRef.current.send({
-          type: 'add-message',
-          message: {
-            role: 'system',
-            content: 'PAUSE. The user has muted you. Do not speak or respond until unmuted. Stay completely silent.'
-          }
-        });
-        toast.info('AI Assistant muted');
-      } else {
-        // When unmuting, tell the AI it can continue
-        vapiRef.current.send({
-          type: 'add-message',
-          message: {
-            role: 'system',
-            content: 'You are now unmuted. You may continue the conversation normally.'
-          }
-        });
-        toast.success('AI Assistant unmuted');
-      }
-      
-      setIsMuted(newMutedState);
+  const handleGoBack = () => {
+    switch (currentStep) {
+      case 'dad-phone':
+        setCurrentStep('voice');
+        break;
+      case 'prank':
+        setCurrentStep('dad-phone');
+        break;
+      case 'transfer':
+        setCurrentStep('prank');
+        break;
+      case 'calling':
+        setCurrentStep('transfer');
+        break;
     }
   };
 
-  const CallInterface = ({ 
-    voiceId, 
-    voiceType, 
-    useAssistantId = false, 
-    customSystemPrompt 
-  }: { 
-    voiceId: string; 
-    voiceType: string; 
-    useAssistantId?: boolean; 
-    customSystemPrompt?: string;
-  }) => (
-    <>
-      {/* Instructions */}
-      <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl flex items-center gap-2 text-white">
-            <AlertCircle className="h-5 w-5 text-yellow-500" />
-            Quick Setup Guide
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">1</span>
-              <p className="text-gray-300">Call dad from YOUR phone and put it on speaker 📱</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">2</span>
-              <p className="text-gray-300">Put your computer on speaker too 🔊</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">3</span>
-              <p className="text-gray-300">Click &quot;Start AI Assistant&quot; to begin</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold flex-shrink-0">4</span>
-              <p className="text-gray-300">Click mute to silence the AI (dad will only hear you)</p>
-            </div>
-            <Alert className="bg-yellow-500/10 border-yellow-500/30 mt-4">
-              <AlertDescription className="text-yellow-200">
-                Make sure both devices are on speaker for the prank to work!
-              </AlertDescription>
-            </Alert>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Controls */}
-      <Card className="mb-8 bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-        <CardContent className="pt-8 pb-8">
-          <div className="flex flex-col gap-6">
-            {/* Voice Ready Badge */}
-            <div className="flex justify-center">
-              <Badge className="bg-green-500/20 text-green-300 border-green-500/30 px-4 py-2">
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {voiceType === 'clone' ? 'Voice Cloned Successfully' : 'Using Pre-defined Assistant'}
-              </Badge>
-            </div>
-
-            {/* Control Buttons */}
-            <div className="flex gap-4 justify-center">
-              {!isCallActive ? (
-                <Button 
-                  onClick={() => handleStartCall(voiceId, useAssistantId, customSystemPrompt)} 
-                  size="lg" 
-                  className="min-w-[240px] h-14 text-lg bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 shadow-lg"
-                >
-                  <Phone className="mr-2 h-6 w-6" />
-                  Start AI Assistant
-                </Button>
-              ) : (
-                <>
-                  <Button 
-                    onClick={handleEndCall} 
-                    size="lg" 
-                    variant="destructive"
-                    className="min-w-[160px] h-14 text-lg shadow-lg"
-                  >
-                    <PhoneOff className="mr-2 h-6 w-6" />
-                    End Call
-                  </Button>
-                  <Button 
-                    onClick={toggleMute}
-                    size="lg"
-                    variant={isMuted ? "outline" : "secondary"}
-                    className={`min-w-[160px] h-14 text-lg shadow-lg ${
-                      isMuted 
-                        ? 'bg-yellow-500/10 hover:bg-yellow-500/20 border-yellow-500/50 text-yellow-300' 
-                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                    }`}
-                  >
-                    {isMuted ? (
-                      <>
-                        <MicOff className="mr-2 h-6 w-6" />
-                        AI Muted
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="mr-2 h-6 w-6" />
-                        AI Active
-                      </>
-                    )}
-                  </Button>
-                </>
-              )}
-            </div>
-
-            {/* Status Display */}
-            {callStatus && (
-              <div className="flex items-center justify-center gap-3 text-sm">
-                <Badge 
-                  variant="outline"
-                  className={`px-4 py-2 flex items-center gap-2 ${
-                    callStatus.includes('Error') 
-                      ? 'bg-red-500/10 text-red-300 border-red-500/30' 
-                      : callStatus.includes('Connected') 
-                        ? 'bg-green-500/10 text-green-300 border-green-500/30'
-                        : 'bg-gray-700/50 text-gray-300 border-gray-600'
-                  }`}
-                >
-                  {callStatus.includes('Speaking') && <Volume2 className="h-4 w-4 animate-pulse" />}
-                  {callStatus.includes('Connected') && <CheckCircle2 className="h-4 w-4" />}
-                  {callStatus.includes('Error') && <AlertCircle className="h-4 w-4" />}
-                  {callStatus}
-                </Badge>
-                {isCallActive && isMuted && (
-                  <Badge variant="outline" className="px-4 py-2 animate-pulse bg-yellow-500/10 text-yellow-300 border-yellow-500/30">
-                    ⚠️ AI is silent - Dad only hears you
-                  </Badge>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
-
-
+  const handleStartOver = () => {
+    setCurrentStep('voice');
+    setClonedVoiceId(null);
+    setDadPhoneNumber('');
+    setSelectedPrank(null);
+    setTransferPhoneNumber('');
+    setSkipTransfer(false);
+    setTranscript([]);
+    setPartialTranscript(null);
+    if (vapiRef.current) {
+      vapiRef.current.stop();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
@@ -406,98 +364,270 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
             </h1>
           </div>
           <p className="text-gray-400 text-lg md:text-xl">
-            AI-powered voice assistant using your cloned voice
+            AI-powered Father&apos;s Day prank call with your cloned voice
           </p>
           <div className="flex items-center justify-center gap-2 mt-3">
             <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30">
               <Sparkles className="h-3 w-3 mr-1" />
-              AI Voice Demo
+              100% Free
             </Badge>
             <Badge variant="outline" className="bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
+              <Zap className="h-3 w-3 mr-1" />
               Father&apos;s Day Special
             </Badge>
           </div>
         </div>
 
-        {/* Main Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'clone' | 'select' | 'predefined')} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8 h-12 bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 p-1">
-            <TabsTrigger 
-              value="clone" 
-              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
-            >
-              <Mic className="mr-2 h-4 w-4" />
-              Clone New Voice
-            </TabsTrigger>
-            <TabsTrigger 
-              value="select" 
-              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
-            >
-              <Volume2 className="mr-2 h-4 w-4" />
-              Select Existing Voice
-            </TabsTrigger>
-            <TabsTrigger 
-              value="predefined" 
-              className="h-10 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-200 text-gray-300 hover:text-white"
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Use Pre-defined Assistant
-            </TabsTrigger>
-          </TabsList>
+        {/* Progress Steps */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-4">
+            {[
+              { key: 'voice', label: '1. Clone Voice', icon: Mic },
+              { key: 'dad-phone', label: '2. Dad\'s Phone', icon: Phone },
+              { key: 'prank', label: '3. Select Prank', icon: Sparkles },
+              { key: 'transfer', label: '4. Your Phone', icon: Heart },
+            ].map(({ key, label, icon: Icon }, index) => (
+              <div key={key} className="flex items-center">
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                  currentStep === key 
+                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                    : ['voice', 'dad-phone', 'prank', 'transfer'].indexOf(currentStep) > index
+                    ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                    : 'bg-gray-800/50 text-gray-500 border border-gray-700'
+                }`}>
+                  <Icon className="h-4 w-4" />
+                  <span className="text-sm font-medium">{label}</span>
+                </div>
+                {index < 3 && (
+                  <ArrowRight className="h-4 w-4 text-gray-600 ml-4" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
 
-          {/* Clone Voice Tab */}
-          <TabsContent value="clone" className="mt-0">
-            {!clonedVoiceId ? (
-              <VoiceRecorder 
-                onVoiceCloned={handleVoiceCloned} 
-                systemPrompt={systemPrompt}
-                onSystemPromptChange={setSystemPrompt}
-              />
-            ) : (
-              <CallInterface 
-                voiceId={clonedVoiceId} 
-                voiceType="clone" 
-                useAssistantId={false}
-                customSystemPrompt={systemPrompt}
-              />
-            )}
-          </TabsContent>
+        {/* Step Content */}
+        {currentStep === 'voice' && (
+          <VoiceRecorder 
+            onVoiceCloned={handleVoiceCloned} 
+            systemPrompt=""
+            onSystemPromptChange={() => {}}
+            hideSystemPrompt={true}
+          />
+        )}
 
-          {/* Select Existing Voice Tab */}
-          <TabsContent value="select" className="mt-0">
-            {!clonedVoiceId ? (
-              <VoiceSelector 
-                onVoiceSelected={handleVoiceCloned} 
-                systemPrompt={systemPrompt}
-                onSystemPromptChange={setSystemPrompt}
-                showOnlySelection={true}
-              />
-            ) : (
-              <CallInterface 
-                voiceId={clonedVoiceId} 
-                voiceType="clone" 
-                useAssistantId={false}
-                customSystemPrompt={systemPrompt}
-              />
-            )}
-          </TabsContent>
+        {currentStep === 'dad-phone' && (
+          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-xl text-white flex items-center gap-2">
+                <Phone className="h-5 w-5 text-purple-400" />
+                Enter Your Dad&apos;s Phone Number
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="dadPhone" className="text-white font-medium">
+                  Dad&apos;s Phone Number
+                </Label>
+                <Input
+                  id="dadPhone"
+                  type="tel"
+                  value={dadPhoneNumber}
+                  onChange={(e) => setDadPhoneNumber(e.target.value)}
+                  placeholder="+1 (555) 123-4567"
+                  className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 text-lg h-12"
+                />
+                <p className="text-gray-400 text-sm">
+                  We&apos;ll call this number with your cloned voice to prank your dad!
+                </p>
+              </div>
 
-          {/* Pre-defined Assistant Tab */}
-          <TabsContent value="predefined" className="mt-0">
-            {!selectedAssistantId ? (
-              <AssistantSelector onAssistantSelected={handleAssistantSelected} />
-            ) : (
-              <CallInterface 
-                voiceId={selectedAssistantId} 
-                voiceType="predefined" 
-                useAssistantId={true}
-                customSystemPrompt={systemPrompt}
-              />
-            )}
-          </TabsContent>
-        </Tabs>
+              <div className="flex gap-4">
+                <Button 
+                  onClick={handleGoBack} 
+                  variant="outline"
+                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button 
+                  onClick={handleDadPhoneSubmit}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 h-12 text-lg"
+                >
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Transcript */}
+        {currentStep === 'prank' && (
+          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-xl text-white flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-400" />
+                Choose Your Prank Scenario
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-gray-300">
+                Pick an excuse for why you&apos;re calling from a random number:
+              </p>
+              
+              <div className="grid gap-4">
+                {PRANK_SCENARIOS.map((prank) => (
+                  <div
+                    key={prank.id}
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      selectedPrank === prank.id
+                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
+                        : 'bg-gray-900/50 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:border-gray-500'
+                    }`}
+                    onClick={() => handlePrankSelect(prank.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium text-lg">{prank.title}</h3>
+                        <p className="text-sm opacity-70 mt-1">{prank.description}</p>
+                      </div>
+                      {selectedPrank === prank.id && (
+                        <CheckCircle2 className="h-5 w-5 text-purple-400" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4">
+                <Button 
+                  onClick={handleGoBack} 
+                  variant="outline"
+                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {currentStep === 'transfer' && (
+          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-xl text-white flex items-center gap-2">
+                <Heart className="h-5 w-5 text-purple-400" />
+                Transfer to You (Optional)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-gray-300">
+                After the prank reveal, should we transfer your dad to your real phone?
+              </p>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="transferPhone" className="text-white font-medium">
+                    Your Phone Number (Optional)
+                  </Label>
+                  <Input
+                    id="transferPhone"
+                    type="tel"
+                    value={transferPhoneNumber}
+                    onChange={(e) => setTransferPhoneNumber(e.target.value)}
+                    placeholder="+1 (555) 987-6543"
+                    className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 text-lg h-12"
+                    disabled={skipTransfer}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="skipTransfer"
+                    checked={skipTransfer}
+                    onChange={(e) => setSkipTransfer(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-900/50 text-purple-600 focus:ring-purple-500"
+                  />
+                  <Label htmlFor="skipTransfer" className="text-gray-300">
+                    Skip transfer - just end the call after the prank
+                  </Label>
+                </div>
+              </div>
+
+              <Alert className="bg-blue-500/10 border-blue-500/30">
+                <AlertCircle className="h-4 w-4 fill-blue-400" />
+                <AlertDescription className="text-blue-200">
+                  <strong>Ready to prank!</strong> We&apos;ll call your dad with your cloned voice, deliver the prank, and optionally transfer him to you.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex gap-4">
+                <Button 
+                  onClick={handleGoBack} 
+                  variant="outline"
+                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button 
+                  onClick={handleTransferSubmit}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 h-12 text-lg"
+                  disabled={!skipTransfer && !transferPhoneNumber.trim()}
+                >
+                  <Phone className="mr-2 h-5 w-5" />
+                  Start Prank Call!
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {currentStep === 'calling' && (
+          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-xl text-white flex items-center gap-2">
+                <PhoneCall className="h-5 w-5 text-purple-400" />
+                Prank Call in Progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <div className="inline-flex items-center gap-3 p-4 bg-green-500/20 border border-green-500/30 rounded-lg">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-300 font-medium">{callStatus}</span>
+                </div>
+                <p className="text-gray-400 mt-2">
+                  Calling {dadPhoneNumber} with your cloned voice...
+                </p>
+              </div>
+
+              <div className="flex gap-4 justify-center">
+                <Button 
+                  onClick={handleEndCall}
+                  variant="destructive"
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={!isCallActive}
+                >
+                  <PhoneOff className="mr-2 h-4 w-4" />
+                  End Call
+                </Button>
+                <Button 
+                  onClick={handleStartOver}
+                  variant="outline"
+                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
+                >
+                  Start Over
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Live Transcript */}
         {(transcript.length > 0 || partialTranscript) && (
           <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl mt-8">
             <CardHeader className="pb-4">
@@ -516,13 +646,12 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
                             : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                         }`}
                       >
-                        {entry.role === 'assistant' ? 'AI' : 'Dad'}
+                        {entry.role === 'assistant' ? 'You' : 'Dad'}
                       </Badge>
                       <p className="text-gray-200 flex-1 leading-relaxed">{entry.text}</p>
                     </div>
                   ))}
                   
-                  {/* Show partial transcript with loading indicator */}
                   {partialTranscript && (
                     <div className="flex gap-3 items-start opacity-60">
                       <Badge 
@@ -533,7 +662,7 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
                             : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                         }`}
                       >
-                        {partialTranscript.role === 'assistant' ? 'AI' : 'Dad'}
+                        {partialTranscript.role === 'assistant' ? 'You' : 'Dad'}
                       </Badge>
                       <p className="text-gray-400 flex-1 italic leading-relaxed">{partialTranscript.text}...</p>
                     </div>
@@ -542,16 +671,6 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative. Think of th
               </ScrollArea>
             </CardContent>
           </Card>
-        )}
-
-        {/* Tips */}
-        {isCallActive && (
-          <Alert className="mt-8 bg-purple-500/10 border-purple-500/30">
-            <Sparkles className="h-4 w-4 text-purple-400" />
-            <AlertDescription className="text-purple-200">
-              <strong>Pro tip:</strong> When you mute the AI, it stops speaking completely. Dad will only hear you talking from your phone! Perfect timing is key for the prank.
-            </AlertDescription>
-          </Alert>
         )}
 
         {/* Footer */}

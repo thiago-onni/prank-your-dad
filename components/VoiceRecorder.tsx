@@ -13,6 +13,7 @@ interface VoiceRecorderProps {
   onVoiceCloned: (voiceId: string) => void;
   systemPrompt: string;
   onSystemPromptChange: (prompt: string) => void;
+  hideSystemPrompt?: boolean;
 }
 
 // Sample texts for voice cloning
@@ -29,7 +30,7 @@ const SAMPLE_TEXTS = [
   "Learning new skills and pursuing hobbies keeps our minds active and provides a sense of accomplishment and personal growth."
 ];
 
-export default function VoiceRecorder({ onVoiceCloned, systemPrompt, onSystemPromptChange }: VoiceRecorderProps) {
+export default function VoiceRecorder({ onVoiceCloned, systemPrompt, onSystemPromptChange, hideSystemPrompt = false }: VoiceRecorderProps) {
   const [recordings, setRecordings] = useState<{ blob: Blob; url: string }[]>([]);
   const [voiceName, setVoiceName] = useState('');
   const [isCloning, setIsCloning] = useState(false);
@@ -466,23 +467,25 @@ export default function VoiceRecorder({ onVoiceCloned, systemPrompt, onSystemPro
         </Button>
 
         {/* System Prompt */}
-        <div className="space-y-2">
-          <Label htmlFor="systemPrompt" className="text-white font-medium flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-purple-400" />
-            System Prompt
-          </Label>
-          <Textarea
-            id="systemPrompt"
-            value={systemPrompt}
-            onChange={(e) => onSystemPromptChange(e.target.value)}
-            placeholder="Enter the system prompt for your AI assistant..."
-            rows={6}
-            className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 resize-none"
-          />
-          <p className="text-gray-400 text-sm">
-            This defines how your AI assistant will behave during the conversation. You can customize it for different scenarios.
-          </p>
-        </div>
+        {!hideSystemPrompt && (
+          <div className="space-y-2">
+            <Label htmlFor="systemPrompt" className="text-white font-medium flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-purple-400" />
+              System Prompt
+            </Label>
+            <Textarea
+              id="systemPrompt"
+              value={systemPrompt}
+              onChange={(e) => onSystemPromptChange(e.target.value)}
+              placeholder="Enter the system prompt for your AI assistant..."
+              rows={6}
+              className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 resize-none"
+            />
+            <p className="text-gray-400 text-sm">
+              This defines how your AI assistant will behave during the conversation. You can customize it for different scenarios.
+            </p>
+          </div>
+        )}
 
         {/* Requirements */}
         <div className="text-xs text-gray-500 space-y-1">
