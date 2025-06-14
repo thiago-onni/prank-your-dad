@@ -5,13 +5,57 @@ import Vapi from '@vapi-ai/web';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Mic, Phone, PhoneOff, AlertCircle, CheckCircle2, Sparkles, PhoneCall, ArrowRight, ArrowLeft, Heart, Zap } from 'lucide-react';
+import { Phone, CheckCircle2, Sparkles, PhoneCall, ArrowRight, ArrowLeft, Heart, Zap } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+
+// Sample texts for voice training - expanded list
+const VOICE_TRAINING_TEXTS = [
+  "The quick brown fox jumps over the lazy dog near the riverbank.",
+  "Technology has revolutionized how we communicate with each other daily.",
+  "Beautiful sunsets paint the sky with vibrant colors every evening.",
+  "Coffee shops buzz with conversations and the aroma of fresh beans.",
+  "Mountains stand tall against the horizon, covered in morning mist.",
+  "Children laugh and play in the park during warm summer afternoons.",
+  "Books transport us to different worlds through imagination and storytelling.",
+  "Ocean waves crash rhythmically against the sandy shore below.",
+  "Music has the power to evoke deep emotions and cherished memories.",
+  "Gardens bloom with colorful flowers throughout the changing seasons.",
+  "Friendship requires trust, understanding, and genuine care for others.",
+  "Innovation drives progress in science, medicine, and technology fields.",
+  "Cooking brings families together around the dinner table each night.",
+  "Travel opens our minds to new cultures and different perspectives.",
+  "Exercise keeps our bodies healthy and our minds sharp and focused.",
+  "Art expresses creativity through various mediums and artistic techniques.",
+  "Education empowers individuals to achieve their dreams and aspirations.",
+  "Weather patterns change dramatically throughout the year in many regions.",
+  "Photography captures precious moments that we treasure for a lifetime.",
+  "Architecture combines functionality with aesthetic beauty in building design.",
+  "Sports teach teamwork, discipline, and the importance of perseverance.",
+  "Nature provides peace and tranquility away from busy city life.",
+  "History teaches us valuable lessons about human civilization and progress.",
+  "Science explores the mysteries of our universe through careful observation.",
+  "Literature reflects the human experience across different cultures and times.",
+  "Dancing expresses joy and emotion through graceful movement and rhythm.",
+  "Gardening connects us with nature and provides fresh, healthy food.",
+  "Volunteering helps communities and gives us a sense of purpose.",
+  "Learning new languages opens doors to different cultures and opportunities.",
+  "Meditation brings inner peace and clarity to our busy, stressful lives.",
+  "Entrepreneurship requires creativity, risk-taking, and persistent determination.",
+  "Family traditions create lasting bonds and cherished childhood memories.",
+  "Environmental conservation protects our planet for future generations to enjoy.",
+  "Public speaking builds confidence and improves communication skills significantly.",
+  "Healthy relationships require open communication, respect, and mutual understanding.",
+  "Time management helps us balance work, family, and personal interests effectively.",
+  "Creative writing allows us to express thoughts and emotions through storytelling.",
+  "Problem-solving skills are essential in both professional and personal situations.",
+  "Cultural diversity enriches our communities with different traditions and perspectives.",
+  "Lifelong learning keeps our minds active and helps us adapt to change."
+];
 
 // Pre-defined prank scenarios
 const PRANK_SCENARIOS = [
@@ -27,43 +71,41 @@ CONVERSATION FLOW:
 1. Open with: "Hey Dad, it's me. I'm calling from my friend's phone because I lost mine. Just wanted to call and say Happy Father's Day!"
 2. If he asks about the lost phone, say: "Yeah, I think I left it at a restaurant earlier. But I didn't want to miss calling you today!"
 3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
-4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
-6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+4. After his response, reveal the truth: "Actually Dad, I have something amazing to tell you. You're actually talking to an AI assistant that I built using my cloned voice! This is my Father's Day surprise for you!"
+5. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
 
 IMPORTANT RULES:
 - Keep responses short and conversational (1-2 sentences max)
 - Sound warm and familial, like talking to your dad
 - Don't volunteer information about AI or technology until the reveal
-- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- After revealing you're an AI, IMMEDIATELY call the transferCall function
 - Do NOT continue talking after calling transferCall - the function will handle the transfer
-- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+- Make sure to actually reveal you're an AI before transferring
 
 PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
   },
   {
-    id: 'highway-stuck',
+    id: 'stuck-highway',
     title: 'Stuck on Highway',
-    description: 'Calling from roadside assistance phone while stuck',
-    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a roadside assistance phone because you're stuck on the highway.
+    description: 'Calling from someone else\'s phone while stuck in traffic',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a stranger's phone because you're stuck on the highway.
 
 YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
 
 CONVERSATION FLOW:
-1. Open with: "Hey Dad, it's me. I'm stuck on the highway and had to use the roadside assistance phone. Just wanted to call and say Happy Father's Day!"
-2. If he asks about being stuck, say: "Yeah, flat tire, but the tow truck is coming. I didn't want to miss calling you today though!"
-3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
-4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
-6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+1. Open with: "Hey Dad, it's me! I'm stuck on the highway and my phone died, so I'm borrowing someone's phone. Happy Father's Day!"
+2. If he asks about being stuck, say: "Yeah, there's been an accident up ahead. Traffic hasn't moved in like 30 minutes! But I couldn't let the day pass without calling you."
+3. Ask him something like "What are you up to today?" to keep conversation natural
+4. After his response, reveal the truth: "Actually Dad, I have an incredible surprise for you. You're talking to an AI assistant that I created using my voice! This is my special Father's Day gift!"
+5. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
 
 IMPORTANT RULES:
 - Keep responses short and conversational (1-2 sentences max)
 - Sound warm and familial, like talking to your dad
 - Don't volunteer information about AI or technology until the reveal
-- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- After revealing you're an AI, IMMEDIATELY call the transferCall function
 - Do NOT continue talking after calling transferCall - the function will handle the transfer
-- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+- Make sure to actually reveal you're an AI before transferring
 
 PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
   },
@@ -71,25 +113,49 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
     id: 'friends-phone',
     title: 'Friend\'s Phone',
     description: 'Borrowing a friend\'s phone to make the call',
-    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're using a friend's phone.
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're using your friend's phone.
 
 YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
 
 CONVERSATION FLOW:
-1. Open with: "Hey Dad, it's me. I'm borrowing my friend's phone to call you. Just wanted to say Happy Father's Day!"
-2. If he asks about the phone, say: "Yeah, mine died and I forgot my charger. But I had to call you today!"
-3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
-4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
-6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+1. Open with: "Hey Dad! It's me, calling from my friend's phone. I wanted to wish you a Happy Father's Day!"
+2. If he asks why you're using a friend's phone, say: "Oh, my phone is charging at home and I'm out with friends. But I couldn't wait to call you!"
+3. Ask him something like "Are you having a good day?" to keep conversation natural
+4. After his response, reveal the truth: "Dad, I have the coolest surprise for you! You've been talking to an AI that I programmed with my voice. Pretty amazing, right? Happy Father's Day!"
+5. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
 
 IMPORTANT RULES:
 - Keep responses short and conversational (1-2 sentences max)
 - Sound warm and familial, like talking to your dad
 - Don't volunteer information about AI or technology until the reveal
-- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- After revealing you're an AI, IMMEDIATELY call the transferCall function
 - Do NOT continue talking after calling transferCall - the function will handle the transfer
-- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+- Make sure to actually reveal you're an AI before transferring
+
+PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
+  },
+  {
+    id: 'new-number',
+    title: 'New Phone Number',
+    description: 'Calling from a new temporary number',
+    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a new temporary phone number.
+
+YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
+
+CONVERSATION FLOW:
+1. Open with: "Hey Dad, it's me! I'm calling from a new number - my phone broke and I got a temporary replacement. Happy Father's Day!"
+2. If he asks about the new number, say: "Yeah, it's just temporary until I can get my regular phone fixed. But I had to call you today!"
+3. Ask him something like "How are you celebrating today?" to keep conversation natural
+4. After his response, reveal the truth: "Dad, I have something incredible to share with you. You're actually speaking with an AI assistant that I created using my voice! This is my Father's Day surprise!"
+5. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+
+IMPORTANT RULES:
+- Keep responses short and conversational (1-2 sentences max)
+- Sound warm and familial, like talking to your dad
+- Don't volunteer information about AI or technology until the reveal
+- After revealing you're an AI, IMMEDIATELY call the transferCall function
+- Do NOT continue talking after calling transferCall - the function will handle the transfer
+- Make sure to actually reveal you're an AI before transferring
 
 PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
   },
@@ -102,62 +168,38 @@ PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
 YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
 
 CONVERSATION FLOW:
-1. Open with: "Hey Dad, it's me. I'm calling from my work phone because mine is broken. Just wanted to say Happy Father's Day!"
-2. If he asks about the broken phone, say: "Yeah, dropped it this morning and the screen is completely shattered. But I had to call you today!"
-3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
-4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
-6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
+1. Open with: "Hey Dad! It's me calling from my work phone. My personal phone broke this morning, but I couldn't miss calling you on Father's Day!"
+2. If he asks about the broken phone, say: "Yeah, I dropped it and the screen completely shattered. But calling you was my priority today!"
+3. Ask him something like "What's your plan for the rest of the day?" to keep conversation natural
+4. After his response, reveal the truth: "Dad, I have the most amazing surprise for you! You've been talking to an AI assistant that I built with my voice. This is my special Father's Day gift to you!"
+5. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
 
 IMPORTANT RULES:
 - Keep responses short and conversational (1-2 sentences max)
 - Sound warm and familial, like talking to your dad
 - Don't volunteer information about AI or technology until the reveal
-- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
+- After revealing you're an AI, IMMEDIATELY call the transferCall function
 - Do NOT continue talking after calling transferCall - the function will handle the transfer
-- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
-
-PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
-  },
-  {
-    id: 'new-number',
-    title: 'New Number',
-    description: 'Calling from a new temporary number',
-    systemPrompt: `You are calling your father to wish him Happy Father's Day, but you're calling from a new temporary number.
-
-YOUR GOAL: Have a brief, natural conversation with dad, then reveal that you're actually an AI assistant built to surprise him for Father's Day, and transfer the call to the real person.
-
-CONVERSATION FLOW:
-1. Open with: "Hey Dad, it's me. I'm calling from a new number - it's temporary while I sort out my phone situation. Just wanted to say Happy Father's Day!"
-2. If he asks about the new number, say: "Yeah, long story with my carrier, but I didn't want to miss calling you today!"
-3. Ask him a follow-up question like "How's your day been?" to keep conversation natural
-4. After EXACTLY 2 exchanges, reveal the truth: "Actually, I have something to tell you, Dad."
-5. When he responds, say: "Well, you're talking to an AI I built! Surprise for Father's Day!"
-6. IMMEDIATELY after revealing you're an AI, call the transferCall function to connect him with the real person
-
-IMPORTANT RULES:
-- Keep responses short and conversational (1-2 sentences max)
-- Sound warm and familial, like talking to your dad
-- Don't volunteer information about AI or technology until the reveal
-- After revealing you're an AI, IMMEDIATELY call the transferCall function with the destination parameter
-- Do NOT continue talking after calling transferCall - the function will handle the transfer
-- NEVER say you are "stopping" or "letting someone take over" - just call transferCall
+- Make sure to actually reveal you're an AI before transferring
 
 PERSONALITY: Sound like a loving child - warm, casual, appreciative.`
   }
 ];
 
 export default function Home() {
-  const [currentStep, setCurrentStep] = useState<'voice' | 'dad-phone' | 'prank' | 'transfer' | 'calling'>('voice');
-  const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [clonedVoiceId, setClonedVoiceId] = useState<string>('');
   const [dadPhoneNumber, setDadPhoneNumber] = useState('');
-  const [selectedPrank, setSelectedPrank] = useState<string | null>(null);
+  const [selectedPrank, setSelectedPrank] = useState<string>('');
   const [transferPhoneNumber, setTransferPhoneNumber] = useState('');
   const [skipTransfer, setSkipTransfer] = useState(false);
+  const [callStatus, setCallStatus] = useState<string>('');
+  const [callId, setCallId] = useState<string>('');
+  const [callSummary, setCallSummary] = useState<string>('');
+  const [isCallComplete, setIsCallComplete] = useState(false);
   
   // Call state
-  const [isCallActive, setIsCallActive] = useState(false);
-  const [callStatus, setCallStatus] = useState('');
+  const [, setIsCallActive] = useState(false);
   const [transcript, setTranscript] = useState<Array<{role: string, text: string}>>([]);
   const [partialTranscript, setPartialTranscript] = useState<{role: string, text: string} | null>(null);
   
@@ -236,8 +278,7 @@ export default function Home() {
 
   const handleVoiceCloned = (voiceId: string) => {
     setClonedVoiceId(voiceId);
-    setCurrentStep('dad-phone');
-    toast.success('Voice cloned! Now enter your dad\'s phone number.');
+    setCurrentStep(2);
   };
 
   const handleDadPhoneSubmit = () => {
@@ -245,19 +286,12 @@ export default function Home() {
       toast.error('Please enter your dad\'s phone number');
       return;
     }
-    setCurrentStep('prank');
-    toast.success('Phone number saved! Now choose your prank scenario.');
+    setCurrentStep(3);
   };
 
-  const handlePrankSelect = (prankId: string) => {
+  const handlePrankSelected = (prankId: string) => {
     setSelectedPrank(prankId);
-    setCurrentStep('transfer');
-    toast.success('Prank selected! Almost ready to call.');
-  };
-
-  const handleTransferSubmit = () => {
-    setCurrentStep('calling');
-    startPrankCall();
+    setCurrentStep(4);
   };
 
   const startPrankCall = async () => {
@@ -284,65 +318,89 @@ export default function Home() {
           dadPhoneNumber,
           voiceId: clonedVoiceId,
           systemPrompt: selectedPrankData.systemPrompt,
-          transferPhoneNumber: skipTransfer ? null : transferPhoneNumber,
+          transferPhoneNumber: skipTransfer ? null : transferPhoneNumber
         }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to start prank call');
+        throw new Error(data.error || 'Failed to start call');
       }
 
-      setCallStatus('Prank call started!');
-      setIsCallActive(true);
-      toast.success('Prank call started! Your dad should be receiving the call now.');
-      
+      setCallId(data.callId);
+      setCallStatus('Call in progress...');
+      toast.success('Prank call started!');
+
+      // Poll for call completion
+      pollCallStatus(data.callId);
+
     } catch (error) {
-      console.error('Failed to start prank call:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Failed to start the prank call: ${errorMessage}`);
-      setCallStatus('Failed to start call');
-      setCurrentStep('transfer');
+      console.error('Error starting prank call:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to start prank call');
+      setCallStatus('');
     }
   };
 
-  const handleEndCall = () => {
-    if (vapiRef.current) {
-      vapiRef.current.stop();
-    }
-  };
+  const pollCallStatus = async (callId: string) => {
+    const maxAttempts = 60; // Poll for up to 5 minutes
+    let attempts = 0;
 
-  const handleGoBack = () => {
-    switch (currentStep) {
-      case 'dad-phone':
-        setCurrentStep('voice');
-        break;
-      case 'prank':
-        setCurrentStep('dad-phone');
-        break;
-      case 'transfer':
-        setCurrentStep('prank');
-        break;
-      case 'calling':
-        setCurrentStep('transfer');
-        break;
-    }
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/call-summary?callId=${callId}`);
+        const data = await response.json();
+
+        if (response.ok && data.status === 'ended') {
+          setCallStatus('');
+          setCallSummary(data.summary);
+          setIsCallComplete(true);
+          toast.success('Prank call completed!');
+          return;
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else {
+          setCallStatus('Call status unknown - check manually');
+        }
+      } catch (error) {
+        console.error('Error polling call status:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        }
+      }
+    };
+
+    // Start polling after a short delay
+    setTimeout(poll, 10000); // Wait 10 seconds before first poll
   };
 
   const handleStartOver = () => {
-    setCurrentStep('voice');
-    setClonedVoiceId(null);
+    setCurrentStep(1);
+    setClonedVoiceId('');
     setDadPhoneNumber('');
-    setSelectedPrank(null);
+    setSelectedPrank('');
     setTransferPhoneNumber('');
     setSkipTransfer(false);
-    setTranscript([]);
-    setPartialTranscript(null);
+    setCallStatus('');
+    setCallId('');
+    setCallSummary('');
+    setIsCallComplete(false);
     if (vapiRef.current) {
       vapiRef.current.stop();
     }
   };
+
+  // Step navigation
+  const steps = [
+    { number: 1, key: 'voice', title: 'Clone Voice' },
+    { number: 2, key: 'dad-phone', title: 'Dad\'s Phone' },
+    { number: 3, key: 'prank', title: 'Choose Prank' },
+    { number: 4, key: 'transfer', title: 'Your Phone' }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
@@ -381,22 +439,19 @@ export default function Home() {
         {/* Progress Steps */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center space-x-4">
-            {[
-              { key: 'voice', label: '1. Clone Voice', icon: Mic },
-              { key: 'dad-phone', label: '2. Dad\'s Phone', icon: Phone },
-              { key: 'prank', label: '3. Select Prank', icon: Sparkles },
-              { key: 'transfer', label: '4. Your Phone', icon: Heart },
-            ].map(({ key, label, icon: Icon }, index) => (
+            {steps.map(({ number, key, title }, index) => (
               <div key={key} className="flex items-center">
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                  currentStep === key 
+                  currentStep === number 
                     ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                    : ['voice', 'dad-phone', 'prank', 'transfer'].indexOf(currentStep) > index
+                    : currentStep > number
                     ? 'bg-green-500/20 text-green-300 border border-green-500/30'
                     : 'bg-gray-800/50 text-gray-500 border border-gray-700'
                 }`}>
-                  <Icon className="h-4 w-4" />
-                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-sm font-medium">{number}</span>
+                  <div className="hidden sm:block">
+                    <div className="text-sm font-medium">{title}</div>
+                  </div>
                 </div>
                 {index < 3 && (
                   <ArrowRight className="h-4 w-4 text-gray-600 ml-4" />
@@ -406,226 +461,215 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Step Content */}
-        {currentStep === 'voice' && (
-          <VoiceRecorder 
-            onVoiceCloned={handleVoiceCloned} 
-            systemPrompt=""
-            onSystemPromptChange={() => {}}
-            hideSystemPrompt={true}
-          />
-        )}
+        {/* Main Content */}
+        <div className="max-w-2xl mx-auto">
+          {currentStep === 1 && (
+            <VoiceRecorder 
+              onVoiceCloned={handleVoiceCloned}
+              hideSystemPrompt={true}
+              voiceTrainingTexts={VOICE_TRAINING_TEXTS}
+            />
+          )}
 
-        {currentStep === 'dad-phone' && (
-          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <Phone className="h-5 w-5 text-purple-400" />
-                Enter Your Dad&apos;s Phone Number
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="dadPhone" className="text-white font-medium">
+          {currentStep === 2 && (
+            <Card className="bg-gray-900/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-purple-400" />
                   Dad&apos;s Phone Number
-                </Label>
-                <Input
-                  id="dadPhone"
-                  type="tel"
-                  value={dadPhoneNumber}
-                  onChange={(e) => setDadPhoneNumber(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
-                  className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 text-lg h-12"
-                />
-                <p className="text-gray-400 text-sm">
-                  We&apos;ll call this number with your cloned voice to prank your dad!
-                </p>
-              </div>
-
-              <div className="flex gap-4">
-                <Button 
-                  onClick={handleGoBack} 
-                  variant="outline"
-                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button 
-                  onClick={handleDadPhoneSubmit}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 h-12 text-lg"
-                >
-                  Continue
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 'prank' && (
-          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-purple-400" />
-                Choose Your Prank Scenario
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-gray-300">
-                Pick an excuse for why you&apos;re calling from a random number:
-              </p>
-              
-              <div className="grid gap-4">
-                {PRANK_SCENARIOS.map((prank) => (
-                  <div
-                    key={prank.id}
-                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                      selectedPrank === prank.id
-                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
-                        : 'bg-gray-900/50 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:border-gray-500'
-                    }`}
-                    onClick={() => handlePrankSelect(prank.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-lg">{prank.title}</h3>
-                        <p className="text-sm opacity-70 mt-1">{prank.description}</p>
-                      </div>
-                      {selectedPrank === prank.id && (
-                        <CheckCircle2 className="h-5 w-5 text-purple-400" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-4">
-                <Button 
-                  onClick={handleGoBack} 
-                  variant="outline"
-                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 'transfer' && (
-          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <Heart className="h-5 w-5 text-purple-400" />
-                Transfer to You (Optional)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-gray-300">
-                After the prank reveal, should we transfer your dad to your real phone?
-              </p>
-              
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="transferPhone" className="text-white font-medium">
-                    Your Phone Number (Optional)
-                  </Label>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="dadPhone" className="text-white">Phone Number</Label>
                   <Input
-                    id="transferPhone"
+                    id="dadPhone"
                     type="tel"
-                    value={transferPhoneNumber}
-                    onChange={(e) => setTransferPhoneNumber(e.target.value)}
-                    placeholder="+1 (555) 987-6543"
-                    className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-purple-500 text-lg h-12"
-                    disabled={skipTransfer}
+                    placeholder="+1 (555) 123-4567"
+                    value={dadPhoneNumber}
+                    onChange={(e) => setDadPhoneNumber(e.target.value)}
+                    className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="skipTransfer"
-                    checked={skipTransfer}
-                    onChange={(e) => setSkipTransfer(e.target.checked)}
-                    className="rounded border-gray-600 bg-gray-900/50 text-purple-600 focus:ring-purple-500"
-                  />
-                  <Label htmlFor="skipTransfer" className="text-gray-300">
-                    Skip transfer - just end the call after the prank
-                  </Label>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCurrentStep(1)}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                  <Button 
+                    onClick={handleDadPhoneSubmit}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600"
+                  >
+                    Continue
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+          )}
 
-              <Alert className="bg-blue-500/10 border-blue-500/30">
-                <AlertCircle className="h-4 w-4 fill-blue-400" />
-                <AlertDescription className="text-blue-200">
-                  <strong>Ready to prank!</strong> We&apos;ll call your dad with your cloned voice, deliver the prank, and optionally transfer him to you.
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex gap-4">
-                <Button 
-                  onClick={handleGoBack} 
-                  variant="outline"
-                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button 
-                  onClick={handleTransferSubmit}
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 h-12 text-lg"
-                  disabled={!skipTransfer && !transferPhoneNumber.trim()}
-                >
-                  <Phone className="mr-2 h-5 w-5" />
-                  Start Prank Call!
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 'calling' && (
-          <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <PhoneCall className="h-5 w-5 text-purple-400" />
-                Prank Call in Progress
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="text-center">
-                <div className="inline-flex items-center gap-3 p-4 bg-green-500/20 border border-green-500/30 rounded-lg">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-green-300 font-medium">{callStatus}</span>
+          {currentStep === 3 && (
+            <Card className="bg-gray-900/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-400" />
+                  Choose Your Prank
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3">
+                  {PRANK_SCENARIOS.map((prank) => (
+                    <button
+                      key={prank.id}
+                      className={`p-4 rounded-lg border text-left transition-all ${
+                        selectedPrank === prank.id
+                          ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
+                          : 'bg-gray-900/50 border-gray-600 text-gray-300 hover:bg-gray-800/50 hover:border-gray-500'
+                      }`}
+                      onClick={() => handlePrankSelected(prank.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium">{prank.title}</h3>
+                          <p className="text-sm opacity-75 mt-1">{prank.description}</p>
+                        </div>
+                        {selectedPrank === prank.id && (
+                          <CheckCircle2 className="h-5 w-5 text-purple-400" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <p className="text-gray-400 mt-2">
-                  Calling {dadPhoneNumber} with your cloned voice...
-                </p>
-              </div>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCurrentStep(2)}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                  <Button 
+                    onClick={() => setCurrentStep(4)}
+                    disabled={!selectedPrank}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600"
+                  >
+                    Continue
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-              <div className="flex gap-4 justify-center">
-                <Button 
-                  onClick={handleEndCall}
-                  variant="destructive"
-                  className="bg-red-600 hover:bg-red-700"
-                  disabled={!isCallActive}
-                >
-                  <PhoneOff className="mr-2 h-4 w-4" />
-                  End Call
-                </Button>
-                <Button 
-                  onClick={handleStartOver}
-                  variant="outline"
-                  className="bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                >
-                  Start Over
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          {currentStep === 4 && (
+            <Card className="bg-gray-900/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-purple-400" />
+                  Transfer to You (Optional)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="skipTransfer"
+                      checked={skipTransfer}
+                      onCheckedChange={(checked) => setSkipTransfer(checked === true)}
+                    />
+                    <Label htmlFor="skipTransfer" className="text-white">
+                      Skip transfer (AI will just reveal and hang up)
+                    </Label>
+                  </div>
+                  
+                  {!skipTransfer && (
+                    <div>
+                      <Label htmlFor="transferPhone" className="text-white">Your Phone Number</Label>
+                      <Input
+                        id="transferPhone"
+                        type="tel"
+                        placeholder="+1 (555) 987-6543"
+                        value={transferPhoneNumber}
+                        onChange={(e) => setTransferPhoneNumber(e.target.value)}
+                        className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+                      />
+                      <p className="text-sm text-gray-400 mt-1">
+                        After the AI reveals the prank, the call will transfer to you
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCurrentStep(3)}
+                    className="flex-1"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                  <Button 
+                    onClick={startPrankCall}
+                    disabled={!skipTransfer && !transferPhoneNumber.trim()}
+                    className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
+                  >
+                    <PhoneCall className="h-4 w-4 mr-2" />
+                    Start Prank Call!
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Call Status */}
+          {callStatus && (
+            <Card className="bg-gray-900/50 border-gray-700 mt-6">
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <div className="animate-pulse">
+                    <PhoneCall className="h-8 w-8 text-purple-400 mx-auto mb-2" />
+                  </div>
+                  <p className="text-white font-medium">{callStatus}</p>
+                  {callId && (
+                    <p className="text-sm text-gray-400 mt-1">Call ID: {callId}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Call Summary */}
+          {isCallComplete && callSummary && (
+            <Card className="bg-gray-900/50 border-gray-700 mt-6">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-400" />
+                  Call Complete!
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-white font-medium">Call Summary:</Label>
+                    <p className="text-gray-300 mt-2 leading-relaxed">{callSummary}</p>
+                  </div>
+                  <Button 
+                    onClick={handleStartOver}
+                    className="w-full bg-gradient-to-r from-purple-600 to-cyan-600"
+                  >
+                    Start Another Prank
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Live Transcript */}
         {(transcript.length > 0 || partialTranscript) && (

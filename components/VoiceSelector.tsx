@@ -13,6 +13,50 @@ import LoadingSkeleton from './LoadingSkeleton';
 import { toast } from 'sonner';
 import { Mic, Volume2, ArrowLeft, MessageSquare, CheckCircle2 } from 'lucide-react';
 
+// Voice training texts for cloning
+const VOICE_TRAINING_TEXTS = [
+  "Hello, this is a test of my voice for cloning purposes.",
+  "The quick brown fox jumps over the lazy dog near the riverbank.",
+  "I love spending time with my family during the holidays.",
+  "Technology has revolutionized the way we communicate with each other.",
+  "The weather today is absolutely beautiful with clear blue skies.",
+  "Reading books helps expand our knowledge and imagination significantly.",
+  "Music has the power to evoke strong emotions and memories.",
+  "Cooking delicious meals brings people together around the dinner table.",
+  "Exercise and healthy eating are essential for maintaining good health.",
+  "Travel opens our minds to new cultures and experiences worldwide.",
+  "Learning new skills keeps our brains active and engaged throughout life.",
+  "Friendship is one of the most valuable treasures we can possess.",
+  "The ocean waves crashed against the rocky shore with tremendous force.",
+  "Art and creativity allow us to express ourselves in unique ways.",
+  "Education provides the foundation for personal and professional growth.",
+  "Laughter truly is the best medicine for both body and soul.",
+  "Nature's beauty surrounds us everywhere if we take time to notice.",
+  "Hard work and dedication are the keys to achieving our dreams.",
+  "Kindness and compassion make the world a better place for everyone.",
+  "The stars shine brightly in the clear night sky above us.",
+  "Coffee and conversation create perfect moments of connection with others.",
+  "Innovation drives progress and helps solve complex global challenges.",
+  "Family traditions create lasting memories that span multiple generations.",
+  "The changing seasons remind us of life's natural cycles and rhythms.",
+  "Gratitude transforms ordinary moments into extraordinary blessings for us.",
+  "Adventure awaits those who are brave enough to step outside their comfort zone.",
+  "Patience and persistence are essential virtues for overcoming life's obstacles.",
+  "The sound of rain on the roof creates a peaceful and calming atmosphere.",
+  "Creativity flourishes when we give ourselves permission to think differently.",
+  "Love is the universal language that connects all human hearts together.",
+  "The morning sunrise brings hope and new possibilities for each day.",
+  "Wisdom comes from experience, reflection, and learning from our mistakes.",
+  "Community support helps individuals thrive and reach their full potential.",
+  "The gentle breeze carries the sweet fragrance of blooming flowers.",
+  "Curiosity drives discovery and leads to amazing scientific breakthroughs.",
+  "Memories are precious gifts that we carry with us throughout our lives.",
+  "The mountain peak offers breathtaking views of the valley below.",
+  "Determination and courage help us overcome even the greatest challenges.",
+  "Simple pleasures like a warm cup of tea can bring immense joy.",
+  "The future belongs to those who believe in the beauty of their dreams."
+];
+
 interface Voice {
   voice_id: string;
   name: string;
@@ -301,6 +345,7 @@ export default function VoiceSelector({ onVoiceSelected, systemPrompt, onSystemP
               onVoiceCloned={handleVoiceCloned}
               systemPrompt={systemPrompt}
               onSystemPromptChange={onSystemPromptChange}
+              voiceTrainingTexts={VOICE_TRAINING_TEXTS}
             />
           </TabsContent>
         </Tabs>

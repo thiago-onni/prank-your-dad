@@ -30,57 +30,60 @@ export async function POST(request: NextRequest) {
 
     // Create the assistant configuration for the prank call
     const assistantConfig = {
+      name: 'Father\'s Day Prank Assistant',
       transcriber: {
-        provider: 'deepgram',
         model: 'nova-2',
         language: 'en-US',
+        provider: 'deepgram'
       },
       model: {
-        provider: 'openai',
         model: 'gpt-4',
-        messages: [{
-          role: 'system',
-          content: systemPrompt
-        }],
-        // Add transfer tool if transfer phone number is provided
-        ...(transferPhoneNumber && {
-          tools: [{
-            type: 'transferCall',
-            destinations: [{
-              type: 'number',
-              number: transferPhoneNumber,
-              message: 'Great news! I\'m now connecting you with the real person behind this prank. Hold on just a moment!',
-              transferPlan: {
-                mode: 'warm-transfer-with-message',
-                message: 'Hey! This is a Father\'s Day prank call that was just transferred to you. Your dad was just talking to an AI using your cloned voice!'
-              }
-            }],
-            function: {
-              name: 'transferCall',
-              description: 'Use this function to transfer the call to the real person after revealing you are an AI. Call this immediately after revealing you are an AI assistant.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  destination: {
-                    type: 'string',
-                    enum: [transferPhoneNumber],
-                    description: 'The phone number to transfer the call to'
-                  }
-                },
-                required: ['destination']
-              }
-            }
-          }]
-        })
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          }
+        ],
+        provider: 'openai'
       },
       voice: {
-        provider: '11labs',
-        voiceId: voiceId,
         model: 'eleven_monolingual_v1',
+        voiceId: voiceId,
+        provider: '11labs',
         stability: 0.5,
-        similarityBoost: 0.5,
+        similarityBoost: 0.5
       },
-      name: 'Father\'s Day Prank Assistant',
+      // Disable background noise for cleaner audio
+      backgroundSound: 'off',
+      // Add transfer tool if transfer phone number is provided
+      ...(transferPhoneNumber && {
+        tools: [{
+          type: 'transferCall',
+          destinations: [{
+            type: 'number',
+            number: transferPhoneNumber,
+            message: 'Great news! I\'m now connecting you with the real person behind this prank. Hold on just a moment!',
+            transferPlan: {
+              mode: 'warm-transfer-with-message',
+              message: 'Hey! This is a Father\'s Day prank call that was just transferred to you. Your dad was just talking to an AI using your cloned voice!'
+            }
+          }],
+          function: {
+            name: 'transferCall',
+            description: 'Transfer the call to the real person after revealing the AI prank',
+            parameters: {
+              type: 'object',
+              properties: {
+                destination: {
+                  type: 'string',
+                  description: 'The phone number to transfer to'
+                }
+              },
+              required: ['destination']
+            }
+          }
+        }]
+      })
     };
 
     // Make the outbound call using Vapi
