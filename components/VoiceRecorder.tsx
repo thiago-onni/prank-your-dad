@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Mic, Upload, Square, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Mic, Upload, Square, RefreshCw, CheckCircle2, Play, Trophy, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface VoiceRecorderProps {
@@ -14,6 +15,15 @@ interface VoiceRecorderProps {
   voiceTrainingTexts: string[];
   systemPrompt?: string;
   onSystemPromptChange?: (prompt: string) => void;
+}
+
+interface RecordingData {
+  id: string;
+  blob: Blob;
+  text: string;
+  recognizedText: string;
+  timestamp: number;
+  url: string;
 }
 
 // Define custom Speech Recognition types to avoid conflicts
@@ -39,13 +49,14 @@ interface CustomSpeechRecognition extends EventTarget {
 
 export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false, voiceTrainingTexts, systemPrompt = '', onSystemPromptChange }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [currentText, setCurrentText] = useState('');
   const [recognizedText, setRecognizedText] = useState('');
   const [highlightedWords, setHighlightedWords] = useState<number[]>([]);
   const [usedTextIndices, setUsedTextIndices] = useState<Set<number>>(new Set());
   const [allTextsCompleted, setAllTextsCompleted] = useState(false);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recognitionRef = useRef<CustomSpeechRecognition | null>(null);
@@ -54,7 +65,7 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
   const generateNewText = useCallback(() => {
     if (usedTextIndices.size >= voiceTrainingTexts.length) {
       setAllTextsCompleted(true);
-      setCurrentText('🎉 Congratulations! You\'ve completed all voice training examples. Your voice samples are ready for cloning!');
+      setCurrentText('🎉 All training texts completed! You can now clone your voice.');
       return;
     }
 
@@ -82,23 +93,43 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
     const currentWords = currentText.toLowerCase().split(/\s+/);
     const spokenWords = transcript.toLowerCase().split(/\s+/);
     
-    // Find the furthest sequential match
-    let matchedCount = 0;
-    for (let i = 0; i < Math.min(currentWords.length, spokenWords.length); i++) {
-      // Check if current word or any recent spoken word matches
-      const currentWord = currentWords[i];
-      const recentSpokenWords = spokenWords.slice(Math.max(0, spokenWords.length - 5)); // Check last 5 words
+    // Find matching words
+    const matched = [];
+    let spokenIndex = 0;
+    
+    for (let i = 0; i < currentWords.length && spokenIndex < spokenWords.length; i++) {
+      const currentWord = currentWords[i].replace(/[^\w]/g, ''); // Remove punctuation
+      let foundMatch = false;
       
-      if (recentSpokenWords.some(spokenWord => 
-        spokenWord.includes(currentWord) || currentWord.includes(spokenWord)
-      )) {
-        matchedCount = i + 1;
-      } else {
-        break; // Stop at first non-sequential match
+      // Look ahead in spoken words to find this current word
+      for (let j = spokenIndex; j < Math.min(spokenIndex + 3, spokenWords.length); j++) {
+        const spokenWord = spokenWords[j].replace(/[^\w]/g, '');
+        
+        if (currentWord.length > 2 && spokenWord.length > 2) {
+          // Use similarity for longer words
+          const similarity = Math.max(
+            currentWord.includes(spokenWord) ? spokenWord.length / currentWord.length : 0,
+            spokenWord.includes(currentWord) ? currentWord.length / spokenWord.length : 0
+          );
+          
+          if (similarity > 0.6) {
+            matched.push(i);
+            spokenIndex = j + 1;
+            foundMatch = true;
+            break;
+          }
+        } else if (currentWord === spokenWord) {
+          matched.push(i);
+          spokenIndex = j + 1;
+          foundMatch = true;
+          break;
+        }
       }
+      
+      if (!foundMatch) break; // Stop highlighting if we can't find a match
     }
     
-    setHighlightedWords(Array.from({ length: matchedCount }, (_, i) => i));
+    setHighlightedWords(matched);
   }, [currentText, allTextsCompleted]);
 
   const initializeSpeechRecognition = useCallback(() => {
@@ -124,20 +155,32 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
 
     recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
       let finalTranscript = '';
+      let interimTranscript = '';
+      
       for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
         }
       }
       
       if (finalTranscript) {
-        setRecognizedText(finalTranscript);
+        setRecognizedText(prev => prev + finalTranscript);
         updateHighlighting(finalTranscript);
+      }
+      
+      if (interimTranscript) {
+        updateHighlighting(interimTranscript);
       }
     };
 
     recognition.onerror = (event: CustomSpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please allow microphone access.');
+      }
     };
 
     return recognition;
@@ -146,6 +189,9 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Reset recognition text
+      setRecognizedText('');
       
       // Initialize speech recognition
       const recognition = initializeSpeechRecognition();
@@ -165,12 +211,35 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
 
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(audioBlob);
+        
+        // Create recording data
+        const recording: RecordingData = {
+          id: Date.now().toString(),
+          blob: audioBlob,
+          text: currentText,
+          recognizedText: recognizedText,
+          timestamp: Date.now(),
+          url: URL.createObjectURL(audioBlob)
+        };
+        
+        setRecordings(prev => [...prev, recording]);
         stream.getTracks().forEach(track => track.stop());
+        
+        // Show success animation
+        setShowSuccessAnimation(true);
+        toast.success('Recording saved! Great job reading that text.');
+        
+        setTimeout(() => {
+          setShowSuccessAnimation(false);
+          if (!allTextsCompleted) {
+            generateNewText();
+          }
+        }, 2000);
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      toast.success('Recording started! Begin reading the text.');
     } catch (error) {
       console.error('Error starting recording:', error);
       toast.error('Failed to start recording. Please check microphone permissions.');
@@ -189,16 +258,20 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
     }
   }, [isRecording]);
 
-  const resetRecording = useCallback(() => {
-    setAudioBlob(null);
-    setRecognizedText('');
-    setHighlightedWords([]);
-    audioChunksRef.current = [];
-  }, []);
+  const deleteRecording = (id: string) => {
+    setRecordings(prev => {
+      const recording = prev.find(r => r.id === id);
+      if (recording) {
+        URL.revokeObjectURL(recording.url);
+      }
+      return prev.filter(r => r.id !== id);
+    });
+    toast.success('Recording deleted');
+  };
 
   const uploadVoice = async () => {
-    if (!audioBlob) {
-      toast.error('No audio recorded');
+    if (recordings.length === 0) {
+      toast.error('No recordings to upload');
       return;
     }
 
@@ -207,18 +280,19 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
     try {
       const formData = new FormData();
       
-      // Determine file extension based on blob type
-      const fileExtension = audioBlob.type.includes('mp4') ? 'mp4' : 
-                           audioBlob.type.includes('webm') ? 'webm' : 'wav';
+      // Add all recordings
+      recordings.forEach((recording, index) => {
+        const fileExtension = recording.blob.type.includes('mp4') ? 'mp4' : 
+                             recording.blob.type.includes('webm') ? 'webm' : 'wav';
+        formData.append('files', recording.blob, `voice-sample-${index + 1}.${fileExtension}`);
+      });
       
-      formData.append('files', audioBlob, `voice-sample.${fileExtension}`);
       formData.append('name', `Voice Clone ${Date.now()}`);
-      formData.append('description', 'Voice cloned for prank call');
+      formData.append('description', `Voice cloned from ${recordings.length} samples for prank call`);
 
       console.log('Uploading voice with:', {
-        blobType: audioBlob.type,
-        blobSize: audioBlob.size,
-        fileExtension
+        recordingCount: recordings.length,
+        totalSize: recordings.reduce((sum, r) => sum + r.blob.size, 0)
       });
 
       const response = await fetch('/api/clone-voice', {
@@ -233,7 +307,7 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
         throw new Error(data.error || 'Failed to clone voice');
       }
 
-      toast.success('Voice cloned successfully!');
+      toast.success(`Voice cloned successfully from ${recordings.length} recordings!`);
       onVoiceCloned(data.voiceId);
     } catch (error) {
       console.error('Error cloning voice:', error);
@@ -248,9 +322,12 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
       return (
         <div className="flex items-center justify-center p-8 text-center">
           <div className="space-y-4">
-            <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
+            <div className="flex justify-center space-x-2">
+              <Trophy className="h-16 w-16 text-yellow-500 animate-bounce" />
+              <Star className="h-12 w-12 text-yellow-400 animate-pulse" />
+            </div>
             <p className="text-lg font-medium text-green-700">
-              🎉 Congratulations! You&apos;ve completed all voice training examples.
+              🎉 Outstanding! You&apos;ve completed all voice training examples.
             </p>
             <p className="text-sm text-gray-600">
               Your voice samples are ready for cloning!
@@ -262,25 +339,39 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
 
     const words = currentText.split(/(\s+)/);
     return (
-      <p className="text-lg leading-relaxed">
-        {words.map((word, index) => {
-          const wordIndex = Math.floor(index / 2); // Account for spaces
-          const isHighlighted = highlightedWords.includes(wordIndex);
-          
-          if (word.trim() === '') return <span key={index}>{word}</span>; // Return spaces as-is
-          
-          return (
-            <span
-              key={index}
-              className={`transition-colors duration-200 ${
-                isHighlighted ? 'bg-green-200 text-green-800' : ''
-              }`}
-            >
-              {word}
-            </span>
-          );
-        })}
-      </p>
+      <div className="relative">
+        <p className="text-lg leading-relaxed text-gray-200">
+          {words.map((word, index) => {
+            const wordIndex = Math.floor(index / 2); // Account for spaces
+            const isHighlighted = highlightedWords.includes(wordIndex);
+            
+            if (word.trim() === '') return <span key={index}>{word}</span>; // Return spaces as-is
+            
+            return (
+              <span
+                key={index}
+                className={`transition-all duration-300 ${
+                  isHighlighted 
+                    ? 'bg-green-400/20 text-green-200 font-medium border-b-2 border-green-400' 
+                    : ''
+                }`}
+              >
+                {word}
+              </span>
+            );
+          })}
+        </p>
+        
+        {showSuccessAnimation && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-gray-900/95 backdrop-blur-sm border border-green-500/50 rounded-xl p-6 text-center shadow-2xl">
+              <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto mb-3 animate-bounce" />
+              <p className="text-green-300 font-medium text-lg">Excellent! Recording saved.</p>
+              <p className="text-gray-400 text-sm mt-1">Moving to next text...</p>
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -293,8 +384,10 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
+      // Clean up URLs
+      recordings.forEach(recording => URL.revokeObjectURL(recording.url));
     };
-  }, []);
+  }, [recordings]);
 
   return (
     <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700 shadow-2xl">
@@ -308,7 +401,7 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
         <div>
           <Label className="text-base font-medium text-white">Voice Training</Label>
           <p className="text-sm text-gray-400 mt-1">
-            Read the text below clearly to train your voice clone. Words will highlight as you speak them.
+            Read each text clearly to train your voice clone. Words will highlight in real-time as you speak them. For best results, aim for at least 30 seconds of total audio - the more you record, the better your voice clone will sound.
           </p>
         </div>
 
@@ -338,23 +431,16 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
           {!allTextsCompleted && (
             <div className="mt-4 text-sm text-gray-400">
               <p><strong>Progress:</strong> {usedTextIndices.size} of {voiceTrainingTexts.length} examples completed</p>
+              <p><strong>Recordings:</strong> {recordings.length} samples collected</p>
             </div>
           )}
         </div>
-
-        {recognizedText && !allTextsCompleted && (
-          <div className="border rounded-lg p-4 bg-blue-900/20 border-blue-700">
-            <Label className="text-sm font-medium text-blue-300">What we heard:</Label>
-            <p className="text-sm text-blue-200 mt-1">{recognizedText}</p>
-          </div>
-        )}
 
         <div className="flex gap-3">
           {!isRecording ? (
             <Button 
               onClick={startRecording} 
               className="flex-1 bg-red-600 hover:bg-red-700"
-              disabled={allTextsCompleted}
             >
               <Mic className="h-4 w-4 mr-2" />
               Start Recording
@@ -369,28 +455,70 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
               Stop Recording
             </Button>
           )}
-          
-          {audioBlob && (
-            <Button 
-              onClick={resetRecording} 
-              variant="outline"
-              className="bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-white"
-            >
-              Reset
-            </Button>
-          )}
         </div>
 
-        {audioBlob && (
+        {!allTextsCompleted && (
+          <div className="border rounded-lg p-4 bg-blue-900/20 border-blue-700">
+            <Label className="text-sm font-medium text-blue-300">What we heard:</Label>
+            <p className="text-sm text-blue-200 mt-1 min-h-[1.25rem]">
+              {recognizedText || (isRecording ? "Listening..." : "Start recording to see speech recognition here")}
+            </p>
+          </div>
+        )}
+
+        {recordings.length > 0 && (
           <div className="space-y-4">
-            <div>
-              <Label className="text-white">Audio Preview</Label>
-              <audio 
-                controls 
-                src={URL.createObjectURL(audioBlob)} 
-                className="w-full mt-2"
-              />
-            </div>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="recordings" className="border-gray-600">
+                <AccordionTrigger className="text-white hover:text-purple-300">
+                  <div className="flex items-center gap-2">
+                    <Play className="h-4 w-4" />
+                    Audio Previews
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 pt-4">
+                  {recordings.map((recording, index) => (
+                    <div key={recording.id} className="border rounded-lg p-3 bg-gray-800/30 border-gray-600">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <Label className="text-white text-sm font-medium">
+                            Recording #{index + 1}
+                          </Label>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(recording.timestamp).toLocaleTimeString()}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteRecording(recording.id)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      {/* Show the text that was being read */}
+                      <div className="mb-3 p-2 bg-gray-900/50 rounded border border-gray-700">
+                        <Label className="text-xs text-gray-400 font-medium">Text read:</Label>
+                        <p className="text-xs text-gray-300 mt-1 leading-relaxed">
+                          {recording.text.length > 100 
+                            ? `${recording.text.substring(0, 100)}...` 
+                            : recording.text
+                          }
+                        </p>
+                      </div>
+                      
+                      <audio 
+                        controls 
+                        src={recording.url}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             
             <Button 
               onClick={uploadVoice} 
@@ -398,7 +526,7 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
               className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {isUploading ? 'Cloning Voice...' : 'Clone Voice'}
+              {isUploading ? `Cloning Voice from ${recordings.length} Samples...` : `Clone Voice (${recordings.length} samples)`}
             </Button>
           </div>
         )}
