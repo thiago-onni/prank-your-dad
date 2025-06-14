@@ -24,14 +24,6 @@ export const metadata: Metadata = {
       "AI-powered Father's Day surprise made possible with Vapi. Clone your voice and prank call your dad!",
     url: "https://call-dad.vapi.ai",
     siteName: "Prank Your Dad",
-    images: [
-      {
-        url: "/og-banner.png",
-        width: 1200,
-        height: 630,
-        alt: "Prank Your Dad - AI Voice Demo",
-      },
-    ],
     locale: "en_US",
     type: "website",
   },
@@ -40,7 +32,6 @@ export const metadata: Metadata = {
     title: "Prank Your Dad - AI Voice Demo by Vapi",
     description:
       "AI-powered Father's Day surprise made possible with Vapi. Clone your voice and prank call your dad!",
-    images: ["/og-banner.png"],
   },
 };
 
@@ -51,6 +42,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="apple-mobile-web-app-title" content="Prank Your Dad" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
