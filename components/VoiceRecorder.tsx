@@ -1,13 +1,18 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Mic, Upload, Square, RefreshCw, CheckCircle2, Play, Trophy, Star, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Mic, Upload, Square, SkipForward, Play, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface VoiceRecorderProps {
   onVoiceCloned: (voiceId: string) => void;
@@ -45,27 +50,92 @@ interface CustomSpeechRecognition extends EventTarget {
   stop(): void;
   onresult: ((event: CustomSpeechRecognitionEvent) => void) | null;
   onerror: ((event: CustomSpeechRecognitionErrorEvent) => void) | null;
+  onend: ((event: Event) => void) | null;
 }
 
-export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false, voiceTrainingTexts, systemPrompt = '', onSystemPromptChange }: VoiceRecorderProps) {
+export default function VoiceRecorder({
+  onVoiceCloned,
+  hideSystemPrompt = false,
+  voiceTrainingTexts,
+  systemPrompt = "",
+  onSystemPromptChange,
+}: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [currentText, setCurrentText] = useState('');
-  const [recognizedText, setRecognizedText] = useState('');
-  const [highlightedWords, setHighlightedWords] = useState<number[]>([]);
-  const [usedTextIndices, setUsedTextIndices] = useState<Set<number>>(new Set());
+  const [currentText, setCurrentText] = useState("");
+  const [recognizedText, setRecognizedText] = useState("");
+  const [usedTextIndices, setUsedTextIndices] = useState<Set<number>>(
+    new Set()
+  );
   const [allTextsCompleted, setAllTextsCompleted] = useState(false);
-  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
-  
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [isContinuousMode, setIsContinuousMode] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recognitionRef = useRef<CustomSpeechRecognition | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const sentenceStartTimeRef = useRef<number>(0);
+
+  // Calculate total recording duration (estimated from blob size)
+  const getTotalRecordingDuration = useCallback((): number => {
+    // Estimate duration based on blob size (rough approximation: 1KB ≈ 0.1s for voice)
+    return recordings.reduce((total, recording) => {
+      const sizeInKB = recording.blob.size / 1024;
+      const estimatedDuration = sizeInKB * 0.1; // Rough estimation
+      return total + estimatedDuration;
+    }, 0);
+  }, [recordings]);
+
+  // Get recording quality status with tiered progress
+  const getRecordingQuality = useCallback(() => {
+    const totalDuration = getTotalRecordingDuration();
+
+    if (totalDuration < 30) {
+      return {
+        status: "poor",
+        label: "Very Little",
+        description: "May sound robotic",
+        color: "text-red-400",
+        bgColor: "bg-red-500",
+        progressPercent: Math.min((totalDuration / 30) * 25, 25),
+      };
+    } else if (totalDuration < 90) {
+      return {
+        status: "fair",
+        label: "Medium",
+        description: "Will sound decent",
+        color: "text-yellow-400",
+        bgColor: "bg-yellow-500",
+        progressPercent: 25 + Math.min(((totalDuration - 30) / 60) * 25, 25),
+      };
+    } else if (totalDuration < 300) {
+      return {
+        status: "good",
+        label: "Great Quality",
+        description: "High-quality voice clone",
+        color: "text-green-400",
+        bgColor: "bg-green-500",
+        progressPercent: 50 + Math.min(((totalDuration - 90) / 210) * 30, 30),
+      };
+    } else {
+      return {
+        status: "excellent",
+        label: "Exceptional",
+        description: "Uneducated ears will be fooled",
+        color: "text-pink-400",
+        bgColor: "bg-pink-500",
+        progressPercent: Math.min(80 + ((totalDuration - 300) / 300) * 20, 100),
+      };
+    }
+  }, [getTotalRecordingDuration]);
 
   const generateNewText = useCallback(() => {
     if (usedTextIndices.size >= voiceTrainingTexts.length) {
       setAllTextsCompleted(true);
-      setCurrentText('🎉 All training texts completed! You can now clone your voice.');
+      setCurrentText(
+        "🎉 All training texts completed! You can now clone your voice."
+      );
       return;
     }
 
@@ -74,134 +144,31 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
       randomIndex = Math.floor(Math.random() * voiceTrainingTexts.length);
     } while (usedTextIndices.has(randomIndex));
 
-    setUsedTextIndices(prev => new Set([...prev, randomIndex]));
+    setUsedTextIndices((prev) => new Set([...prev, randomIndex]));
     setCurrentText(voiceTrainingTexts[randomIndex]);
-    setRecognizedText('');
-    setHighlightedWords([]);
+    setRecognizedText("");
+    sentenceStartTimeRef.current = Date.now();
   }, [usedTextIndices, voiceTrainingTexts]);
 
-  // Initialize with first random text
+  // Initialize with the first text (Father's Day prompt), then use random for subsequent texts
   useEffect(() => {
     if (voiceTrainingTexts.length > 0 && !currentText) {
-      generateNewText();
+      // Always start with the first text (Father's Day prompt)
+      setUsedTextIndices(new Set([0]));
+      setCurrentText(voiceTrainingTexts[0]);
+      setRecognizedText("");
+      sentenceStartTimeRef.current = Date.now();
     }
-  }, [voiceTrainingTexts, currentText, generateNewText]);
-
-  const updateHighlighting = useCallback((transcript: string) => {
-    if (!currentText || allTextsCompleted) return;
-    
-    const currentWords = currentText.toLowerCase().split(/\s+/);
-    const spokenWords = transcript.toLowerCase().split(/\s+/);
-    
-    // Find matching words
-    const matched = [];
-    let spokenIndex = 0;
-    
-    for (let i = 0; i < currentWords.length && spokenIndex < spokenWords.length; i++) {
-      const currentWord = currentWords[i].replace(/[^\w]/g, ''); // Remove punctuation
-      let foundMatch = false;
-      
-      // Look ahead in spoken words to find this current word
-      for (let j = spokenIndex; j < Math.min(spokenIndex + 3, spokenWords.length); j++) {
-        const spokenWord = spokenWords[j].replace(/[^\w]/g, '');
-        
-        if (currentWord.length > 2 && spokenWord.length > 2) {
-          // Use similarity for longer words
-          const similarity = Math.max(
-            currentWord.includes(spokenWord) ? spokenWord.length / currentWord.length : 0,
-            spokenWord.includes(currentWord) ? currentWord.length / spokenWord.length : 0
-          );
-          
-          if (similarity > 0.6) {
-            matched.push(i);
-            spokenIndex = j + 1;
-            foundMatch = true;
-            break;
-          }
-        } else if (currentWord === spokenWord) {
-          matched.push(i);
-          spokenIndex = j + 1;
-          foundMatch = true;
-          break;
-        }
-      }
-      
-      if (!foundMatch) break; // Stop highlighting if we can't find a match
-    }
-    
-    setHighlightedWords(matched);
-  }, [currentText, allTextsCompleted]);
-
-  const initializeSpeechRecognition = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-
-    // Check if Speech Recognition is available
-    const windowWithSpeech = window as Window & {
-      SpeechRecognition?: new () => CustomSpeechRecognition;
-      webkitSpeechRecognition?: new () => CustomSpeechRecognition;
-    };
-
-    const SpeechRecognitionConstructor = windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionConstructor) {
-      console.warn('Speech Recognition not supported in this browser');
-      return null;
-    }
-
-    const recognition = new SpeechRecognitionConstructor();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-      
-      if (finalTranscript) {
-        setRecognizedText(prev => prev + finalTranscript);
-        updateHighlighting(finalTranscript);
-      }
-      
-      if (interimTranscript) {
-        updateHighlighting(interimTranscript);
-      }
-    };
-
-    recognition.onerror = (event: CustomSpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
-      if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied. Please allow microphone access.');
-      }
-    };
-
-    return recognition;
-  }, [updateHighlighting]);
+  }, [voiceTrainingTexts, currentText]);
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Reset recognition text
-      setRecognizedText('');
-      
-      // Initialize speech recognition
-      const recognition = initializeSpeechRecognition();
-      if (recognition) {
-        recognitionRef.current = recognition;
-        recognition.start();
-      }
 
+      // Start media recorder
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
+      sentenceStartTimeRef.current = Date.now();
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -209,168 +176,473 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
         }
       };
 
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        // Create recording data
+      mediaRecorderRef.current.start(1000);
+
+      // Start speech recognition
+      if (typeof window !== "undefined") {
+        const windowWithSpeech = window as Window & {
+          SpeechRecognition?: new () => CustomSpeechRecognition;
+          webkitSpeechRecognition?: new () => CustomSpeechRecognition;
+        };
+
+        const SpeechRecognition =
+          windowWithSpeech.SpeechRecognition ||
+          windowWithSpeech.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = (event: CustomSpeechRecognitionEvent) => {
+            let finalTranscript = "";
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+              }
+            }
+
+            // Handle final results - save to state
+            if (finalTranscript) {
+              setRecognizedText((prev) => prev + finalTranscript);
+            }
+          };
+
+          recognition.onerror = (event: CustomSpeechRecognitionErrorEvent) => {
+            console.log("Speech recognition error:", event.error);
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+        }
+      }
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      throw error;
+    }
+  };
+
+  const cropCurrentSample = async () => {
+    if (!mediaRecorderRef.current || !isContinuousMode) return;
+
+    return new Promise<void>((resolve) => {
+      const currentRecorder = mediaRecorderRef.current;
+      if (!currentRecorder) {
+        resolve();
+        return;
+      }
+
+      // Set up handler for when recording stops and final data is available
+      currentRecorder.onstop = () => {
+        // Save current recording with all available audio data
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+
+        console.log("Saving audio blob of size:", audioBlob.size);
+
         const recording: RecordingData = {
           id: Date.now().toString(),
           blob: audioBlob,
           text: currentText,
           recognizedText: recognizedText,
-          timestamp: Date.now(),
-          url: URL.createObjectURL(audioBlob)
+          timestamp: sentenceStartTimeRef.current,
+          url: URL.createObjectURL(audioBlob),
         };
-        
-        setRecordings(prev => [...prev, recording]);
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Show success animation
-        setShowSuccessAnimation(true);
-        toast.success('Recording saved! Great job reading that text.');
-        
-        setTimeout(() => {
-          setShowSuccessAnimation(false);
-          if (!allTextsCompleted) {
-            generateNewText();
+
+        setRecordings((prev) => {
+          const newRecordings = [...prev, recording];
+          console.log("Total recordings:", newRecordings.length);
+          return newRecordings;
+        });
+
+        // Clean up everything else
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        }
+
+        if (currentRecorder.stream) {
+          currentRecorder.stream.getTracks().forEach((track) => track.stop());
+        }
+
+        mediaRecorderRef.current = null;
+
+        // Reset state
+        setRecognizedText("");
+        audioChunksRef.current = [];
+
+        toast.success("Sample captured! Starting next prompt...");
+
+        // Check if done
+        if (allTextsCompleted) {
+          setIsContinuousMode(false);
+          setIsRecording(false);
+          resolve();
+          return;
+        }
+
+        // Get new text and restart
+        generateNewText();
+
+        setTimeout(async () => {
+          if (isContinuousMode && !allTextsCompleted) {
+            try {
+              await startRecording();
+            } catch (error) {
+              console.error("Failed to restart recording:", error);
+              toast.error("Failed to start recording for next prompt");
+            }
           }
-        }, 2000);
+          resolve();
+        }, 1000);
       };
 
-      mediaRecorderRef.current.start();
+      // Stop the recording - this will trigger the onstop handler
+      currentRecorder.stop();
+    });
+  };
+
+  const startContinuousRecording = async () => {
+    try {
+      setIsContinuousMode(true);
       setIsRecording(true);
-      toast.success('Recording started! Begin reading the text.');
+      setShowTooltip(true);
+      setRecognizedText("");
+
+      await startRecording();
+
+      // Hide tooltip after 5 seconds
+      setTimeout(() => setShowTooltip(false), 5000);
     } catch (error) {
-      console.error('Error starting recording:', error);
-      toast.error('Failed to start recording. Please check microphone permissions.');
+      console.error("Error starting recording:", error);
+      toast.error(
+        "Failed to start recording. Please check microphone permissions."
+      );
+      setIsContinuousMode(false);
+      setIsRecording(false);
     }
   };
 
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+  const stopContinuousRecording = async () => {
+    // Check if current recording is longer than 10 seconds
+    const currentDuration = Date.now() - sentenceStartTimeRef.current;
+    const shouldSaveSample = currentDuration > 10000; // 10 seconds in milliseconds
+
+    console.log("Stop recording called:", {
+      currentDuration: Math.round(currentDuration / 1000) + "s",
+      shouldSaveSample,
+      hasMediaRecorder: !!mediaRecorderRef.current,
+      mediaRecorderState: mediaRecorderRef.current?.state,
+      audioChunksLength: audioChunksRef.current.length,
+    });
+
+    if (
+      shouldSaveSample &&
+      mediaRecorderRef.current &&
+      audioChunksRef.current.length > 0
+    ) {
+      // Save the current sample before stopping
+      return new Promise<void>((resolve) => {
+        const currentRecorder = mediaRecorderRef.current;
+        if (!currentRecorder) {
+          console.log("No current recorder found");
+          stopRecordingCleanup();
+          resolve();
+          return;
+        }
+
+        // Set up handler for when recording stops and final data is available
+        currentRecorder.onstop = () => {
+          console.log("MediaRecorder stopped, processing audio...");
+          // Save current recording with all available audio data
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: "audio/webm",
+          });
+
+          console.log("Saving audio blob of size:", audioBlob.size);
+
+          const recording: RecordingData = {
+            id: Date.now().toString(),
+            blob: audioBlob,
+            text: currentText,
+            recognizedText: recognizedText,
+            timestamp: sentenceStartTimeRef.current,
+            url: URL.createObjectURL(audioBlob),
+          };
+
+          setRecordings((prev) => {
+            const newRecordings = [...prev, recording];
+            console.log("Total recordings:", newRecordings.length);
+            return newRecordings;
+          });
+
+          stopRecordingCleanup();
+          toast.success("Recording saved and session ended.");
+          resolve();
+        };
+
+        // Stop the recording - this will trigger the onstop handler
+        if (currentRecorder.state === "recording") {
+          console.log("Stopping MediaRecorder...");
+          currentRecorder.stop();
+        } else {
+          console.log(
+            "MediaRecorder not in recording state:",
+            currentRecorder.state
+          );
+          // If not recording, just process what we have
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: "audio/webm",
+          });
+
+          console.log("Saving audio blob of size:", audioBlob.size);
+
+          const recording: RecordingData = {
+            id: Date.now().toString(),
+            blob: audioBlob,
+            text: currentText,
+            recognizedText: recognizedText,
+            timestamp: sentenceStartTimeRef.current,
+            url: URL.createObjectURL(audioBlob),
+          };
+
+          setRecordings((prev) => {
+            const newRecordings = [...prev, recording];
+            console.log("Total recordings:", newRecordings.length);
+            return newRecordings;
+          });
+
+          stopRecordingCleanup();
+          toast.success("Recording saved and session ended.");
+          resolve();
+        }
+      });
+    } else {
+      stopRecordingCleanup();
+      if (currentDuration < 10000) {
+        toast.info(
+          `Recording too short (${Math.round(
+            currentDuration / 1000
+          )}s). Need 10+ seconds to save.`
+        );
+      } else {
+        toast.success("Recording session ended.");
+      }
     }
-    
+  };
+
+  const stopRecordingCleanup = () => {
+    // Stop speech recognition
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.onerror = null;
+      recognitionRef.current.onend = null;
       recognitionRef.current = null;
     }
-  }, [isRecording]);
+
+    // Stop all media tracks
+    if (mediaRecorderRef.current?.stream) {
+      mediaRecorderRef.current.stream
+        .getTracks()
+        .forEach((track) => track.stop());
+    }
+
+    // Clean up
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    setRecognizedText("");
+    setIsRecording(false);
+    setIsContinuousMode(false);
+    setShowTooltip(false);
+  };
 
   const deleteRecording = (id: string) => {
-    setRecordings(prev => {
-      const recording = prev.find(r => r.id === id);
+    setRecordings((prev) => {
+      const recording = prev.find((r) => r.id === id);
       if (recording) {
         URL.revokeObjectURL(recording.url);
       }
-      return prev.filter(r => r.id !== id);
+      return prev.filter((r) => r.id !== id);
     });
-    toast.success('Recording deleted');
   };
 
-  const uploadVoice = async () => {
-    if (recordings.length === 0) {
-      toast.error('No recordings to upload');
+  const uploadVoiceInternal = async (
+    recordingsToUse: RecordingData[] = recordings,
+    isRetry = false
+  ) => {
+    if (recordingsToUse.length === 0) {
+      toast.error("Please record some voice samples first");
       return;
     }
 
     setIsUploading(true);
-    
+
     try {
       const formData = new FormData();
-      
-      // Add all recordings
-      recordings.forEach((recording, index) => {
-        const fileExtension = recording.blob.type.includes('mp4') ? 'mp4' : 
-                             recording.blob.type.includes('webm') ? 'webm' : 'wav';
-        formData.append('files', recording.blob, `voice-sample-${index + 1}.${fileExtension}`);
-      });
-      
-      formData.append('name', `Voice Clone ${Date.now()}`);
-      formData.append('description', `Voice cloned from ${recordings.length} samples for prank call`);
 
-      console.log('Uploading voice with:', {
-        recordingCount: recordings.length,
-        totalSize: recordings.reduce((sum, r) => sum + r.blob.size, 0)
+      // Add a name for the voice
+      formData.append("name", `Dad Voice Clone ${Date.now()}`);
+
+      // Add all audio files with the key "files" (as expected by the API)
+      recordingsToUse.forEach((recording, index) => {
+        formData.append("files", recording.blob, `recording-${index}.webm`);
       });
 
-      const response = await fetch('/api/clone-voice', {
-        method: 'POST',
+      const response = await fetch("/api/clone-voice", {
+        method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
-      console.log('Voice cloning response:', data);
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to clone voice');
+        const errorData = await response.json();
+
+        // Check for the specific ElevenLabs "voice_sample_too_short" error
+        if (
+          errorData.details &&
+          typeof errorData.details === "object" &&
+          errorData.details.detail &&
+          errorData.details.detail.status === "voice_sample_too_short"
+        ) {
+          console.log(
+            "ElevenLabs rejected sample due to insufficient speech content"
+          );
+
+          // If we have more than one recording and this isn't already a retry, try again with fewer files
+          if (recordingsToUse.length > 1 && !isRetry) {
+            console.log(
+              "Retrying with fewer files to exclude problematic samples..."
+            );
+
+            // Sort recordings by size (larger files more likely to have enough speech)
+            const sortedRecordings = [...recordingsToUse].sort(
+              (a, b) => b.blob.size - a.blob.size
+            );
+
+            // Try with the largest 70% of recordings (minimum 1)
+            const numToKeep = Math.max(
+              1,
+              Math.floor(sortedRecordings.length * 0.7)
+            );
+            const filteredRecordings = sortedRecordings.slice(0, numToKeep);
+
+            console.log(
+              `Retrying with ${filteredRecordings.length} largest recordings (was ${recordingsToUse.length})`
+            );
+
+            // Silently retry with filtered recordings
+            return uploadVoiceInternal(filteredRecordings, true);
+          }
+        }
+
+        throw new Error(errorData.error || "Failed to clone voice");
       }
 
-      toast.success(`Voice cloned successfully from ${recordings.length} recordings!`);
-      onVoiceCloned(data.voiceId);
+      const data = await response.json();
+
+      if (data.success && data.voiceId) {
+        if (isRetry) {
+          toast.success(
+            "Voice cloned successfully! (Some samples were automatically filtered out)"
+          );
+        } else {
+          toast.success("Voice cloned successfully!");
+        }
+        onVoiceCloned(data.voiceId);
+      } else {
+        throw new Error(data.error || "Unknown error occurred");
+      }
     } catch (error) {
-      console.error('Error cloning voice:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to clone voice');
+      console.error("Error cloning voice:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      toast.error(`Failed to clone voice: ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const renderTextWithHighlighting = () => {
+  const uploadVoice = async () => {
+    return uploadVoiceInternal();
+  };
+
+  const renderProgressBar = () => {
+    const quality = getRecordingQuality();
+    const breakpoints = [
+      { threshold: 30, color: "bg-red-500", width: 25 },
+      { threshold: 90, color: "bg-yellow-500", width: 25 },
+      { threshold: 300, color: "bg-green-500", width: 30 },
+      { threshold: Infinity, color: "bg-pink-500", width: 20 },
+    ];
+
+    return (
+      <div className="space-y-3">
+        {/* Progress Bar */}
+        <div className="relative">
+          <div className="flex h-4 bg-gray-700 rounded-full overflow-hidden">
+            {breakpoints.map((breakpoint, index) => (
+              <div
+                key={index}
+                className={`${breakpoint.color} transition-all duration-500`}
+                style={{
+                  width: `${breakpoint.width}%`,
+                  opacity:
+                    quality.progressPercent >=
+                    (index === 0
+                      ? 0
+                      : breakpoints
+                          .slice(0, index)
+                          .reduce((sum, bp) => sum + bp.width, 0))
+                      ? 1
+                      : 0.3,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Progress Indicator */}
+          <div
+            className="absolute top-0 h-4 bg-white/20 rounded-full transition-all duration-500"
+            style={{ width: `${quality.progressPercent}%` }}
+          />
+        </div>
+
+        {/* Duration and Description */}
+        <div className="flex flex-row items-center gap-2">
+          {/* Quality Pill */}
+          <div className="flex justify-center">
+            <div
+              className={`px-2 py-1 rounded-full text-sm font-medium ${quality.color} border border-current`}
+            >
+              {quality.label}
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-300">
+            ~{Math.round(getTotalRecordingDuration())}s recorded.{" "}
+            {quality.description}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderText = () => {
     if (allTextsCompleted) {
       return (
-        <div className="flex items-center justify-center p-8 text-center">
-          <div className="space-y-4">
-            <div className="flex justify-center space-x-2">
-              <Trophy className="h-16 w-16 text-yellow-500 animate-bounce" />
-              <Star className="h-12 w-12 text-yellow-400 animate-pulse" />
-            </div>
-            <p className="text-lg font-medium text-green-700">
-              🎉 Outstanding! You&apos;ve completed all voice training examples.
-            </p>
-            <p className="text-sm text-gray-600">
-              Your voice samples are ready for cloning!
-            </p>
-          </div>
+        <div className="relative text-center py-8">
+          <p className="text-2xl">{currentText}</p>
         </div>
       );
     }
 
-    const words = currentText.split(/(\s+)/);
     return (
       <div className="relative">
-        <p className="text-lg leading-relaxed text-gray-200">
-          {words.map((word, index) => {
-            const wordIndex = Math.floor(index / 2); // Account for spaces
-            const isHighlighted = highlightedWords.includes(wordIndex);
-            
-            if (word.trim() === '') return <span key={index}>{word}</span>; // Return spaces as-is
-            
-            return (
-              <span
-                key={index}
-                className={`transition-all duration-300 ${
-                  isHighlighted 
-                    ? 'bg-green-400/20 text-green-200 font-medium border-b-2 border-green-400' 
-                    : ''
-                }`}
-              >
-                {word}
-              </span>
-            );
-          })}
-        </p>
-        
-        {showSuccessAnimation && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-gray-900/95 backdrop-blur-sm border border-green-500/50 rounded-xl p-6 text-center shadow-2xl">
-              <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto mb-3 animate-bounce" />
-              <p className="text-green-300 font-medium text-lg">Excellent! Recording saved.</p>
-              <p className="text-gray-400 text-sm mt-1">Moving to next text...</p>
-            </div>
-          </div>
-        )}
+        <p className="text-lg leading-relaxed">{currentText}</p>
       </div>
     );
   };
@@ -381,11 +653,14 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === "recording"
+      ) {
         mediaRecorderRef.current.stop();
       }
       // Clean up URLs
-      recordings.forEach(recording => URL.revokeObjectURL(recording.url));
+      recordings.forEach((recording) => URL.revokeObjectURL(recording.url));
     };
   }, [recordings]);
 
@@ -398,73 +673,78 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <Label className="text-base font-medium text-white">Voice Training</Label>
-          <p className="text-sm text-gray-400 mt-1">
-            Read each text clearly to train your voice clone. Words will highlight in real-time as you speak them. For best results, aim for at least 30 seconds of total audio - the more you record, the better your voice clone will sound.
-          </p>
+        <p className="text-sm text-gray-400">
+          Record yourself reading different Father&apos;s Day themed texts to
+          train your voice clone. Click &quot;Complete Prompt&quot; when you
+          finish reading each prompt, or &quot;Skip Prompt&quot; to get a
+          different one.
+        </p>
+
+        <div className="border rounded-lg p-4 bg-gray-900/30 border-gray-600">
+          {renderProgressBar()}
         </div>
 
         <div className="border rounded-lg p-6 bg-gray-900/30 border-gray-600">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-medium text-white">
-              {allTextsCompleted ? 'Training Complete!' : 'Read this text aloud:'}
+              {allTextsCompleted
+                ? "Training Complete!"
+                : "Read this text aloud:"}
             </h3>
-            {!allTextsCompleted && (
+            {!allTextsCompleted && !isRecording && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={generateNewText}
-                disabled={isRecording}
                 className="bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-white"
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                New Text
+                <SkipForward className="h-4 w-4 mr-2" />
+                Skip Prompt
               </Button>
             )}
           </div>
-          
-          <div className="text-gray-200">
-            {renderTextWithHighlighting()}
-          </div>
-          
-          {!allTextsCompleted && (
-            <div className="mt-4 text-sm text-gray-400">
-              <p><strong>Progress:</strong> {usedTextIndices.size} of {voiceTrainingTexts.length} examples completed</p>
-              <p><strong>Recordings:</strong> {recordings.length} samples collected</p>
-            </div>
-          )}
+
+          <div className="text-gray-200">{renderText()}</div>
         </div>
 
-        <div className="flex gap-3">
+        {/* Recording Controls */}
+        <div className="relative">
           {!isRecording ? (
-            <Button 
-              onClick={startRecording} 
-              className="flex-1 bg-red-600 hover:bg-red-700"
+            <Button
+              onClick={startContinuousRecording}
+              className="w-full bg-red-600 hover:bg-red-700"
             >
               <Mic className="h-4 w-4 mr-2" />
               Start Recording
             </Button>
           ) : (
-            <Button 
-              onClick={stopRecording} 
-              variant="destructive" 
-              className="flex-1"
-            >
-              <Square className="h-4 w-4 mr-2" />
-              Stop Recording
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                onClick={cropCurrentSample}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              >
+                Complete Prompt
+              </Button>
+              <Button
+                onClick={stopContinuousRecording}
+                variant="destructive"
+                className="flex-shrink-0"
+              >
+                <Square className="h-4 w-4 mr-2" />
+                Stop Recording
+              </Button>
+            </div>
+          )}
+          {showTooltip && (
+            <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg z-10 whitespace-nowrap">
+              Read each Father&apos;s Day prompt aloud with emotion! Click
+              &quot;Complete Prompt&quot; when done, then continue to the next
+              prompt.
+              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+            </div>
           )}
         </div>
-
-        {!allTextsCompleted && (
-          <div className="border rounded-lg p-4 bg-blue-900/20 border-blue-700">
-            <Label className="text-sm font-medium text-blue-300">What we heard:</Label>
-            <p className="text-sm text-blue-200 mt-1 min-h-[1.25rem]">
-              {recognizedText || (isRecording ? "Listening..." : "Start recording to see speech recognition here")}
-            </p>
-          </div>
-        )}
 
         {recordings.length > 0 && (
           <div className="space-y-4">
@@ -478,7 +758,10 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
                 </AccordionTrigger>
                 <AccordionContent className="space-y-3 pt-4">
                   {recordings.map((recording, index) => (
-                    <div key={recording.id} className="border rounded-lg p-3 bg-gray-800/30 border-gray-600">
+                    <div
+                      key={recording.id}
+                      className="border rounded-lg p-3 bg-gray-800/30 border-gray-600"
+                    >
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <Label className="text-white text-sm font-medium">
@@ -497,43 +780,44 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                      
+
                       {/* Show the text that was being read */}
                       <div className="mb-3 p-2 bg-gray-900/50 rounded border border-gray-700">
-                        <Label className="text-xs text-gray-400 font-medium">Text read:</Label>
+                        <Label className="text-xs text-gray-400 font-medium">
+                          Text read:
+                        </Label>
                         <p className="text-xs text-gray-300 mt-1 leading-relaxed">
-                          {recording.text.length > 100 
-                            ? `${recording.text.substring(0, 100)}...` 
-                            : recording.text
-                          }
+                          {recording.text.length > 100
+                            ? `${recording.text.substring(0, 100)}...`
+                            : recording.text}
                         </p>
                       </div>
-                      
-                      <audio 
-                        controls 
-                        src={recording.url}
-                        className="w-full"
-                      />
+
+                      <audio controls src={recording.url} className="w-full" />
                     </div>
                   ))}
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-            
-            <Button 
-              onClick={uploadVoice} 
+
+            <Button
+              onClick={uploadVoice}
               disabled={isUploading}
               className="w-full bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {isUploading ? `Cloning Voice from ${recordings.length} Samples...` : `Clone Voice (${recordings.length} samples)`}
+              {isUploading
+                ? `Cloning Voice from ${recordings.length} Samples...`
+                : `Clone Voice (${recordings.length} samples)`}
             </Button>
           </div>
         )}
 
         {!hideSystemPrompt && onSystemPromptChange && (
           <div className="space-y-2">
-            <Label htmlFor="systemPrompt" className="text-white">System Prompt (Optional)</Label>
+            <Label htmlFor="systemPrompt" className="text-white">
+              System Prompt (Optional)
+            </Label>
             <Textarea
               id="systemPrompt"
               placeholder="Enter custom system prompt for your assistant..."
@@ -547,4 +831,4 @@ export default function VoiceRecorder({ onVoiceCloned, hideSystemPrompt = false,
       </CardContent>
     </Card>
   );
-} 
+}

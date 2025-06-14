@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizePhoneNumber } from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize phone numbers to E164 format for international support
+    const normalizedDadPhone = normalizePhoneNumber(dadPhoneNumber);
+    const normalizedTransferPhone = transferPhoneNumber ? normalizePhoneNumber(transferPhoneNumber) : null;
+
     // Create the assistant configuration for the prank call
     const assistantConfig = {
       name: 'Father\'s Day Prank Assistant',
@@ -55,13 +60,13 @@ export async function POST(request: NextRequest) {
       },
       // Disable background noise for cleaner audio
       backgroundSound: 'off',
-      // Add transfer tool if transfer phone number is provided
-      ...(transferPhoneNumber && {
+      // Only add transfer tool if transfer phone number is provided (user didn't choose skip transfer)
+      ...(normalizedTransferPhone && {
         tools: [{
           type: 'transferCall',
           destinations: [{
             type: 'number',
-            number: transferPhoneNumber,
+            number: normalizedTransferPhone,
             message: 'Great news! I\'m now connecting you with the real person behind this prank. Hold on just a moment!',
             transferPlan: {
               mode: 'warm-transfer-with-message',
@@ -98,7 +103,7 @@ export async function POST(request: NextRequest) {
         assistant: assistantConfig,
         phoneNumberId: phoneNumberId,
         customer: {
-          number: dadPhoneNumber,
+          number: normalizedDadPhone,
         },
       }),
     });

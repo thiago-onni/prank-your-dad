@@ -1,37 +1,37 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import VoiceRecorder from '@/components/VoiceRecorder';
-import { PhoneNumberStep } from '@/components/steps/PhoneNumberStep';
-import { PrankSelectionStep } from '@/components/steps/PrankSelectionStep';
-import { TransferStep } from '@/components/steps/TransferStep';
-import { ProgressSteps } from '@/components/shared/ProgressSteps';
-import { AppHeader } from '@/components/shared/AppHeader';
-import { CallStatus } from '@/components/shared/CallStatus';
-import { CallSummary } from '@/components/shared/CallSummary';
-import { LiveTranscript } from '@/components/shared/LiveTranscript';
-import { usePrankCall } from '@/hooks/usePrankCall';
-import { useVapiCall } from '@/hooks/useVapiCall';
-import { PRANK_SCENARIOS } from '@/constants/prank-scenarios';
-import { VOICE_TRAINING_TEXTS } from '@/constants/voice-training';
-import type { Step } from '@/types';
+import { useState } from "react";
+import VoiceRecorder from "@/components/VoiceRecorder";
+import { PhoneNumberStep } from "@/components/steps/PhoneNumberStep";
+import { PrankSelectionStep } from "@/components/steps/PrankSelectionStep";
+import { TransferStep } from "@/components/steps/TransferStep";
+import { ProgressSteps } from "@/components/shared/ProgressSteps";
+import { AppHeader } from "@/components/shared/AppHeader";
+import { CallStatus } from "@/components/shared/CallStatus";
+import { CallSummary } from "@/components/shared/CallSummary";
+import { LiveTranscript } from "@/components/shared/LiveTranscript";
+import { usePrankCall } from "@/hooks/usePrankCall";
+import { useVapiCall } from "@/hooks/useVapiCall";
+import { PRANK_SCENARIOS } from "@/constants/prank-scenarios";
+import { VOICE_TRAINING_TEXTS } from "@/constants/voice-training";
+import type { Step } from "@/types";
 
 const STEPS: Step[] = [
-  { number: 1, key: 'voice', title: 'Clone Voice' },
-  { number: 2, key: 'dad-phone', title: 'Dad\'s Phone' },
-  { number: 3, key: 'prank', title: 'Choose Prank' },
-  { number: 4, key: 'transfer', title: 'Your Phone' }
+  { number: 1, key: "voice", title: "Clone Voice" },
+  { number: 2, key: "dad-phone", title: "Dad's Phone" },
+  { number: 3, key: "prank", title: "Choose Prank" },
+  { number: 4, key: "transfer", title: "Your Phone" },
 ];
 
 export default function Home() {
   // Step management
   const [currentStep, setCurrentStep] = useState<number>(1);
-  
+
   // Form state
-  const [clonedVoiceId, setClonedVoiceId] = useState<string>('');
-  const [dadPhoneNumber, setDadPhoneNumber] = useState('');
-  const [selectedPrank, setSelectedPrank] = useState<string>('');
-  const [transferPhoneNumber, setTransferPhoneNumber] = useState('');
+  const [clonedVoiceId, setClonedVoiceId] = useState<string>("");
+  const [dadPhoneNumber, setDadPhoneNumber] = useState("");
+  const [selectedPrank, setSelectedPrank] = useState<string>("");
+  const [transferPhoneNumber, setTransferPhoneNumber] = useState("");
   const [skipTransfer, setSkipTransfer] = useState(false);
 
   // Custom hooks
@@ -44,12 +44,8 @@ export default function Home() {
     resetCall,
   } = usePrankCall();
 
-  const {
-    transcript,
-    partialTranscript,
-    resetTranscript,
-    stopCall,
-  } = useVapiCall();
+  const { transcript, partialTranscript, resetTranscript, stopCall } =
+    useVapiCall();
 
   // Event handlers
   const handleVoiceCloned = (voiceId: string) => {
@@ -62,7 +58,9 @@ export default function Home() {
       return;
     }
 
-    const selectedPrankData = PRANK_SCENARIOS.find(p => p.id === selectedPrank);
+    const selectedPrankData = PRANK_SCENARIOS.find(
+      (p) => p.id === selectedPrank
+    );
     if (!selectedPrankData) {
       return;
     }
@@ -71,16 +69,16 @@ export default function Home() {
       dadPhoneNumber,
       voiceId: clonedVoiceId,
       systemPrompt: selectedPrankData.systemPrompt,
-      transferPhoneNumber: skipTransfer ? null : transferPhoneNumber
+      transferPhoneNumber: skipTransfer ? null : transferPhoneNumber,
     });
   };
 
   const handleStartOver = () => {
     setCurrentStep(1);
-    setClonedVoiceId('');
-    setDadPhoneNumber('');
-    setSelectedPrank('');
-    setTransferPhoneNumber('');
+    setClonedVoiceId("");
+    setDadPhoneNumber("");
+    setSelectedPrank("");
+    setTransferPhoneNumber("");
     setSkipTransfer(false);
     resetCall();
     resetTranscript();
@@ -97,13 +95,13 @@ export default function Home() {
 
       <div className="w-full max-w-4xl relative z-10">
         <AppHeader />
-        
+
         <ProgressSteps steps={STEPS} currentStep={currentStep} />
 
         {/* Main Content */}
         <div className="max-w-2xl mx-auto">
           {currentStep === 1 && (
-            <VoiceRecorder 
+            <VoiceRecorder
               onVoiceCloned={handleVoiceCloned}
               hideSystemPrompt={true}
               voiceTrainingTexts={VOICE_TRAINING_TEXTS}
@@ -147,22 +145,31 @@ export default function Home() {
           )}
         </div>
 
-        <LiveTranscript 
-          transcript={transcript} 
-          partialTranscript={partialTranscript} 
+        <LiveTranscript
+          transcript={transcript}
+          partialTranscript={partialTranscript}
         />
 
         {/* Footer */}
-        <div className="mt-12 text-center">
+        <div className="mt-4 text-center">
           <p className="text-gray-400 text-sm">
-            Built with ❤️ by{' '}
-            <a 
-              href="https://vapi.ai" 
-              target="_blank" 
+            Built with ❤️ by{" "}
+            <a
+              href="https://vapi.ai"
+              target="_blank"
               rel="noopener noreferrer"
               className="text-purple-400 hover:text-purple-300 transition-colors font-medium"
             >
               Vapi
+            </a>
+            .<br />
+            <a
+              href="https://github.com/vapi-ai/prank-your-dad"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-400 hover:text-purple-300 transition-colors font-medium"
+            >
+              Source code
             </a>
           </p>
         </div>

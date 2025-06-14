@@ -1,6 +1,6 @@
-import React from 'react';
-import { Badge } from '@/components/ui/badge';
-import { PhoneCall, Sparkles, Zap } from 'lucide-react';
+import React from "react";
+import { Badge } from "@/components/ui/badge";
+import { PhoneCall, Sparkles, Zap } from "lucide-react";
 
 export function AppHeader() {
   return (
@@ -16,16 +16,22 @@ export function AppHeader() {
       <p className="text-gray-400 text-lg md:text-xl">
         AI-powered Father&apos;s Day prank call with your cloned voice
       </p>
-      <div className="flex items-center justify-center gap-2 mt-3">
-        <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30">
+      <div className="flex items-center justify-center gap-2 mt-2">
+        <Badge
+          variant="outline"
+          className="bg-purple-500/10 text-purple-300 border-purple-500/30"
+        >
           <Sparkles className="h-3 w-3 mr-1" />
           100% Free
         </Badge>
-        <Badge variant="outline" className="bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
+        <Badge
+          variant="outline"
+          className="bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
+        >
           <Zap className="h-3 w-3 mr-1" />
           Father&apos;s Day Special
         </Badge>
       </div>
     </div>
   );
-} 
+}
