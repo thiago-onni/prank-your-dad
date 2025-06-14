@@ -15,7 +15,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Prank Your Dad - AI Voice Demo",
-  description: "AI-powered Father's Day surprise using Vapi voice technology",
+  description:
+    "AI-powered Father's Day surprise made possible with Vapi. Clone your voice and prank call your dad!",
+  metadataBase: new URL("https://call-dad.vapi.ai"),
+  openGraph: {
+    title: "Prank Your Dad - AI Voice Demo by Vapi",
+    description:
+      "AI-powered Father's Day surprise made possible with Vapi. Clone your voice and prank call your dad!",
+    url: "https://call-dad.vapi.ai",
+    siteName: "Prank Your Dad",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Prank Your Dad - AI Voice Demo by Vapi",
+    description:
+      "AI-powered Father's Day surprise made possible with Vapi. Clone your voice and prank call your dad!",
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +42,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="apple-mobile-web-app-title" content="Prank Your Dad" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

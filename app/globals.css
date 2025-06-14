@@ -188,3 +188,54 @@
     letter-spacing: var(--tracking-normal);
   }
 }
+
+/* Custom styles for react-phone-number-input */
+.phone-input {
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.phone-input .PhoneInputInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  flex: 1;
+  padding: 0;
+  margin-left: 0.5rem;
+}
+
+.phone-input .PhoneInputInput::placeholder {
+  color: rgb(156 163 175); /* gray-400 */
+}
+
+.phone-input .PhoneInputCountrySelect {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  margin-right: 0.5rem;
+}
+
+.phone-input .PhoneInputCountrySelectArrow {
+  color: rgb(156 163 175);
+}
+
+.phone-input .PhoneInputCountryIcon {
+  margin-right: 0.25rem;
+}
+
+/* Focus styles */
+.phone-input:focus-within {
+  border-color: rgb(168 85 247); /* purple-500 */
+  box-shadow: 0 0 0 1px rgb(168 85 247);
+}
+
+/* Dark theme adjustments */
+.phone-input {
+  background-color: rgba(17, 24, 39, 0.5); /* gray-900/50 */
+  border-color: rgb(75 85 99); /* gray-600 */
+}
