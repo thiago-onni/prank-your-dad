@@ -164,7 +164,7 @@ export default function Home() {
             </a>
             .<br />
             <a
-              href="https://github.com/vapi-ai/prank-your-dad"
+              href="https://github.com/VapiAI/prank-your-dad"
               target="_blank"
               rel="noopener noreferrer"
               className="text-purple-400 hover:text-purple-300 transition-colors font-medium"
