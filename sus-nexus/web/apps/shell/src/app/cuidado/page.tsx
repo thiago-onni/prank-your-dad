@@ -1,7 +1,8 @@
-import { PlaceholderPage } from '@/components/Placeholder';
+import { CareWorkbench } from '@/features/cuidado/CareWorkbench';
+import { t } from '@/i18n';
 
-export const metadata = { title: 'Cuidado' };
+export const metadata = { title: t.care.title };
 
 export default function Page() {
-  return <PlaceholderPage title="Cuidado" phase="Workbench de Cuidado (F2/F3)" />;
+  return <CareWorkbench />;
 }

@@ -31,23 +31,24 @@ function rng(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const random = rng(20261004);
-const pick = <T>(arr: readonly T[]): T => arr[Math.floor(random() * arr.length)] as T;
-const int = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
+export const random = rng(20261004);
+export const pick = <T>(arr: readonly T[]): T => arr[Math.floor(random() * arr.length)] as T;
+export const int = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
 
 const ULID_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-function ulid(): string {
+export function ulid(): string {
   let s = '';
   for (let i = 0; i < 26; i++) s += ULID_CHARS[Math.floor(random() * ULID_CHARS.length)];
   return s;
 }
-const id = (prefix: string) => `${prefix}_${ulid()}`;
+export const id = (prefix: string) => `${prefix}_${ulid()}`;
 
-const NOW = new Date('2026-10-04T09:30:00-03:00');
-const iso = (d: Date) => d.toISOString().replace('Z', '+00:00');
-const hoursAgo = (h: number) => iso(new Date(NOW.getTime() - h * 3600_000));
-const daysAgo = (d: number) => hoursAgo(d * 24);
-const daysAhead = (d: number) => iso(new Date(NOW.getTime() + d * 24 * 3600_000));
+export const NOW = new Date('2026-10-04T09:30:00-03:00');
+export const iso = (d: Date) => d.toISOString().replace('Z', '+00:00');
+export const hoursAgo = (h: number) => iso(new Date(NOW.getTime() - h * 3600_000));
+export const daysAgo = (d: number) => hoursAgo(d * 24);
+export const daysAhead = (d: number) => iso(new Date(NOW.getTime() + d * 24 * 3600_000));
+export const hoursAhead = (h: number) => iso(new Date(NOW.getTime() + h * 3600_000));
 
 export const healthUnits: HealthUnit[] = [
   {
@@ -107,6 +108,26 @@ export const healthUnits: HealthUnit[] = [
 ];
 const ubs = healthUnits.filter((h) => h.kind_code === '02');
 export const unitByCnes = (cnes: string | undefined) => healthUnits.find((h) => h.cnes === cnes);
+
+/** Equipes ESF (INE) por UBS — duas por unidade, estáveis para o Workbench de Cuidado. */
+export const teamsByUnit: Record<string, { ine: string; name: string }[]> = Object.fromEntries(
+  ubs.map((u, i) => [
+    u.cnes,
+    [
+      {
+        ine: `000${1000 + i * 10 + 1}00${u.cnes.slice(-1)}`,
+        name: `ESF ${u.name.replace('UBS ', '')} I`,
+      },
+      {
+        ine: `000${1000 + i * 10 + 2}00${u.cnes.slice(-1)}`,
+        name: `ESF ${u.name.replace('UBS ', '')} II`,
+      },
+    ],
+  ]),
+);
+export const allTeams = Object.entries(teamsByUnit).flatMap(([cnes, teams]) =>
+  teams.map((t) => ({ ...t, cnes })),
+);
 
 const femaleNames = [
   'Maria Aparecida',
@@ -236,8 +257,8 @@ function makeCitizen(i: number, overrides: Partial<CitizenDetail> = {}): Citizen
       },
     ],
     health_unit_cnes: unit.cnes,
-    team_ine: `000${int(1000000, 9999999)}`,
-    microarea: String(int(1, 8)).padStart(2, '0'),
+    team_ine: pick(teamsByUnit[unit.cnes] ?? []).ine,
+    microarea: String(int(1, 4)).padStart(2, '0'),
     address: {
       street: `Rua ${pick(['das Flores', 'Sete de Setembro', 'Tiradentes', 'Santa Rita', 'Padre Chiquinho'])}`,
       number: String(int(10, 999)),
@@ -629,6 +650,82 @@ export const tasks: Task[] = Array.from({ length: 36 }, () => {
     version: 1,
   };
 });
+
+/** Tarefas do Workbench de Cuidado: tipos canônicos, atribuídas à equipe ou UBS do cidadão. */
+const careTaskTemplates: Record<
+  string,
+  { title: string; priority: Task['priority']; origin: string }
+> = {
+  no_show_recovery: {
+    title: 'Recuperar falta em consulta especializada',
+    priority: 'high',
+    origin: 'rule_no_show_recovery',
+  },
+  exam_not_scheduled: {
+    title: 'Exame solicitado sem agendamento há 15 dias',
+    priority: 'medium',
+    origin: 'rule_exam_not_scheduled',
+  },
+  exam_result_followup: {
+    title: 'Laudo disponível sem consulta de retorno',
+    priority: 'high',
+    origin: 'rule_exam_followup',
+  },
+  regulation_pending_document: {
+    title: 'Solicitação de regulação devolvida: anexar documento',
+    priority: 'urgent',
+    origin: 'agent_regulation_completeness',
+  },
+  mpi_review: {
+    title: 'Revisar possível duplicidade de cadastro',
+    priority: 'low',
+    origin: 'rule_mpi_review',
+  },
+  generic: {
+    title: 'Contato pós-alta hospitalar em 72h',
+    priority: 'medium',
+    origin: 'rule_pos_alta_72h',
+  },
+};
+const careTaskTypeList = Object.keys(careTaskTemplates);
+
+export const careTasks: Task[] = Array.from({ length: 40 }, (_, i) => {
+  const type = careTaskTypeList[i % careTaskTypeList.length] as string;
+  const tpl = careTaskTemplates[type] as (typeof careTaskTemplates)[string];
+  const citizen = citizens[i % citizens.length] as CitizenDetail;
+  const status = pick(['open', 'open', 'open', 'assigned', 'in_progress', 'completed'] as const);
+  const dueOffset = int(-30, 72);
+  const closed = status === 'completed';
+  const toUnit = i % 5 === 0;
+  return {
+    id: `task_${ulid()}`,
+    task_type: type,
+    status,
+    priority: tpl.priority,
+    title: tpl.title,
+    description: `Gerada a partir de eventos do barramento para o cidadão da microárea ${citizen.microarea ?? '—'}.`,
+    citizen_id: citizen.id,
+    assignee:
+      status === 'in_progress'
+        ? { kind: 'user', id: 'user_mock' }
+        : toUnit
+          ? { kind: 'health_unit', id: `hu_${citizen.health_unit_cnes}` }
+          : { kind: 'team', id: `team_${citizen.team_ine}` },
+    due_at: iso(new Date(NOW.getTime() + dueOffset * 3600_000)),
+    sla_policy_id: 'sla_v2',
+    overdue: !closed && dueOffset < 0,
+    origin: {
+      kind: type === 'regulation_pending_document' ? 'agent' : 'rule',
+      id: tpl.origin,
+      version: '1.0.0',
+    },
+    outcome: status === 'completed' ? 'Contato realizado; cidadão orientado.' : undefined,
+    created_at: hoursAgo(int(2, 120)),
+    updated_at: hoursAgo(int(0, 1)),
+    version: 1,
+  };
+});
+tasks.push(...careTasks);
 
 const eventTemplates: {
   domain: TimelineEvent['domain'];

@@ -23,7 +23,12 @@ export function renderWithProviders(
   });
   return render(
     <SessionProvider session={session}>
-      <CoreApiProvider baseUrl="http://core.test" purpose={purpose} queryClient={queryClient}>
+      <CoreApiProvider
+        baseUrl="http://core.test"
+        aiBaseUrl="http://ai.test"
+        purpose={purpose}
+        queryClient={queryClient}
+      >
         <TooltipProvider>
           <ToastProvider>{ui}</ToastProvider>
         </TooltipProvider>

@@ -1,15 +1,30 @@
 import type {
+  ActionClass,
+  ActionStatus,
   AppointmentStatus,
+  ApprovalStatus,
+  AutonomyLevel,
   ConnectorHealth,
   Domain,
+  ExamIssue,
+  ExamOrderStatus,
+  ExamResultStatus,
   IdentityConfidence,
   IntegrationMessageStatus,
   MergeCaseStatus,
   Purpose,
   RegistrationState,
+  RegulationIssueFilter,
+  RegulationIssueKind,
+  RegulationKind,
+  RegulationPriority,
+  RegulationQueueGroupBy,
+  RegulationStatus,
+  RunStatus,
   TaskPriority,
   TaskStatus,
   TimelineConfidence,
+  ToolCallRecord,
 } from '@sus-nexus/api-client';
 import type { BadgeTone } from '@sus-nexus/design-system';
 
@@ -160,4 +175,199 @@ export const sexLabels: Record<string, string> = {
   female: 'Feminino',
   male: 'Masculino',
   unknown: 'Não informado',
+};
+
+// ---------- regulação ----------
+
+export const regulationStatusLabels: Record<RegulationStatus, { label: string; tone: BadgeTone }> =
+  {
+    requested: { label: 'Solicitado', tone: 'neutral' },
+    pending_documents: { label: 'Aguardando documentos', tone: 'warning' },
+    returned: { label: 'Devolvido à origem', tone: 'warning' },
+    under_review: { label: 'Em análise', tone: 'info' },
+    authorized: { label: 'Autorizado', tone: 'success' },
+    denied: { label: 'Negado', tone: 'danger' },
+    scheduled: { label: 'Agendado', tone: 'primary' },
+    cancelled: { label: 'Cancelado', tone: 'neutral' },
+    no_show: { label: 'Faltou', tone: 'danger' },
+    performed: { label: 'Realizado', tone: 'success' },
+    expired: { label: 'Expirado', tone: 'danger' },
+  };
+
+export const regulationPriorityLabels: Record<
+  RegulationPriority,
+  { label: string; tone: BadgeTone; rank: number }
+> = {
+  emergency: { label: 'Emergência', tone: 'danger', rank: 0 },
+  urgent: { label: 'Urgente', tone: 'danger', rank: 1 },
+  priority: { label: 'Prioritário', tone: 'warning', rank: 2 },
+  elective: { label: 'Eletivo', tone: 'neutral', rank: 3 },
+};
+
+export const regulationKindLabels: Record<RegulationKind, string> = {
+  consultation: 'Consulta',
+  exam: 'Exame',
+  procedure: 'Procedimento',
+  surgery: 'Cirurgia',
+  admission: 'Internação',
+};
+
+export const regulationIssueKindLabels: Record<RegulationIssueKind, string> = {
+  missing_document: 'Documento ausente',
+  missing_field: 'Campo obrigatório ausente',
+  clinical_justification: 'Justificativa clínica insuficiente',
+  duplicate: 'Possível duplicidade',
+  other: 'Outra',
+  sla_breached: 'SLA estourado',
+  no_capacity: 'Sem capacidade no prestador',
+  expired: 'Solicitação expirada',
+};
+
+export const regulationIssueFilterLabels: Record<RegulationIssueFilter, string> = {
+  incomplete: 'Incompletas (documento/campo)',
+  returned: 'Devolvidas à origem',
+  expired: 'Expiradas',
+  duplicate: 'Duplicadas',
+  no_capacity: 'Sem capacidade',
+  sla_breached: 'SLA estourado',
+};
+
+export const regulationQueueGroupByLabels: Record<RegulationQueueGroupBy, string> = {
+  specialty: 'Especialidade',
+  service_code: 'Procedimento',
+  provider_cnes: 'Prestador',
+  requesting_cnes: 'Unidade solicitante',
+  priority: 'Prioridade',
+};
+
+// ---------- exames ----------
+
+export const examStatusLabels: Record<ExamOrderStatus, { label: string; tone: BadgeTone }> = {
+  requested: { label: 'Solicitado', tone: 'neutral' },
+  authorized: { label: 'Autorizado', tone: 'info' },
+  scheduled: { label: 'Agendado', tone: 'primary' },
+  collected: { label: 'Coletado', tone: 'primary' },
+  performed: { label: 'Realizado', tone: 'info' },
+  reported: { label: 'Laudado', tone: 'success' },
+  cancelled: { label: 'Cancelado', tone: 'neutral' },
+  not_performed: { label: 'Não realizado', tone: 'danger' },
+};
+
+/** Ordem canônica do ciclo do exame (stepper). */
+export const EXAM_CYCLE: ExamOrderStatus[] = [
+  'requested',
+  'authorized',
+  'scheduled',
+  'collected',
+  'performed',
+  'reported',
+];
+
+export const examIssueLabels: Record<ExamIssue, { label: string; tone: BadgeTone }> = {
+  not_scheduled: { label: 'Não agendado', tone: 'warning' },
+  result_pending: { label: 'Laudo pendente', tone: 'warning' },
+  no_result_followup: { label: 'Sem retorno', tone: 'warning' },
+  integration_failure: { label: 'Falha de integração', tone: 'danger' },
+  inconclusive: { label: 'Inconclusivo', tone: 'neutral' },
+  critical: { label: 'Crítico', tone: 'danger' },
+};
+
+export const examResultStatusLabels: Record<ExamResultStatus, { label: string; tone: BadgeTone }> =
+  {
+    final: { label: 'Final', tone: 'success' },
+    preliminary: { label: 'Preliminar', tone: 'info' },
+    amended: { label: 'Retificado', tone: 'warning' },
+    inconclusive: { label: 'Inconclusivo', tone: 'neutral' },
+    cancelled: { label: 'Cancelado', tone: 'neutral' },
+  };
+
+// ---------- cuidado ----------
+
+/** Tipos de tarefa do Workbench de Cuidado (origem: regras/agentes/workflows). */
+export const CARE_TASK_TYPES = [
+  'no_show_recovery',
+  'exam_not_scheduled',
+  'exam_result_followup',
+  'regulation_pending_document',
+  'mpi_review',
+  'generic',
+] as const;
+export type CareTaskType = (typeof CARE_TASK_TYPES)[number];
+
+export const careTaskTypeLabels: Record<CareTaskType, { label: string; description: string }> = {
+  no_show_recovery: {
+    label: 'Recuperação de falta',
+    description: 'Cidadão faltou a consulta/exame; reagendar e orientar.',
+  },
+  exam_not_scheduled: {
+    label: 'Exame não agendado',
+    description: 'Pedido de exame sem agendamento dentro do prazo.',
+  },
+  exam_result_followup: {
+    label: 'Retorno de exame',
+    description: 'Laudo disponível sem consulta de retorno registrada.',
+  },
+  regulation_pending_document: {
+    label: 'Pendência de regulação',
+    description: 'Solicitação devolvida ou aguardando documento da unidade.',
+  },
+  mpi_review: {
+    label: 'Revisão de cadastro',
+    description: 'Possível duplicidade ou divergência de identidade.',
+  },
+  generic: { label: 'Outras', description: 'Tarefas sem classificação específica.' },
+};
+
+export function careTaskType(taskType: string): CareTaskType {
+  return (CARE_TASK_TYPES as readonly string[]).includes(taskType)
+    ? (taskType as CareTaskType)
+    : 'generic';
+}
+
+// ---------- agentes ----------
+
+export const runStatusLabels: Record<RunStatus, { label: string; tone: BadgeTone }> = {
+  running: { label: 'Em execução', tone: 'info' },
+  completed: { label: 'Concluída', tone: 'success' },
+  invalid_output: { label: 'Saída inválida', tone: 'warning' },
+  failed: { label: 'Falhou', tone: 'danger' },
+  denied: { label: 'Negada (política)', tone: 'danger' },
+};
+
+export const actionStatusLabels: Record<ActionStatus, { label: string; tone: BadgeTone }> = {
+  executed: { label: 'Executada', tone: 'success' },
+  pending_approval: { label: 'Aguardando aprovação', tone: 'warning' },
+  approved: { label: 'Aprovada', tone: 'success' },
+  rejected: { label: 'Rejeitada', tone: 'neutral' },
+  blocked: { label: 'Bloqueada', tone: 'danger' },
+  denied: { label: 'Negada', tone: 'danger' },
+  failed: { label: 'Falhou', tone: 'danger' },
+};
+
+export const actionClassLabels: Record<ActionClass, { label: string; tone: BadgeTone }> = {
+  auto: { label: 'Automática', tone: 'success' },
+  requires_approval: { label: 'Requer aprovação', tone: 'warning' },
+  forbidden: { label: 'Proibida', tone: 'danger' },
+};
+
+export const approvalStatusLabels: Record<ApprovalStatus, { label: string; tone: BadgeTone }> = {
+  pending: { label: 'Pendente', tone: 'warning' },
+  approved: { label: 'Aprovada', tone: 'success' },
+  rejected: { label: 'Rejeitada', tone: 'neutral' },
+};
+
+export const autonomyLabels: Record<AutonomyLevel, { label: string; tone: BadgeTone }> = {
+  suggest_only: { label: 'Somente sugestão', tone: 'neutral' },
+  approval_required: { label: 'Ação com aprovação humana', tone: 'warning' },
+  autonomous: { label: 'Ações automáticas (baixo risco)', tone: 'info' },
+};
+
+export const toolCallStatusLabels: Record<
+  ToolCallRecord['status'],
+  { label: string; tone: BadgeTone }
+> = {
+  executed: { label: 'Executada', tone: 'success' },
+  denied: { label: 'Negada pelo OPA', tone: 'danger' },
+  requires_approval: { label: 'Aguardando aprovação', tone: 'warning' },
+  error: { label: 'Erro', tone: 'danger' },
 };

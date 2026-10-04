@@ -4,4 +4,5 @@ dist
 storybook-static
 pnpm-lock.yaml
 src/generated
+**/src/generated
 .turbo

@@ -2,14 +2,17 @@
   "name": "@sus-nexus/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Cliente tipado da Core Municipal API (openapi-typescript + openapi-fetch) e hooks TanStack Query",
+  "description": "Cliente tipado da Core Municipal API e do ai-service (openapi-typescript + openapi-fetch) e hooks TanStack Query",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./generated": "./src/generated/core.d.ts"
+    "./generated": "./src/generated/core.d.ts",
+    "./generated/ai": "./src/generated/ai.d.ts"
   },
   "scripts": {
-    "generate": "openapi-typescript ../../../contracts/openapi/core-municipal.yaml -o src/generated/core.d.ts --alphabetize --empty-objects-unknown",
+    "generate": "pnpm run generate:core && pnpm run generate:ai",
+    "generate:core": "openapi-typescript ../../../contracts/openapi/core-municipal.yaml -o src/generated/core.d.ts --alphabetize --empty-objects-unknown",
+    "generate:ai": "openapi-typescript ../../../contracts/openapi/ai-service.yaml -o src/generated/ai.d.ts --alphabetize --empty-objects-unknown",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

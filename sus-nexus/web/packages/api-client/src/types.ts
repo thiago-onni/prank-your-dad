@@ -35,6 +35,16 @@ export type TimelineEvent = Schemas['TimelineEvent'];
 export type CitizenOperationalSummary = Schemas['CitizenOperationalSummary'];
 export type AccessLogEntry = Schemas['AccessLogEntry'];
 export type RuleSet = Schemas['RuleSet'];
+export type RegulationRequest = Schemas['RegulationRequest'];
+export type RegulationIssue = Schemas['RegulationIssue'];
+export type RegulationStatus = Schemas['RegulationStatus'];
+export type RegulationPriority = Schemas['RegulationPriority'];
+export type RegulationKind = Schemas['RegulationKind'];
+export type RegulationQueueItem = Schemas['RegulationQueueItem'];
+export type ProviderCapacity = Schemas['ProviderCapacity'];
+export type ExamOrder = Schemas['ExamOrder'];
+export type ExamOrderStatus = Schemas['ExamOrderStatus'];
+export type ExamResult = Schemas['ExamResult'];
 
 export type IdentityConfidence = NonNullable<CitizenSummary['identity_confidence']>;
 export type TimelineConfidence = NonNullable<TimelineEvent['confidence']>;
@@ -43,6 +53,29 @@ export type TaskPriority = Task['priority'];
 export type TaskTransitionAction = NonNullable<
   operations['transitionTask']['requestBody']
 >['content']['application/json']['action'];
+
+type RegulationListQuery = NonNullable<operations['listRegulationRequests']['parameters']['query']>;
+/** Pendências consultáveis na fila (REG-005). */
+export type RegulationIssueFilter = NonNullable<RegulationListQuery['issue']>;
+export type RegulationSort = NonNullable<RegulationListQuery['sort']>;
+export type RegulationQueueGroupBy = NonNullable<
+  NonNullable<operations['getRegulationQueueSummary']['parameters']['query']>['group_by']
+>;
+export type RegulationIssueKind = RegulationIssue['kind'];
+export type RegulationIssueInput = NonNullable<
+  operations['addRegulationIssue']['requestBody']
+>['content']['application/json'];
+/** Tipos de pendência que um humano pode abrir (subconjunto de `RegulationIssueKind`). */
+export type RegulationIssueKindInput = RegulationIssueInput['kind'];
+export type RegulationStatusHistoryEntry = NonNullable<RegulationRequest['status_history']>[number];
+
+export type ExamIssue = NonNullable<ExamOrder['issues']>[number];
+export type ExamResultStatus = ExamResult['status'];
+export type ExamStatusHistoryEntry = NonNullable<ExamOrder['status_history']>[number];
+export type ExamCycleTimes = NonNullable<ExamOrder['cycle_times']>;
+/** Referência segura (URL assinada, curta) ao laudo. Nunca armazenar em cache. */
+export type ExamResultDocument =
+  operations['getExamResultDocument']['responses'][200]['content']['application/json'];
 
 /** Página paginada por cursor opaco. */
 export interface Page<T> {

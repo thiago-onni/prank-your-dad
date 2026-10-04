@@ -15,6 +15,7 @@ export {
   CoreApiProvider,
   createDefaultQueryClient,
   useCoreClient,
+  useAiClient,
   useCurrentPurpose,
   type CoreApiProviderProps,
 } from './provider';
@@ -25,3 +26,17 @@ export * from './hooks/tasks';
 export * from './hooks/integration';
 export * from './hooks/reference';
 export * from './hooks/appointments';
+export * from './hooks/regulation';
+export * from './hooks/exams';
+export * from './ai/types';
+export {
+  createAiClient,
+  createAiRawClient,
+  type AiClient,
+  type AiRawClient,
+  type AiClientOptions,
+  type AgentRunsQuery,
+  type ApprovalsQuery,
+} from './ai/client';
+export { aiKeys } from './ai/keys';
+export * from './ai/hooks';

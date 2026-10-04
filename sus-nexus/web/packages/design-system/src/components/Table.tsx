@@ -102,6 +102,24 @@ export function VirtualizedTable<T>({
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
     overscan: 8,
+    // Sem layout (SSR, jsdom, painel oculto) a medição é 0 e nada seria renderizado; usamos a
+    // altura configurada como fallback para que as primeiras linhas existam no DOM.
+    observeElementRect: (instance, cb) => {
+      const el = instance.scrollElement;
+      if (!el) return;
+      const measure = () => {
+        const rect = el.getBoundingClientRect();
+        cb({
+          width: Math.round(rect.width) || el.clientWidth || 1024,
+          height: Math.round(rect.height) || height,
+        });
+      };
+      measure();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+    },
   });
   const gridTemplateColumns = columns.map((c) => c.width ?? 'minmax(120px, 1fr)').join(' ');
 

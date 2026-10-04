@@ -23,4 +23,13 @@ export const coreKeys = {
     [...coreKeys.all, 'terminology', system, params] as const,
   accessLog: (params: object) => [...coreKeys.all, 'audit', 'access', params] as const,
   ruleSets: () => [...coreKeys.all, 'admin', 'rules'] as const,
+  regulation: () => [...coreKeys.all, 'regulation'] as const,
+  regulationRequests: (params: object) => [...coreKeys.regulation(), 'requests', params] as const,
+  regulationRequest: (id: string) => [...coreKeys.regulation(), 'request', id] as const,
+  regulationCapacity: (params: object) => [...coreKeys.regulation(), 'capacity', params] as const,
+  regulationQueueSummary: (params: object) =>
+    [...coreKeys.regulation(), 'queues', 'summary', params] as const,
+  exams: () => [...coreKeys.all, 'exams'] as const,
+  examOrders: (params: object) => [...coreKeys.exams(), 'orders', params] as const,
+  examOrder: (id: string) => [...coreKeys.exams(), 'order', id] as const,
 };

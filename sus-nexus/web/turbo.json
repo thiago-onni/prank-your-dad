@@ -4,7 +4,10 @@
   "globalEnv": ["NODE_ENV", "CI"],
   "tasks": {
     "generate": {
-      "inputs": ["../../../contracts/openapi/core-municipal.yaml"],
+      "inputs": [
+        "../../../contracts/openapi/core-municipal.yaml",
+        "../../../contracts/openapi/ai-service.yaml"
+      ],
       "outputs": ["src/generated/**"]
     },
     "build": {

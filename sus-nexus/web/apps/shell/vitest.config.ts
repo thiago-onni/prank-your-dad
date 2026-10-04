@@ -21,6 +21,11 @@ export default defineConfig({
     // axe + user-event são lentos quando o Turborepo executa várias suítes em paralelo.
     testTimeout: 20_000,
     hookTimeout: 20_000,
-    env: { AUTH_MODE: 'mock', NEXT_PUBLIC_API_MOCK: 'true', CORE_API_URL: 'http://core.test' },
+    env: {
+      AUTH_MODE: 'mock',
+      NEXT_PUBLIC_API_MOCK: 'true',
+      CORE_API_URL: 'http://core.test',
+      AI_SERVICE_URL: 'http://ai.test',
+    },
   },
 });

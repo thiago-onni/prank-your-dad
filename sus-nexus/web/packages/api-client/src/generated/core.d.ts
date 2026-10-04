@@ -89,6 +89,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caregaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lacunas de cuidado / lista de busca ativa (CUI-003/004) */
+        get: operations["listCareGaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caregaps/{careGapId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar desfecho da busca ativa (CUI-006) */
+        post: operations["resolveCareGap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/careplans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCarePlans"];
+        put?: never;
+        /** Criar plano de cuidado a partir de um protocolo vigente (CUI-001) */
+        post: operations["createCarePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/careplans/{carePlanId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCarePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/careplans/{carePlanId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["closeCarePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/careplans/{carePlanId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar realização/desfecho de um item previsto (CUI-002) */
+        post: operations["updateCarePlanItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/citizens": {
         parameters: {
             query?: never;
@@ -276,6 +376,108 @@ export interface paths {
          *     (ex.: número de pedido ORC-2/ORC-3 do HL7 ORM). 404 quando o pedido de origem não existe no tenant.
          */
         post: operations["registerExamResultBySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Internações e passagens por urgência (HOS-006) */
+        get: operations["listHospitalEpisodes"];
+        put?: never;
+        /** Registrar movimentação ADT vinda do HIS (admissão, transferência, leito, alta, óbito) */
+        post: operations["registerHospitalMovement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes/{episodeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getHospitalEpisode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes/{episodeId}/counter-referral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar contrarreferência recebida (HOS-008) — metadados e referência segura */
+        post: operations["registerCounterReferral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes/{episodeId}/discharge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar alta/sumário de alta (metadados) e disparar o fluxo pós-alta (HOS-003/004) */
+        post: operations["registerDischarge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes/{episodeId}/followup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar resultado da tentativa de contato pós-alta (CUI-006) */
+        post: operations["registerDischargeFollowup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hospital/episodes/by-source/{system}/{sourceRecordId}/discharge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alta por identificador de origem (uso dos conectores) */
+        post: operations["registerDischargeBySource"];
         delete?: never;
         options?: never;
         head?: never;
@@ -476,6 +678,41 @@ export interface paths {
         put?: never;
         /** Reverter fusão (MPI-007) */
         post: operations["unmerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Protocolos de linha de cuidado (configuráveis, versionados — CUI-009) */
+        get: operations["listProtocols"];
+        put?: never;
+        /** Criar nova versão de protocolo (rascunho) */
+        post: operations["createProtocolVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols/{protocolId}/versions/{version}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ciclo de aprovação (draft → in_review → approved → active → revoked) com responsável e testes anexados */
+        post: operations["transitionProtocolVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -820,6 +1057,91 @@ export interface components {
             /** @enum {string} */
             kind: "user" | "team" | "health_unit" | "queue";
         };
+        CareGap: {
+            care_line: string;
+            care_plan_id?: string;
+            citizen_display_name?: string;
+            citizen_id: string;
+            contact_valid?: boolean;
+            days_overdue?: number;
+            /** Format: date-time */
+            detected_at: string;
+            /** Format: date-time */
+            expected_by?: string;
+            gap_kind: components["schemas"]["CareGapKind"];
+            health_unit_cnes?: string;
+            id: string;
+            microarea?: string;
+            protocol_id?: string;
+            protocol_version: string;
+            resolution?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            /** @enum {string} */
+            status: "open" | "resolved";
+            task_id?: string;
+            team_ine?: string;
+        };
+        /** @enum {string} */
+        CareGapKind: "consultation_overdue" | "exam_overdue" | "vaccine_overdue" | "return_overdue" | "no_contact" | "lost_to_followup" | "post_discharge_no_contact";
+        CarePlan: {
+            care_line: string;
+            citizen_id: string;
+            closed_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+            health_unit_cnes?: string;
+            id: string;
+            items: components["schemas"]["CarePlanItem"][];
+            open_gaps?: number;
+            origin?: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "professional" | "rule" | "workflow" | "hospital_discharge";
+            };
+            protocol_id: string;
+            protocol_version: string;
+            responsible_professional_id?: string;
+            /** @enum {string} */
+            status: "active" | "on_hold" | "completed" | "cancelled";
+            team_ine?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            version?: number;
+        };
+        CarePlanCreate: {
+            citizen_id: string;
+            health_unit_cnes?: string;
+            origin?: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "professional" | "rule" | "workflow" | "hospital_discharge";
+            };
+            protocol_id: string;
+            /** @description Omitido = versão vigente */
+            protocol_version?: string;
+            responsible_professional_id?: string;
+            /** Format: date-time */
+            start_at?: string;
+            team_ine?: string;
+        };
+        CarePlanItem: {
+            code?: string;
+            code_system?: string;
+            evidence_ref?: string;
+            /** Format: date-time */
+            expected_by?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "consultation" | "exam" | "vaccine" | "return" | "home_visit" | "procedure" | "education" | "other";
+            overdue?: boolean;
+            /** Format: date-time */
+            performed_at?: string;
+            periodicity_days?: number;
+            /** @enum {string} */
+            status: "planned" | "scheduled" | "done" | "missed" | "cancelled";
+            title: string;
+        };
         CitizenDetail: components["schemas"]["CitizenSummary"] & {
             address?: {
                 city_ibge?: string;
@@ -989,6 +1311,15 @@ export interface components {
             reconciliation_gap?: number;
             source_system: string;
         };
+        CounterReferralRegistration: {
+            document_ref?: string;
+            document_sha256?: string;
+            /** Format: date-time */
+            received_at: string;
+            recommendations_count?: number;
+            source: components["schemas"]["SourceRefInput"];
+            target_health_unit_cnes?: string;
+        };
         DeadLetter: {
             attempts: number;
             connector_id?: string;
@@ -1003,6 +1334,21 @@ export interface components {
             topic?: string;
             /** Format: date-time */
             triaged_at?: string;
+        };
+        DischargeRegistration: {
+            care_lines?: string[];
+            /** Format: date-time */
+            discharged_at: string;
+            /** @enum {string} */
+            disposition: "home" | "home_with_care" | "transfer" | "against_advice" | "deceased" | "other";
+            followup_due_days?: number;
+            followup_plan_present?: boolean;
+            principal_diagnosis_cid?: string;
+            procedures_count?: number;
+            source: components["schemas"]["SourceRefInput"];
+            /** @description Referência segura ao sumário de alta na origem/object storage (HOS-009/010) */
+            summary_document_ref?: string;
+            summary_document_sha256?: string;
         };
         /** @enum {string} */
         Domain: "identity" | "aps" | "schedule" | "regulation" | "exam" | "hospital" | "careplan" | "task" | "production" | "communication";
@@ -1151,6 +1497,86 @@ export interface components {
             items: components["schemas"]["HealthUnitUpsert"][];
             source: components["schemas"]["SourceRef"];
         };
+        HospitalEpisode: {
+            admission_source?: string;
+            /** Format: date-time */
+            admitted_at: string;
+            aih_number?: string;
+            bed?: string;
+            citizen_id: string;
+            counter_referral?: {
+                has_document?: boolean;
+                /** Format: date-time */
+                received_at?: string;
+                recommendations_count?: number;
+            };
+            /** Format: date-time */
+            discharged_at?: string;
+            disposition?: string;
+            /** @enum {string} */
+            episode_class: "inpatient" | "emergency" | "observation" | "day_hospital";
+            followup?: {
+                care_plan_id?: string;
+                /** Format: date-time */
+                contacted_at?: string;
+                /** Format: date-time */
+                due_at?: string;
+                outcome?: string;
+                /** @enum {string} */
+                status?: "pending" | "contacted" | "scheduled" | "closed" | "escalated";
+                task_id?: string;
+            };
+            has_summary_document?: boolean;
+            hospital_cnes: string;
+            hospital_name?: string;
+            id: string;
+            length_of_stay_days?: number;
+            movements?: {
+                bed?: string;
+                movement?: string;
+                /** Format: date-time */
+                occurred_at?: string;
+                ward?: string;
+            }[];
+            previous_episode_id?: string;
+            /** @description Presente apenas quando a política permitir */
+            principal_diagnosis_cid?: string;
+            readmission_within_30d?: boolean;
+            reference_health_unit_cnes?: string;
+            reference_team_ine?: string;
+            regulation_request_id?: string;
+            /** @enum {string} */
+            risk_level?: "low" | "medium" | "high";
+            risk_rule_version?: string;
+            source_record_id?: string;
+            source_system: string;
+            status: components["schemas"]["HospitalEpisodeStatus"];
+            version?: number;
+            ward?: string;
+        };
+        /** @enum {string} */
+        HospitalEpisodeStatus: "admitted" | "in_progress" | "transferred" | "discharged" | "deceased" | "cancelled";
+        HospitalMovementRegistration: {
+            /** @enum {string} */
+            admission_source?: "emergency" | "regulation" | "transfer" | "elective" | "other";
+            aih_number?: string;
+            attending_professional_id?: string;
+            bed?: string;
+            citizen_ref: components["schemas"]["CitizenRef"];
+            /** @enum {string} */
+            episode_class: "inpatient" | "emergency" | "observation" | "day_hospital";
+            hospital_cnes: string;
+            /** @enum {string} */
+            movement: "admit" | "transfer" | "bed_change" | "discharge" | "death" | "cancel";
+            /** Format: date-time */
+            occurred_at: string;
+            /** @description Código CID-10; omitido quando a política classificar como highly_restricted */
+            principal_diagnosis_cid?: string;
+            reason?: string;
+            regulation_source_record_id?: string;
+            source: components["schemas"]["SourceRefInput"];
+            ward?: string;
+        };
         /** @enum {string} */
         IdentifierSystem: "CNS" | "CPF" | "PEC" | "SISREG" | "ESUS_REGULACAO" | "HIS" | "AIH" | "APAC" | "LOCAL";
         IdentityResolution: {
@@ -1271,6 +1697,59 @@ export interface components {
             title?: string;
             /** Format: uri */
             type?: string;
+        };
+        Protocol: {
+            approved_by?: string;
+            care_line: string;
+            /** Format: date-time */
+            created_at?: string;
+            description?: string;
+            /** Format: date-time */
+            effective_from?: string;
+            eligibility?: {
+                [key: string]: unknown;
+            };
+            id: string;
+            items: components["schemas"]["ProtocolItemRule"][];
+            lost_to_followup_days?: number;
+            name: string;
+            /** @enum {string} */
+            status: "draft" | "in_review" | "approved" | "active" | "revoked";
+            test_cases_count?: number;
+            version: string;
+        };
+        ProtocolCreate: {
+            base_version?: string;
+            care_line: string;
+            description?: string;
+            eligibility?: {
+                [key: string]: unknown;
+            };
+            items: components["schemas"]["ProtocolItemRule"][];
+            lost_to_followup_days?: number;
+            name: string;
+            /** @description Casos de teste anexados (obrigatórios para aprovação — plano 8.3) */
+            test_cases?: {
+                [key: string]: unknown;
+            }[];
+        };
+        ProtocolItemRule: {
+            code?: string;
+            code_system?: string;
+            /** @description Expressão restrita avaliada sobre atributos do cidadão (ex. idade, sexo, risco) — sem código */
+            condition?: {
+                [key: string]: unknown;
+            };
+            /** @description Prazo a partir do início do plano (ou do item anterior quando periodicity) */
+            due_in_days: number;
+            /** @description Dias após o prazo para considerar lacuna */
+            gap_after_days?: number;
+            /** @enum {string} */
+            kind: "consultation" | "exam" | "vaccine" | "return" | "home_visit" | "procedure" | "education" | "other";
+            periodicity_days?: number;
+            /** @enum {string} */
+            priority?: "low" | "medium" | "high" | "urgent";
+            title: string;
         };
         Provenance: {
             confidence?: number;
@@ -1554,10 +2033,12 @@ export interface components {
         };
     };
     parameters: {
+        carePlanId: string;
         caseId: string;
         citizenId: string;
         correlationId: string;
         cursor: string;
+        episodeId: string;
         /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
         idempotencyKey: string;
         limit: number;
@@ -1744,6 +2225,227 @@ export interface operations {
                         items: components["schemas"]["AccessLogEntry"][];
                         next_cursor?: string | null;
                     };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCareGaps: {
+        parameters: {
+            query?: {
+                care_line?: string;
+                cnes?: string;
+                cursor?: components["parameters"]["cursor"];
+                gap_kind?: components["schemas"]["CareGapKind"];
+                limit?: components["parameters"]["limit"];
+                microarea?: string;
+                min_days_overdue?: number;
+                status?: "open" | "resolved";
+                team_ine?: string;
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CareGap"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resolveCareGap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                careGapId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note?: string;
+                    /** @enum {string} */
+                    resolution: "performed" | "scheduled" | "contact_made" | "refused" | "moved" | "deceased" | "not_found" | "cancelled";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareGap"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCarePlans: {
+        parameters: {
+            query?: {
+                care_line?: string;
+                citizen_id?: string;
+                cnes?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                status?: "active" | "on_hold" | "completed" | "cancelled";
+                team_ine?: string;
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CarePlan"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCarePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CarePlanCreate"];
+            };
+        };
+        responses: {
+            /** @description Criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCarePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                carePlanId: components["parameters"]["carePlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    closeCarePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                carePlanId: components["parameters"]["carePlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /** @enum {string} */
+                    status: "completed" | "cancelled";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateCarePlanItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                carePlanId: components["parameters"]["carePlanId"];
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Referência ao evento/atendimento/exame que comprova */
+                    evidence_ref?: string;
+                    note?: string;
+                    /** Format: date-time */
+                    performed_at?: string;
+                    /** @enum {string} */
+                    status: "planned" | "scheduled" | "done" | "missed" | "cancelled";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarePlan"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -2178,6 +2880,233 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listHospitalEpisodes: {
+        parameters: {
+            query?: {
+                citizen_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                discharged_from?: string;
+                discharged_to?: string;
+                followup_status?: "pending" | "contacted" | "scheduled" | "closed" | "escalated";
+                hospital_cnes?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description UBS de referência do cidadão (para a APS acompanhar sua população) */
+                reference_cnes?: string;
+                status?: components["schemas"]["HospitalEpisodeStatus"];
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["HospitalEpisode"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerHospitalMovement: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HospitalMovementRegistration"];
+            };
+        };
+        responses: {
+            /** @description Episódio atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            /** @description Episódio criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getHospitalEpisode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                episodeId: components["parameters"]["episodeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerCounterReferral: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                episodeId: components["parameters"]["episodeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CounterReferralRegistration"];
+            };
+        };
+        responses: {
+            /** @description Registrada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerDischarge: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                episodeId: components["parameters"]["episodeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DischargeRegistration"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerDischargeFollowup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                episodeId: components["parameters"]["episodeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date-time */
+                    contacted_at?: string;
+                    note?: string;
+                    /** @enum {string} */
+                    outcome: "contact_made" | "appointment_scheduled" | "deceased" | "moved" | "refused" | "not_found";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerDischargeBySource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
+                sourceRecordId: components["parameters"]["sourceRecordId"];
+                /** @description Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS */
+                system: components["parameters"]["sourceSystem"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DischargeRegistration"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HospitalEpisode"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listConnectors: {
         parameters: {
             query?: never;
@@ -2551,6 +3480,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProtocols: {
+        parameters: {
+            query?: {
+                care_line?: string;
+                status?: "draft" | "in_review" | "approved" | "active" | "revoked";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Protocol"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProtocolVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProtocolCreate"];
+            };
+        };
+        responses: {
+            /** @description Criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Protocol"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    transitionProtocolVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                protocolId: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "submit" | "approve" | "activate" | "revoke";
+                    /** Format: date-time */
+                    effective_from?: string;
+                    justification?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Protocol"];
                 };
             };
             default: components["responses"]["Problem"];

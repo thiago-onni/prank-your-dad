@@ -2,19 +2,10 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import {
-  useTasks,
-  useTransitionTask,
-  type Task,
-  type TaskStatus,
-  type TaskTransitionAction,
-} from '@sus-nexus/api-client';
+import { useTasks, type TaskStatus } from '@sus-nexus/api-client';
 import {
   Badge,
-  Button,
   CursorPagination,
-  Dialog,
-  DialogContent,
   EmptyState,
   Select,
   Table,
@@ -23,8 +14,6 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
-  Textarea,
-  useToast,
 } from '@sus-nexus/design-system';
 import {
   formatDateTime,
@@ -34,21 +23,10 @@ import {
 } from '@sus-nexus/domain-components';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryState } from '@/components/QueryState';
-import { describeError } from '@/lib/problem';
 import { t } from '@/i18n';
+import { TaskActions, useTaskTransition } from './useTaskTransition';
 
 const STATUSES = Object.keys(taskStatusLabels) as TaskStatus[];
-
-const ALLOWED: Record<TaskStatus, TaskTransitionAction[]> = {
-  open: ['assign', 'start', 'cancel', 'escalate'],
-  assigned: ['start', 'complete', 'cancel', 'escalate'],
-  in_progress: ['complete', 'cancel', 'escalate'],
-  escalated: ['assign', 'start', 'complete', 'cancel'],
-  completed: [],
-  cancelled: [],
-};
-
-const NEEDS_REASON: TaskTransitionAction[] = ['cancel', 'escalate'];
 
 export function TasksPage() {
   const [status, setStatus] = useState<TaskStatus | ''>('');
@@ -60,58 +38,7 @@ export function TasksPage() {
     cursor: cursors[cursors.length - 1],
     limit: 50,
   });
-  const transition = useTransitionTask();
-  const { toast } = useToast();
-  const [pending, setPending] = useState<{ task: Task; action: TaskTransitionAction } | null>(null);
-  const [reason, setReason] = useState('');
-  const [outcome, setOutcome] = useState('');
-  const [reasonError, setReasonError] = useState<string | undefined>();
-
-  const run = (
-    task: Task,
-    action: TaskTransitionAction,
-    extra?: { reason?: string; outcome?: string },
-  ) => {
-    transition.mutate(
-      { taskId: task.id, action, reason: extra?.reason, outcome: extra?.outcome },
-      {
-        onSuccess: () => {
-          toast({ title: t.tasks.transition.success, tone: 'success' });
-          setPending(null);
-          setReason('');
-          setOutcome('');
-        },
-        onError: (error) => {
-          const { message, correlationId } = describeError(error);
-          toast({
-            title: t.tasks.transition.failed,
-            description: `${message}${correlationId ? ` (${correlationId})` : ''}`,
-            tone: 'danger',
-          });
-        },
-      },
-    );
-  };
-
-  const onAction = (task: Task, action: TaskTransitionAction) => {
-    if (NEEDS_REASON.includes(action) || action === 'complete') {
-      setPending({ task, action });
-      return;
-    }
-    run(task, action);
-  };
-
-  const confirmPending = () => {
-    if (!pending) return;
-    if (NEEDS_REASON.includes(pending.action) && reason.trim().length < 5) {
-      setReasonError(`${t.tasks.transition.reasonLabel}: ${t.app.required.toLowerCase()}`);
-      return;
-    }
-    run(pending.task, pending.action, {
-      reason: reason.trim() || undefined,
-      outcome: outcome.trim() || undefined,
-    });
-  };
+  const { onAction, dialog, isPending } = useTaskTransition();
 
   return (
     <>
@@ -212,29 +139,7 @@ export function TasksPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div
-                            className="flex flex-wrap gap-1"
-                            role="group"
-                            aria-label={`${t.app.actions}: ${task.title ?? task.task_type}`}
-                          >
-                            {ALLOWED[task.status].map((action) => (
-                              <Button
-                                key={action}
-                                size="sm"
-                                variant={
-                                  action === 'cancel'
-                                    ? 'ghost'
-                                    : action === 'escalate'
-                                      ? 'danger'
-                                      : 'secondary'
-                                }
-                                onClick={() => onAction(task, action)}
-                                disabled={transition.isPending}
-                              >
-                                {t.tasks.transition[action]}
-                              </Button>
-                            ))}
-                          </div>
+                          <TaskActions task={task} onAction={onAction} disabled={isPending} />
                         </TableCell>
                       </TableRow>
                     );
@@ -252,53 +157,7 @@ export function TasksPage() {
           )
         }
       </QueryState>
-
-      <Dialog
-        open={pending !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPending(null);
-            setReasonError(undefined);
-          }
-        }}
-      >
-        <DialogContent
-          title={pending ? t.tasks.transition[pending.action] : ''}
-          description={pending?.task.title}
-          size="sm"
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setPending(null)}>
-                {t.app.cancel}
-              </Button>
-              <Button variant="primary" onClick={confirmPending} loading={transition.isPending}>
-                {t.app.confirm}
-              </Button>
-            </>
-          }
-        >
-          {pending?.action === 'complete' ? (
-            <Textarea
-              label={t.tasks.transition.outcomeLabel}
-              value={outcome}
-              onChange={(e) => setOutcome(e.target.value)}
-              maxLength={500}
-            />
-          ) : (
-            <Textarea
-              label={t.tasks.transition.reasonLabel}
-              required
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                if (reasonError) setReasonError(undefined);
-              }}
-              error={reasonError}
-              maxLength={500}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {dialog}
     </>
   );
 }
