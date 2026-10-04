@@ -253,6 +253,9 @@
                     <include>integration/*.schema.json</include>
                     <include>regulation/*.schema.json</include>
                     <include>exam/*.schema.json</include>
+                    <include>hospital/*.schema.json</include>
+                    <include>careplan/*.schema.json</include>
+                    <include>caregap/*.schema.json</include>
                   </includes>
                 </resource>
               </resources>

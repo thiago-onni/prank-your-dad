@@ -25,7 +25,10 @@ class ArchitectureTest {
           "tasks",
           "journey",
           "regulation",
-          "exams");
+          "exams",
+          "hospital",
+          "careplan",
+          "consent");
   static JavaClasses classes;
 
   @BeforeAll

@@ -20,17 +20,32 @@ public class Bus {
 
   /** canal de saída → canais de entrada que assinam o mesmo tópico. */
   static final Map<String, List<String>> FANOUT =
-      Map.of(
-          "citizen-out", List.of("journey-identity-in"),
-          "merge-out", List.of("journey-merge-in", "tasks-merge-in"),
-          "appointment-out", List.of("journey-appointment-in", "exams-appointment-in"),
-          "task-out", List.of("journey-task-in", "tasks-task-in", "exams-task-in"),
-          "integration-command-out", List.of(),
-          "regulation-request-out",
-              List.of("journey-regulation-request-in", "regulation-request-in"),
-          "regulation-status-out", List.of("journey-regulation-status-in", "regulation-status-in"),
-          "exam-order-out", List.of("journey-exam-order-in", "exams-order-in"),
-          "exam-result-out", List.of("journey-exam-result-in", "exams-result-in"));
+      Map.ofEntries(
+          Map.entry("citizen-out", List.of("journey-identity-in")),
+          Map.entry("merge-out", List.of("journey-merge-in", "tasks-merge-in")),
+          Map.entry(
+              "appointment-out",
+              List.of("journey-appointment-in", "exams-appointment-in", "careplan-appointment-in")),
+          Map.entry(
+              "task-out",
+              List.of("journey-task-in", "tasks-task-in", "exams-task-in", "hospital-task-in")),
+          Map.entry("integration-command-out", List.of()),
+          Map.entry(
+              "regulation-request-out",
+              List.of("journey-regulation-request-in", "regulation-request-in")),
+          Map.entry(
+              "regulation-status-out",
+              List.of("journey-regulation-status-in", "regulation-status-in")),
+          Map.entry(
+              "exam-order-out",
+              List.of("journey-exam-order-in", "exams-order-in", "careplan-exam-in")),
+          Map.entry("exam-result-out", List.of("journey-exam-result-in", "exams-result-in")),
+          Map.entry("hospital-adt-out", List.of("journey-hospital-adt-in")),
+          Map.entry(
+              "hospital-discharge-out",
+              List.of("journey-hospital-discharge-in", "hospital-discharge-in")),
+          Map.entry("careplan-out", List.of("journey-careplan-in")),
+          Map.entry("caregap-out", List.of("journey-caregap-in")));
 
   @Inject
   @Connector("smallrye-in-memory")

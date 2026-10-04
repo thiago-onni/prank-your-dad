@@ -45,6 +45,8 @@ public class TimelineProjector {
           Map.entry("production", "internal"),
           Map.entry("communication", "restricted"));
 
+  static final Set<String> RESTRICTED = Set.of("restricted", "highly_restricted");
+
   @Inject TimelineEventRepository repository;
   @Inject HealthUnitService healthUnits;
   @Inject TenantContext tenantContext;
@@ -224,6 +226,91 @@ public class TimelineProjector {
     return save(t);
   }
 
+  /**
+   * {@code sus.hospital.adt.*} e {@code sus.hospital.discharge.*}: classificação do envelope
+   * ({@code highly_restricted} quando o CID principal é sensível); o resumo NUNCA contém o CID.
+   */
+  public boolean projectHospital(Inbound in) {
+    String citizenId = in.citizenId();
+    if (citizenId == null) {
+      return false;
+    }
+    JsonNode d = in.data();
+    TimelineEvent t = base(in, citizenId, "hospital");
+    t.cnes = text(d.path("hospital_cnes"));
+    t.professionalRef = text(d.path("attending_professional_id"));
+    boolean discharge = in.eventType().startsWith("sus.hospital.discharge.");
+    if (discharge) {
+      t.status = d.path("disposition").asText("home");
+      JsonNode lines = d.path("care_lines");
+      if (lines.isArray() && !lines.isEmpty()) {
+        t.careLine = lines.get(0).asText();
+      }
+      String risk = text(d.path("risk_level"));
+      t.summary =
+          "counter_referral_received".equals(in.action())
+              ? "Contrarreferência hospitalar recebida"
+              : "Alta hospitalar ("
+                  + t.status
+                  + (d.hasNonNull("length_of_stay_days")
+                      ? ", " + d.get("length_of_stay_days").asInt() + " dia(s)"
+                      : "")
+                  + (risk == null ? "" : ", risco " + risk)
+                  + ")";
+    } else {
+      t.status = d.path("status").asText("admitted");
+      String ward = text(d.path("ward"));
+      t.summary =
+          "Episódio hospitalar "
+              + describe(in.action())
+              + " — "
+              + d.path("episode_class").asText("inpatient")
+              + (ward == null ? "" : " (" + ward + ")");
+    }
+    if (!RESTRICTED.contains(t.sensitivity)) {
+      t.sensitivity = "restricted";
+    }
+    t.detailRef = "/api/v1/hospital/episodes/" + d.path("hospital_episode_id").asText();
+    return save(t);
+  }
+
+  /** {@code sus.careplan.*} e {@code sus.caregap.*} (restricted; só linha, status e contagens). */
+  public boolean projectCarePlan(Inbound in) {
+    String citizenId = in.citizenId();
+    if (citizenId == null) {
+      return false;
+    }
+    JsonNode d = in.data();
+    TimelineEvent t = base(in, citizenId, "careplan");
+    t.cnes = text(d.path("health_unit_cnes"));
+    t.careLine = text(d.path("care_line"));
+    boolean gap = in.eventType().startsWith("sus.caregap.");
+    if (gap) {
+      t.status = "resolved".equals(in.action()) ? "resolved" : "open";
+      t.summary =
+          "Lacuna de cuidado "
+              + ("resolved".equals(in.action()) ? "resolvida" : "detectada")
+              + " — "
+              + d.path("gap_kind").asText("")
+              + (t.careLine == null ? "" : " (" + t.careLine + ")");
+      t.detailRef = "/api/v1/caregaps/" + d.path("care_gap_id").asText();
+    } else {
+      t.status = d.path("status").asText("active");
+      t.summary =
+          "Plano de cuidado "
+              + describe(in.action())
+              + (t.careLine == null ? "" : " — " + t.careLine)
+              + " (protocolo v"
+              + d.path("protocol_version").asText("?")
+              + ")";
+      t.detailRef = "/api/v1/careplans/" + d.path("care_plan_id").asText();
+    }
+    if (!RESTRICTED.contains(t.sensitivity)) {
+      t.sensitivity = "restricted";
+    }
+    return save(t);
+  }
+
   // ---------------------------------------------------------------------
 
   private TimelineEvent base(Inbound in, String citizenId, String domain) {
@@ -286,6 +373,12 @@ public class TimelineProjector {
       case "completed" -> "concluída";
       case "escalated" -> "escalonada";
       case "sla_breached" -> "com SLA estourado";
+      case "admitted" -> "admitido";
+      case "transferred" -> "transferido";
+      case "bed_changed" -> "com troca de leito";
+      case "discharged" -> "com alta";
+      case "deceased" -> "com óbito";
+      case "closed" -> "encerrado";
       default -> action.replace('_', ' ');
     };
   }

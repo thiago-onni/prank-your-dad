@@ -2,7 +2,10 @@
 
 Monólito modular do barramento municipal de saúde digital (Fase 1 — fundação + segunda leva:
 `integration`, `scheduling`, `tasks`, `journey`, Kafka, Temporal, OPA, idempotência; Fase 2 —
-`regulation` e `exams` com workflows `RegulationSlaWorkflow` e `ExamFollowUpWorkflow`).
+`regulation` e `exams` com workflows `RegulationSlaWorkflow` e `ExamFollowUpWorkflow`; Fase 3 —
+`hospital` (ADT, alta, pós-alta com `DischargeFollowUpWorkflow`), `careplan` (protocolos versionados,
+planos, lacunas e `CareGapDetectionJob`) e `consent` mínimo, com regras configuráveis em
+`platform.rule_set`/`rule_version`).
 Java 21 + Quarkus 3.39.x + PostgreSQL 16 (+ Kafka, Temporal e OPA em prod). Segue `../CONVENTIONS.md`
 e o plano em `docs/sus-nexus/PLANO_IMPLEMENTACAO.md` (§5.1–5.8, §8).
 
@@ -74,9 +77,18 @@ Parâmetros SUS Nexus (`application.properties`): `sus.authz.mode` (`rbac` | `op
 `sus.regulation.documents-required-kinds` (tipos em que `attached_documents_count=0` gera pendência;
 padrão `procedure,surgery,admission`), `sus.exams.not-scheduled-days` (15), `sus.exams.result-pending-days`
 (7), `sus.exams.followup-days` (10), `sus.exams.document-base-url`, `sus.exams.document-signing-key`
-(HMAC-SHA256 da URL assinada do laudo; **trocar em produção**), `sus.exams.document-link-ttl` (PT5M).
+(HMAC-SHA256 da URL assinada do laudo; **trocar em produção**), `sus.exams.document-link-ttl` (PT5M),
+`sus.privacy.highly-restricted-cid-prefixes` (prefixos/intervalos CID-10 classificados
+`highly_restricted`; padrão `F,B20-B24,O`), `sus.careplan.gap-detection-cron` (varredura diária de
+lacunas; desligada no perfil `test`, onde `CareGapDetectionJob.runOnce()` é invocado explicitamente).
 Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
 elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
+O prazo do contato pós-alta fica em `tasks.sla_policy` (`post_discharge_followup` × prioridade = risco:
+high 24 h, medium 72 h, low 7 d; `escalate_after` 12 h / 24 h / 3 d define o segundo prazo da busca ativa) e a
+classificação de risco pós-alta em `platform.rule_set` `post-discharge-risk` (tabela de decisão jsonb
+versionada, seed v1: high se LOS ≥ 7, `home_with_care`, reinternação em 30 d, idade ≥ 75 ou linha
+oncologia/saúde mental; medium se LOS ≥ 3 ou sem plano de seguimento; senão low — `risk_rule_version`
+gravada em cada alta, com os fatos em `hospital_discharge.risk_facts`).
 
 Parâmetros do MPI ficam em `sus.mpi.*` (`application.properties`): `threshold.high/low`,
 `jaro-winkler.agree/partial`, `blocking.*` e pesos m/u por campo (`weights.<campo>.m|u`).
@@ -104,7 +116,13 @@ roda **in-process** (`TestWorkflowEnvironment`, time-skipping, cliente injetado 
 `OpaProfileTest` com `sus.authz.mode=opa`). Os testes de Fase 2 (`RegulationFlowTest`,
 `RegulationSlaWorkflowTest`, `ExamFlowTest`, `ExamFollowUpWorkflowTest`) cobrem o ciclo completo, as
 pendências, os eventos contra os schemas de `regulation/` e `exam/`, a timeline (ACS não vê laudos) e o
-isolamento de tenant.
+isolamento de tenant. Os de Fase 3 (`HospitalFlowTest`, `DischargeFollowUpWorkflowTest`,
+`CarePlanFlowTest`) cobrem ADT → alta → risco/tarefa → contrarreferência → contato (abre plano), CID
+sensível (só equipe/hospital; eventos e timeline `highly_restricted` sem o código), reinternação, óbito,
+ingestão `ingest-hospital-in`, o workflow pós-alta (escalonamento + lacuna + `not_found`), o ciclo de
+aprovação de protocolos (sem casos de teste → 422; `profissional_aps` não aprova → 403; ativação revoga
+a vigente; tenant B só vê as globais), evidência automática por agendamento/exame, job de lacunas,
+perda de seguimento, eventos `careplan/` e `caregap/` e o summary.
 
 ## Estrutura
 
@@ -126,6 +144,8 @@ br.gov.sus.nexus.core
 │   ├── logging/         PiiMasker, PiiLogFilter (quarkus.log.console.filter=pii-mask)
 │   ├── pagination/      Cursor opaco, Page { items, next_cursor }
 │   ├── temporal/        TemporalClientProvider, TemporalWorkers (descobre os WorkflowRegistrar dos módulos)
+│   ├── rules/           RuleSets (platform.rule_set/rule_version vigente) + RuleEvaluator (tabelas de decisão
+│   │                    e condições jsonb restritas: eq/ne/gt/ge/lt/le/in/contains_any/is_true/is_false/present)
 │   └── ids/             Ulid com prefixos
 ├── sharedkernel/        Cns, Cpf, Cnes, Cbo, Competence, IdentifierHash (HMAC por tenant), Masks
 ├── audit/               audit_log encadeado por hash (append-only), access_log, @AuditedAccess,
@@ -155,10 +175,21 @@ br.gov.sus.nexus.core
 ├── exams/               pedidos de exame (exam_order + status_history + exam_result [só metadados + document_ref]
 │                        + source_link), pendências EXA-004/005/009, tempos de ciclo EXA-010, URL assinada do laudo
 │                        com access_log; /api/v1/exams/orders/*; consumidor `ingest-exam-in`; ExamFollowUpWorkflow
-└── journey/             read model timeline_event (projeções de identity/schedule/task/regulation/exam; merge
-                         reatribui, unmerge reverte); GET /api/v1/citizens/{id}/timeline (keyset occurred_at+id,
-                         filtragem por sensibilidade via AuthorizationPolicy, redação por obrigações) e /summary
-                         (JOR-008: open_tasks, open_regulation_requests, pending_exams, next_appointment_at)
+├── hospital/            episódios (hospital_episode + hospital_bed_movement [append-only] + hospital_discharge
+│                        [metadados + risk_facts] + counter_referral + source_link); CID principal só código,
+│                        highly_restricted por prefixo configurável; /api/v1/hospital/episodes/*; consumidor
+│                        `ingest-hospital-in`; DischargeFollowUpWorkflow (Workflow 2)
+├── careplan/            protocol + protocol_version (jsonb items/eligibility/test_cases; draft→in_review→approved→
+│                        active→revoked; globais seed: gestante, hipertensão, diabetes) + care_plan + care_plan_item +
+│                        care_gap; /api/v1/careplans, /caregaps, /protocols; consumidores de evidência
+│                        `careplan-appointment-in`/`careplan-exam-in`; CareGapDetectionJob (@Scheduled diário)
+├── consent/             consent + communication_preference (só value_masked/value_hash); API interna consent.api
+│                        (contact_valid em caregaps e summary); sem REST nesta fase
+└── journey/             read model timeline_event (projeções de identity/schedule/task/regulation/exam/hospital/
+                         careplan; merge reatribui, unmerge reverte); GET /api/v1/citizens/{id}/timeline (keyset
+                         occurred_at+id, filtragem por sensibilidade via AuthorizationPolicy, redação por
+                         obrigações) e /summary (JOR-008: open_tasks, open_regulation_requests, pending_exams,
+                         next_appointment_at, last_hospital_discharge_at, care_lines, care_gaps, contact_valid)
 ```
 
 Cada módulo de domínio tem `api/` (contratos públicos), `domain/`, `application/` e
@@ -166,11 +197,12 @@ Cada módulo de domínio tem `api/` (contratos públicos), `domain/`, `applicati
 outros módulos e que `platform`/`sharedkernel` não conhecem módulos.
 
 Um schema PostgreSQL por módulo (`platform`, `audit`, `reference`, `terminology`, `identity`,
-`integration`, `scheduling`, `tasks`, `journey`, `regulation`, `exams`), migrações em
-`src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V014). Todas as tabelas com
+`integration`, `scheduling`, `tasks`, `journey`, `regulation`, `exams`, `hospital`, `careplan`,
+`consent`), migrações em `src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V018; V015 cria
+`platform.rule_set`/`rule_version` e as políticas de SLA pós-alta). Todas as tabelas com
 `tenant_id` têm RLS (`platform.current_tenant()` ↔ `app.tenant_id`); terminologia é global e
-`tasks.sla_policy`/`regulation.regulation_sla_policy` expõem linhas globais (`tenant_id IS NULL`)
-mais as do tenant.
+`tasks.sla_policy`/`regulation.regulation_sla_policy`/`platform.rule_version`/`careplan.protocol[_version]`
+expõem linhas globais (`tenant_id IS NULL`) mais as do tenant (a do tenant tem precedência).
 
 ## Regulação (`/api/v1/regulation`) e exames (`/api/v1/exams`)
 
@@ -194,6 +226,28 @@ Pendências de regulação (REG-005, origem `rule`, reavaliadas a cada escrita):
 sem `available > 0` em competência ≥ à do pedido), `sla_breached` (prazo vencido sem decisão). Decisão
 registrada resolve as pendências de regra; encerramento resolve todas.
 
+## Hospital (`/api/v1/hospital`), planos de cuidado (`/api/v1/careplans`, `/caregaps`, `/protocols`)
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /hospital/episodes` | operador_integracao, profissional_hospitalar | ADT por vínculo `(tenant, source.system, source_record_id)`: `admit` cria/garante (cidadão via identity.api; `regulation_source_record_id` vincula regulação); `transfer`/`bed_change` registram movimentação (append-only); `discharge`/`death` executam o fluxo de alta; `cancel` encerra sem alta; movimento sem episódio → 404; episódio encerrado → 409 |
+| `POST /hospital/episodes/{id}/discharge` e `.../by-source/{system}/{sourceRecordId}/discharge` | operador_integracao, profissional_hospitalar | LOS, reinternação em 30 d (`previous_episode_id`), UBS/equipe/microárea de referência (identity), risco pela regra vigente `post-discharge-risk`, `hospital_discharge` com `risk_facts`, eventos `sus.hospital.adt.discharged|deceased` → `sus.hospital.discharge.completed` (`data_ref` = sumário), tarefa `post_discharge_followup` (prioridade = risco; equipe INE → UBS → fila `busca_ativa`; prazo pela `sla_policy`); óbito não abre tarefa |
+| `POST /hospital/episodes/{id}/counter-referral` | operador_integracao, profissional_hospitalar | metadados + referência ao documento; evento `counter_referral_received`; exige alta registrada |
+| `POST /hospital/episodes/{id}/followup` | profissional_aps, acs, gestor | desfecho do contato (`contact_made`, `appointment_scheduled`, `deceased`, `moved`, `refused`, `not_found`): conclui as tarefas (`workflow`/`discharge-followup:<hep>`), resolve lacunas do episódio, sinaliza o workflow; contato efetivo abre plano quando há protocolo vigente elegível para as `care_lines` (`origin.kind=hospital_discharge`); já encerrado → 409 |
+| `GET /hospital/episodes[/{id}]` | leitura ampla | filtros do contrato incl. `reference_cnes` e `followup_status`; `principal_diagnosis_cid` só para papel clínico (aps/hospitalar/regulador) com vínculo (CNES do hospital/UBS de referência, equipe INE ou regulador); CID `highly_restricted` (prefixos configuráveis) só para a equipe de referência ou profissional hospitalar do CNES; `admin_municipal` vê tudo; `@AuditedAccess` |
+| `GET/POST /protocols`, `POST /protocols/{id}/versions/{v}/transition` | leitura ampla / gestor, profissional_aps | nova versão em `draft` (número sequencial por protocolo; protocolo do tenant criado se não existir); `submit` → `in_review`; `approve` exige `test_cases` > 0 **e** papel gestor/admin (`approved_by`); `activate` revoga a versão ativa do tenant e grava `effective_from`; versões globais (seed) não são alteráveis pelo município (409) |
+| `POST/GET /careplans[/{id}]`, `POST /{id}/items/{itemId}`, `POST /{id}/close` | profissional_aps, gestor (escrita); acs lê/atualiza itens | instancia a versão vigente (tenant > global) após elegibilidade (`platform.rules` sobre `age_years`/`sex`); um plano ativo por linha (409); item `done` fecha a lacuna e gera a próxima ocorrência periódica; encerramento cancela itens abertos e resolve lacunas; eventos `sus.careplan.*` |
+| `GET /caregaps`, `POST /caregaps/{id}/resolve` | profissional_aps, acs, gestor | lista de busca ativa por linha/UBS/equipe/microárea/`min_days_overdue` com `contact_valid` (consent.api); resolução conclui a tarefa `care_gap` (`performed` marca o item); eventos `sus.caregap.*` |
+
+Evidência automática (CUI-002): `sus.schedule.appointment.attended` e `sus.exam.order.*` com status
+`performed|collected|reported` marcam como `done` o item em aberto de código SIGTAP igual ou, na falta, do
+mesmo tipo com `expected_by` em ±30 d; o evento assistencial também resolve `lost_to_followup`.
+`CareGapDetectionJob` (cron `sus.careplan.gap-detection-cron`, percorre `careplan.active_tenants()`):
+item vencido além de `gap_after_days` → item `missed` + `care_gap` (`consultation|exam|vaccine|return_overdue`,
+`no_contact`) + tarefa `care_gap` (equipe → UBS → fila `busca_ativa`, origem `rule`/`care-gap:<id>`); plano sem
+evento assistencial por `lost_to_followup_days` → `lost_to_followup`. Idempotente (uma lacuna aberta por
+item/plano/kind).
+
 ## Kafka — canais e tópicos
 
 Produção publica via **Debezium Outbox Event Router** lendo `platform.event_outbox` (CDC); o
@@ -211,18 +265,25 @@ tenant do envelope, correlation id, transação nova com o inbox na mesma transa
 | `tasks-merge-in` | `sus.identity.merge.v1` | `core-tasks-merge` | `case_opened` → tarefa `mpi_review` + `MpiReviewWorkflow`; decisão conclui |
 | `ingest-regulation-in` | `sus.ingest.regulation.v1` | `core-ingest-regulation` | `data` = `RegulationRequestRegistration` (tem `kind`) ou `RegulationStatusChange` (pedido por `source_record_id`) |
 | `ingest-exam-in` | `sus.ingest.exam.v1` | `core-ingest-exam` | `data` = `ExamOrderRegistration` (`exam_code`), `ExamResultRegistration` (`reported_at`) ou `ExamStatusChange` |
+| `ingest-hospital-in` | `sus.ingest.hospital.v1` | `core-ingest-hospital` | `data` = `HospitalMovementRegistration` (`movement`), `DischargeRegistration` (`disposition`; episódio por `source`) ou `CounterReferralRegistration` (`received_at`) |
 | `regulation-request-in`, `regulation-status-in` | `sus.regulation.request.v1`, `sus.regulation.status.v1` | `core-regulation-sla` | `created` inicia `RegulationSlaWorkflow`; `status.changed` sinaliza |
 | `exams-order-in`, `exams-result-in`, `exams-task-in`, `exams-appointment-in` | `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.task.v1`, `sus.schedule.appointment.v1` | `core-exams-followup` | `created` inicia `ExamFollowUpWorkflow`; status/laudo/tarefa concluída/falta sinalizam |
-| `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in`, `journey-regulation-request-in`, `journey-regulation-status-in`, `journey-exam-order-in`, `journey-exam-result-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1`, `sus.regulation.request.v1`, `sus.regulation.status.v1`, `sus.exam.order.v1`, `sus.exam.result.v1` | `core-journey` | projeções da timeline (regulação e laudos: `restricted`) |
-| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
+| `hospital-discharge-in`, `hospital-task-in` | `sus.hospital.discharge.v1`, `sus.task.v1` | `core-hospital-followup` | `discharge.completed` (salvo óbito) inicia `DischargeFollowUpWorkflow`; `task.completed` com origem `discharge-followup:<hep>` sinaliza o contato |
+| `careplan-appointment-in`, `careplan-exam-in` | `sus.schedule.appointment.v1`, `sus.exam.order.v1` | `core-careplan-evidence` | `attended` / `performed|collected|reported` → evidência automática dos itens do plano |
+| `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in`, `journey-regulation-request-in`, `journey-regulation-status-in`, `journey-exam-order-in`, `journey-exam-result-in`, `journey-hospital-adt-in`, `journey-hospital-discharge-in`, `journey-careplan-in`, `journey-caregap-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1`, `sus.regulation.request.v1`, `sus.regulation.status.v1`, `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.hospital.adt.v1`, `sus.hospital.discharge.v1`, `sus.careplan.v1`, `sus.caregap.v1` | `core-journey` | projeções da timeline (regulação, laudos, hospital e careplan: `restricted`; hospital com CID sensível: `highly_restricted`; resumo nunca contém CID) |
+| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out`, `hospital-adt-out`, `hospital-discharge-out`, `careplan-out`, `caregap-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
 
 Eventos produzidos: `sus.identity.citizen.*`, `sus.identity.merge.*`, `sus.schedule.appointment.*`
 (`created|confirmed|cancelled|rescheduled|attended|no_show|duplicate_detected`), `sus.task.*`
 (`created|assigned|completed|escalated|sla_breached|cancelled`), `sus.integration.reprocess.requested`
 (tópico `sus.integration.command.v1`), `sus.regulation.request.{created|updated|returned|cancelled}`,
 `sus.regulation.status.changed` (`actor_kind` nunca `agent`), `sus.exam.order.{created|status_changed}` e
-`sus.exam.result.{available|critical_flagged}` (`data_ref` = referência do laudo; nunca valores), todos
-validados nos testes contra `contracts/events/**`.
+`sus.exam.result.{available|critical_flagged}` (`data_ref` = referência do laudo; nunca valores),
+`sus.hospital.adt.{admitted|transferred|bed_changed|discharged|deceased}` e
+`sus.hospital.discharge.{completed|counter_referral_received}` (`restricted`, ou `highly_restricted` com o CID
+omitido do payload; `data_ref` = sumário de alta), `sus.careplan.{created|updated|closed}` e
+`sus.caregap.{detected|resolved}` (`restricted`; só ids, códigos e contagens), todos validados nos testes
+contra `contracts/events/**`.
 
 ## Temporal
 
@@ -244,9 +305,17 @@ activities de cada módulo usam `namePrefix` para não colidir). Workflows deter
   laudo em 7 d → `result_pending`; laudo sem retorno em M dias → `exam_result_followup`; encerra em
   cancelamento/não realização ou quando a tarefa de retorno é concluída (`sus.task.completed` com origem
   `exam-followup:<id>`). Reconcilia com o estado persistido (`snapshot`) a cada prazo.
+- `DischargeFollowUpWorkflow` (`discharge-followup:<hep>`, Workflow 2): aguarda o sinal `contacted(outcome)`
+  até o `due_at` da tarefa `post_discharge_followup` (SLA por risco); sem contato → `followup_status=escalated`,
+  tarefa de contato escalonada para a fila `busca_ativa` (em transação própria — o `TaskSlaWorkflow` pode estar
+  escalonando a mesma tarefa), nova tarefa `active_search` para a equipe/microárea e lacuna
+  `post_discharge_no_contact` (careplan.api); vencido o segundo prazo (`escalate_after` da política) →
+  encerra como `not_found` (tarefas concluídas, lacuna resolvida). Contato efetivo/desfecho final encerra.
+- `CareGapDetectionWorkflow` é implementado como job `@Scheduled` (`CareGapDetectionJob`, cron diário por
+  tenant com planos ativos), invocável em testes e operação via `runOnce()`.
 
 Os starters ficam nos **consumidores** (`TaskEventsConsumer`, `IdentityMergeConsumer`,
-`RegulationEventsConsumer`, `ExamEventsConsumer`), não nos serviços, com
+`RegulationEventsConsumer`, `ExamEventsConsumer`, `HospitalEventsConsumer`), não nos serviços, com
 `WorkflowIdReusePolicy=REJECT_DUPLICATE` — replay de eventos não duplica workflows.
 
 ## Autorização (OPA) e obrigações

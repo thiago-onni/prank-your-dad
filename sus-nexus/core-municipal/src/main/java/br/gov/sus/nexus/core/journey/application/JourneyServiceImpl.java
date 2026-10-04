@@ -1,6 +1,9 @@
 package br.gov.sus.nexus.core.journey.application;
 
+import br.gov.sus.nexus.core.careplan.api.CarePlanService;
+import br.gov.sus.nexus.core.consent.api.ConsentService;
 import br.gov.sus.nexus.core.exams.api.ExamService;
+import br.gov.sus.nexus.core.hospital.api.HospitalService;
 import br.gov.sus.nexus.core.identity.api.CitizenDetail;
 import br.gov.sus.nexus.core.identity.api.CitizenService;
 import br.gov.sus.nexus.core.journey.api.CitizenOperationalSummary;
@@ -25,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +63,9 @@ public class JourneyServiceImpl implements JourneyService {
   @Inject TaskQueries tasks;
   @Inject RegulationService regulation;
   @Inject ExamService exams;
+  @Inject HospitalService hospital;
+  @Inject CarePlanService carePlans;
+  @Inject ConsentService consent;
 
   @Override
   @TenantTransactional
@@ -161,6 +168,9 @@ public class JourneyServiceImpl implements JourneyService {
   @TenantTransactional
   public CitizenOperationalSummary summary(String citizenId) {
     CitizenDetail citizen = citizens.get(citizenId);
+    // linhas de cuidado: planos ativos (careplan) + linhas observadas nos eventos
+    LinkedHashSet<String> careLines = new LinkedHashSet<>(carePlans.activeCareLines(citizenId));
+    careLines.addAll(repository.careLines(citizenId));
     return new CitizenOperationalSummary(
         citizen.id(),
         repository.lastOccurred(citizenId, "aps").map(i -> i.atOffset(ZoneOffset.UTC)).orElse(null),
@@ -168,13 +178,10 @@ public class JourneyServiceImpl implements JourneyService {
         tasks.countOpen(citizenId),
         regulation.countOpen(citizenId),
         exams.countPending(citizenId),
-        repository
-            .lastOccurred(citizenId, "hospital")
-            .map(i -> i.atOffset(ZoneOffset.UTC))
-            .orElse(null),
-        repository.careLines(citizenId),
-        0,
-        citizen.contacts() != null && !citizen.contacts().isEmpty());
+        hospital.lastDischargeAt(citizenId).orElse(null),
+        List.copyOf(careLines),
+        carePlans.countOpenGaps(citizenId),
+        consent.contactValid(citizenId));
   }
 
   static TimelineEventDto toDto(TimelineEvent t) {

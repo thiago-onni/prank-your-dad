@@ -32,16 +32,20 @@ public class OutboxRelay {
 
   /** aggregate_type → canal de saída (ver application.properties). */
   static final Map<String, String> CHANNELS =
-      Map.of(
-          "citizen", "citizen-out",
-          "merge_case", "merge-out",
-          "appointment", "appointment-out",
-          "care_task", "task-out",
-          "integration_message", "integration-command-out",
-          "regulation_request", "regulation-request-out",
-          "regulation_status", "regulation-status-out",
-          "exam_order", "exam-order-out",
-          "exam_result", "exam-result-out");
+      Map.ofEntries(
+          Map.entry("citizen", "citizen-out"),
+          Map.entry("merge_case", "merge-out"),
+          Map.entry("appointment", "appointment-out"),
+          Map.entry("care_task", "task-out"),
+          Map.entry("integration_message", "integration-command-out"),
+          Map.entry("regulation_request", "regulation-request-out"),
+          Map.entry("regulation_status", "regulation-status-out"),
+          Map.entry("exam_order", "exam-order-out"),
+          Map.entry("exam_result", "exam-result-out"),
+          Map.entry("hospital_episode", "hospital-adt-out"),
+          Map.entry("hospital_discharge", "hospital-discharge-out"),
+          Map.entry("care_plan", "careplan-out"),
+          Map.entry("care_gap", "caregap-out"));
 
   @Inject EntityManager entityManager;
   @Inject ObjectMapper objectMapper;
@@ -81,6 +85,22 @@ public class OutboxRelay {
   @Inject
   @Channel("exam-result-out")
   MutinyEmitter<String> examResultOut;
+
+  @Inject
+  @Channel("hospital-adt-out")
+  MutinyEmitter<String> hospitalAdtOut;
+
+  @Inject
+  @Channel("hospital-discharge-out")
+  MutinyEmitter<String> hospitalDischargeOut;
+
+  @Inject
+  @Channel("careplan-out")
+  MutinyEmitter<String> carePlanOut;
+
+  @Inject
+  @Channel("caregap-out")
+  MutinyEmitter<String> careGapOut;
 
   @ConfigProperty(name = "sus.outbox.relay.enabled", defaultValue = "false")
   boolean enabled;
@@ -182,6 +202,10 @@ public class OutboxRelay {
       case "regulation-status-out" -> regulationStatusOut;
       case "exam-order-out" -> examOrderOut;
       case "exam-result-out" -> examResultOut;
+      case "hospital-adt-out" -> hospitalAdtOut;
+      case "hospital-discharge-out" -> hospitalDischargeOut;
+      case "careplan-out" -> carePlanOut;
+      case "caregap-out" -> careGapOut;
       default -> null;
     };
   }
