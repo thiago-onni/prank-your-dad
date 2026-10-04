@@ -11,11 +11,14 @@ import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentResponse;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CitizenRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsert;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.DischargeRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderResponse;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamResultRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsert;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.HospitalEpisodeResponse;
+import br.gov.sus.nexus.connectors.sdk.core.dto.HospitalMovementRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.IdentityResolution;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacity;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacityBatch;
@@ -43,6 +46,10 @@ import java.util.Map;
  * CanonicalBatch#PROVIDER_CAPACITY} → {@code POST /regulation/capacity} (lotes); {@link
  * CanonicalBatch#EXAM_ORDER} → {@code POST /exams/orders} (upsert); {@link
  * CanonicalBatch#EXAM_RESULT} → {@code POST /exams/orders/by-source/{system}/{id}/results}.
+ *
+ * <p>Fase 3 (hospital): {@link CanonicalBatch#HOSPITAL_MOVEMENT} → {@code POST /hospital/episodes}
+ * (upsert do episódio por nº do atendimento); {@link CanonicalBatch#HOSPITAL_DISCHARGE} → {@code
+ * POST /hospital/episodes/by-source/{system}/{id}/discharge}.
  *
  * <p>Nos tipos "by-source" o registro alvo (pedido) é lido do payload em {@value #TARGET_REF}
  * ({@code {system, source_record_id}}); se ausente, usa-se {@code source} do próprio payload. A
@@ -74,6 +81,8 @@ public class CorePublisher {
       case CanonicalBatch.PROVIDER_CAPACITY -> publishProviderCapacity(batch, correlationId);
       case CanonicalBatch.EXAM_ORDER -> publishExamOrders(batch, correlationId);
       case CanonicalBatch.EXAM_RESULT -> publishExamResults(batch, correlationId);
+      case CanonicalBatch.HOSPITAL_MOVEMENT -> publishHospitalMovements(batch, correlationId);
+      case CanonicalBatch.HOSPITAL_DISCHARGE -> publishHospitalDischarges(batch, correlationId);
       default ->
           throw ConnectorException.permanent(
               "publish", "entity_type sem rota de publicação: " + batch.entityType(), null);
@@ -202,6 +211,32 @@ public class CorePublisher {
       ExamResultRegistration body = mapper.convertValue(payload, ExamResultRegistration.class);
       ExamOrderResponse res =
           client.registerExamResultBySource(
+              target.system(), target.sourceRecordId(), IdempotencyKeys.of(r), correlationId, body);
+      if (res != null && res.id() != null) ids.add(res.id());
+    }
+    return new PublishResult(batch.size(), 0, ids, null);
+  }
+
+  private PublishResult publishHospitalMovements(CanonicalBatch batch, String correlationId) {
+    List<String> ids = new ArrayList<>();
+    for (CanonicalRecord r : batch.records()) {
+      HospitalMovementRegistration body =
+          mapper.convertValue(r.payload(), HospitalMovementRegistration.class);
+      HospitalEpisodeResponse res =
+          client.registerHospitalMovement(IdempotencyKeys.of(r), correlationId, body);
+      if (res != null && res.id() != null) ids.add(res.id());
+    }
+    return new PublishResult(batch.size(), 0, ids, null);
+  }
+
+  private PublishResult publishHospitalDischarges(CanonicalBatch batch, String correlationId) {
+    List<String> ids = new ArrayList<>();
+    for (CanonicalRecord r : batch.records()) {
+      Map<String, Object> payload = new LinkedHashMap<>(r.payload());
+      TargetRef target = targetRef(payload);
+      DischargeRegistration body = mapper.convertValue(payload, DischargeRegistration.class);
+      HospitalEpisodeResponse res =
+          client.registerDischargeBySource(
               target.system(), target.sourceRecordId(), IdempotencyKeys.of(r), correlationId, body);
       if (res != null && res.id() != null) ids.add(res.id());
     }

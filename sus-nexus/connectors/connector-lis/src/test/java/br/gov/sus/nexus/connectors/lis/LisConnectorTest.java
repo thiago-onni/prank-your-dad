@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.gov.sus.nexus.connectors.sdk.api.CanonicalBatch;
 import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
 import br.gov.sus.nexus.connectors.sdk.core.IdempotencyKeys;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Acks;
 import br.gov.sus.nexus.connectors.sdk.ledger.InMemoryIntegrationMessageLedger;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageLedger;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageStatus;

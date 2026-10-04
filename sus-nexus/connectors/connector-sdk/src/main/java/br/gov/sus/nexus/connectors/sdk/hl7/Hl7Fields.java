@@ -1,9 +1,12 @@
-package br.gov.sus.nexus.connectors.lis;
+package br.gov.sus.nexus.connectors.sdk.hl7;
 
 import ca.uhn.hl7v2.HL7Exception;
 import ca.uhn.hl7v2.model.Composite;
+import ca.uhn.hl7v2.model.Group;
 import ca.uhn.hl7v2.model.Message;
 import ca.uhn.hl7v2.model.Primitive;
+import ca.uhn.hl7v2.model.Segment;
+import ca.uhn.hl7v2.model.Structure;
 import ca.uhn.hl7v2.model.Type;
 import ca.uhn.hl7v2.model.Varies;
 import ca.uhn.hl7v2.model.v25.datatype.CE;
@@ -30,9 +33,12 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Extrai de uma mensagem HL7 (estruturas canônicas v2.5) um modelo plano por pedido: {@code msh.*},
- * {@code pid.*}, {@code orc.*}, {@code obr.*} (timestamps já em ISO-8601) e a lista de OBX. As
- * chaves são as fontes dos YAML de mapeamento.
+ * Extrai de uma mensagem HL7 (estruturas canônicas v2.5) um modelo plano: {@code msh.*}, {@code
+ * pid.*}, {@code evn.*}, {@code pv1.*} (visita/internação), diagnósticos DG1, procedimentos PR1,
+ * segmentos Z ({@code zai.2}, {@code zai.2.1}...) e, para ORM/ORU, os grupos de pedido ({@code
+ * orc.*}, {@code obr.*}, lista de OBX). Timestamps já em ISO-8601. As chaves são as fontes dos YAML
+ * de mapeamento. Segmentos de visita/diagnóstico são localizados por nome em qualquer profundidade
+ * da estrutura, o que tolera as variações ADT_A01/A02/A03/A06/A09 do HAPI.
  */
 public final class Hl7Fields {
 
@@ -42,7 +48,29 @@ public final class Hl7Fields {
       String triggerEvent,
       Map<String, String> msh,
       Map<String, String> pid,
-      List<Order> orders) {}
+      Map<String, String> visit,
+      List<Diagnosis> diagnoses,
+      List<Procedure> procedures,
+      Map<String, String> custom,
+      List<Order> orders) {
+
+    /** Modelo plano de MSH + PID + EVN/PV1 + segmentos Z (sem os grupos de pedido). */
+    public Map<String, String> flat() {
+      Map<String, String> m = new LinkedHashMap<>(msh);
+      m.putAll(pid);
+      m.putAll(visit);
+      m.putAll(custom);
+      return m;
+    }
+  }
+
+  /** Um diagnóstico DG1 ({@code type} = DG1-6: A admitting, W working, F final). */
+  public record Diagnosis(
+      String setId, String code, String text, String codingSystem, String type, String datetime) {}
+
+  /** Um procedimento PR1. */
+  public record Procedure(
+      String setId, String code, String text, String codingSystem, String datetime) {}
 
   /** Um grupo ORDER (ORM) ou ORDER_OBSERVATION (ORU). */
   public record Order(Map<String, String> fields, List<Obx> observations) {}
@@ -71,8 +99,51 @@ public final class Hl7Fields {
     Map<String, String> msh = msh(terser);
     String type = msh.getOrDefault("msh.message_type", "");
     String trigger = msh.getOrDefault("msh.trigger", "");
+    List<Segment> all = new ArrayList<>();
+    walk(message, all);
+    Map<String, String> pid = Map.of();
+    for (Segment s : all) {
+      if (s instanceof PID p) {
+        pid = pid(p);
+        break;
+      }
+    }
+    Map<String, String> visit = new LinkedHashMap<>();
+    List<Diagnosis> diagnoses = new ArrayList<>();
+    List<Procedure> procedures = new ArrayList<>();
+    Map<String, String> custom = new LinkedHashMap<>();
+    boolean evnDone = false;
+    boolean pv1Done = false;
+    for (Segment s : all) {
+      String name = s.getName();
+      if ("EVN".equals(name) && !evnDone) {
+        evn(visit, s);
+        evnDone = true;
+      } else if ("PV1".equals(name) && !pv1Done) {
+        pv1(visit, s);
+        pv1Done = true;
+      } else if ("DG1".equals(name)) {
+        diagnoses.add(
+            new Diagnosis(
+                get(s, 1),
+                get(s, 3, 1),
+                get(s, 3, 2),
+                get(s, 3, 3),
+                get(s, 6),
+                Hl7Dates.toIso(get(s, 5), zone)));
+      } else if ("PR1".equals(name)) {
+        procedures.add(
+            new Procedure(
+                get(s, 1),
+                get(s, 3, 1),
+                get(s, 3, 2),
+                get(s, 3, 3),
+                Hl7Dates.toIso(get(s, 5), zone)));
+      } else if (name.startsWith("Z")) {
+        custom(custom, s);
+      }
+    }
     if (message instanceof ORM_O01 orm) {
-      Map<String, String> pid = pid(orm.getPATIENT().getPID());
       List<Order> orders = new ArrayList<>();
       for (int i = 0; i < orm.getORDERReps(); i++) {
         ORM_O01_ORDER g = orm.getORDER(i);
@@ -85,11 +156,10 @@ public final class Hl7Fields {
         }
         orders.add(new Order(f, obx));
       }
-      return new Parsed(type, trigger, msh, pid, orders);
+      return new Parsed(type, trigger, msh, pid, visit, diagnoses, procedures, custom, orders);
     }
     if (message instanceof ORU_R01 oru) {
       ORU_R01_PATIENT_RESULT pr = oru.getPATIENT_RESULT();
-      Map<String, String> pid = pid(pr.getPATIENT().getPID());
       List<Order> orders = new ArrayList<>();
       for (int i = 0; i < pr.getORDER_OBSERVATIONReps(); i++) {
         ORU_R01_ORDER_OBSERVATION g = pr.getORDER_OBSERVATION(i);
@@ -102,9 +172,91 @@ public final class Hl7Fields {
         }
         orders.add(new Order(f, obx));
       }
-      return new Parsed(type, trigger, msh, pid, orders);
+      return new Parsed(type, trigger, msh, pid, visit, diagnoses, procedures, custom, orders);
     }
-    return new Parsed(type, trigger, msh, Map.of(), List.of());
+    return new Parsed(type, trigger, msh, pid, visit, diagnoses, procedures, custom, List.of());
+  }
+
+  /** Percorre a estrutura (grupos aninhados e segmentos não padrão) em ordem de documento. */
+  static void walk(Group group, List<Segment> out) throws HL7Exception {
+    for (String name : group.getNames()) {
+      for (Structure st : group.getAll(name)) {
+        if (st instanceof Group g) {
+          walk(g, out);
+        } else if (st instanceof Segment seg) {
+          if (!seg.isEmpty()) out.add(seg);
+        }
+      }
+    }
+  }
+
+  private void evn(Map<String, String> m, Segment evn) throws HL7Exception {
+    m.put("evn.type_code", get(evn, 1));
+    m.put("evn.recorded_at", Hl7Dates.toIso(get(evn, 2), zone));
+    m.put("evn.reason_code", get(evn, 4));
+    m.put("evn.occurred_at", Hl7Dates.toIso(get(evn, 6), zone));
+  }
+
+  /** PV1 (tabela 0004 em PV1-2, 0023 em PV1-14, 0112 em PV1-36). */
+  private void pv1(Map<String, String> m, Segment pv1) throws HL7Exception {
+    m.put("pv1.set_id", get(pv1, 1));
+    m.put("pv1.patient_class", get(pv1, 2));
+    m.put("pv1.ward", get(pv1, 3, 1));
+    m.put("pv1.room", get(pv1, 3, 2));
+    m.put("pv1.bed", get(pv1, 3, 3));
+    m.put("pv1.facility", get(pv1, 3, 4));
+    m.put("pv1.location_description", get(pv1, 3, 9));
+    m.put("pv1.admission_type", get(pv1, 4));
+    m.put("pv1.preadmit_number", get(pv1, 5, 1));
+    m.put("pv1.prior_ward", get(pv1, 6, 1));
+    m.put("pv1.prior_bed", get(pv1, 6, 3));
+    m.put("pv1.attending_id", get(pv1, 7, 1));
+    m.put("pv1.attending_name", get(pv1, 7, 2));
+    m.put("pv1.referring_id", get(pv1, 8, 1));
+    m.put("pv1.hospital_service", get(pv1, 10));
+    m.put("pv1.readmission", get(pv1, 13));
+    m.put("pv1.admit_source", get(pv1, 14));
+    m.put("pv1.admitting_id", get(pv1, 17, 1));
+    m.put("pv1.patient_type", get(pv1, 18));
+    m.put("pv1.visit_number", get(pv1, 19, 1));
+    m.put("pv1.financial_class", get(pv1, 20, 1));
+    m.put("pv1.discharge_disposition", get(pv1, 36));
+    m.put("pv1.discharged_to_location", get(pv1, 37, 1));
+    m.put("pv1.account_status", get(pv1, 41));
+    m.put("pv1.admit_datetime", Hl7Dates.toIso(get(pv1, 44), zone));
+    m.put("pv1.discharge_datetime", Hl7Dates.toIso(get(pv1, 45), zone));
+    m.put("pv1.alternate_visit_id", get(pv1, 50, 1));
+  }
+
+  /** Segmento Z: {@code zxx.N} = campo inteiro codificado, {@code zxx.N.C} = componente C. */
+  private static void custom(Map<String, String> m, Segment z) throws HL7Exception {
+    String prefix = z.getName().toLowerCase(Locale.ROOT) + ".";
+    for (int i = 1; i <= z.numFields(); i++) {
+      Type[] reps = z.getField(i);
+      if (reps.length == 0) continue;
+      String encoded = reps[0].encode();
+      if (encoded == null || encoded.isBlank()) continue;
+      m.put(prefix + i, encoded.trim());
+      if (reps[0] instanceof Composite c) {
+        Type[] parts = c.getComponents();
+        for (int j = 0; j < parts.length; j++) {
+          String v = typeValue(parts[j]);
+          if (!v.isBlank()) m.put(prefix + i + "." + (j + 1), v);
+        }
+      } else {
+        m.put(prefix + i + ".1", encoded.trim());
+      }
+    }
+  }
+
+  static String get(Segment s, int field) throws HL7Exception {
+    return get(s, field, 1);
+  }
+
+  static String get(Segment s, int field, int component) throws HL7Exception {
+    if (field > s.numFields()) return "";
+    String v = Terser.get(s, field, 0, component, 1);
+    return v == null ? "" : v.trim();
   }
 
   private Map<String, String> msh(Terser t) throws HL7Exception {
@@ -145,6 +297,7 @@ public final class Hl7Fields {
       m.put("pid.family_name", value(pid.getPatientName(0).getFamilyName().getSurname()));
       m.put("pid.given_name", value(pid.getPatientName(0).getGivenName()));
     }
+    m.put("pid.account_number", value(pid.getPatientAccountNumber().getIDNumber()));
     m.put("pid.birthdate", Hl7Dates.toDate(value(pid.getDateTimeOfBirth().getTime())));
     m.put("pid.sex", value(pid.getAdministrativeSex()));
     return m;
@@ -200,6 +353,7 @@ public final class Hl7Fields {
     f.put(
         "obr.specimen_received",
         Hl7Dates.toIso(value(obr.getSpecimenReceivedDateTime().getTime()), zone));
+    f.put("obr.clinical_info", value(obr.getRelevantClinicalInformation()));
     f.put("obr.ordering_provider_id", xcnId(obr.getOrderingProvider()));
     f.put(
         "obr.results_datetime",
@@ -233,7 +387,7 @@ public final class Hl7Fields {
   }
 
   /** Valor textual de um tipo HL7: primitivo direto, SN = num1, composto = primeiro componente. */
-  static String typeValue(Type data) {
+  public static String typeValue(Type data) {
     if (data == null) return "";
     if (data instanceof Varies v) return typeValue(v.getData());
     if (data instanceof SN sn) {
@@ -254,7 +408,7 @@ public final class Hl7Fields {
   }
 
   /** Primeiro candidato com exatamente 7 dígitos (CNES); senão o primeiro não vazio. */
-  static String firstDigits7(String... candidates) {
+  public static String firstDigits7(String... candidates) {
     for (String c : candidates) {
       if (c != null && c.trim().matches("\\d{7}")) return c.trim();
     }
@@ -271,7 +425,7 @@ public final class Hl7Fields {
     return v == null ? "" : v;
   }
 
-  static String value(Primitive p) {
+  public static String value(Primitive p) {
     return p == null || p.getValue() == null ? "" : p.getValue().trim();
   }
 }

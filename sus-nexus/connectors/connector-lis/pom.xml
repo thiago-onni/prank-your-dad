@@ -31,14 +31,6 @@
       <artifactId>camel-quarkus-hl7</artifactId>
     </dependency>
     <dependency>
-      <groupId>ca.uhn.hapi</groupId>
-      <artifactId>hapi-base</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ca.uhn.hapi</groupId>
-      <artifactId>hapi-structures-v25</artifactId>
-    </dependency>
-    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5</artifactId>
       <scope>test</scope>

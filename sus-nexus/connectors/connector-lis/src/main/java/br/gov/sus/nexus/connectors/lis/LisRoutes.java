@@ -1,29 +1,17 @@
 package br.gov.sus.nexus.connectors.lis;
 
 import br.gov.sus.nexus.connectors.sdk.api.CanonicalBatch;
-import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
-import br.gov.sus.nexus.connectors.sdk.runtime.ConnectorRuntime;
-import br.gov.sus.nexus.connectors.sdk.runtime.PipelineHeaders;
-import br.gov.sus.nexus.connectors.sdk.util.Hashes;
-import br.gov.sus.nexus.connectors.sdk.util.Ids;
-import br.gov.sus.nexus.connectors.sdk.util.Pii;
-import ca.uhn.hl7v2.AcknowledgmentCode;
-import ca.uhn.hl7v2.HL7Exception;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Parser;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Receiver;
+import br.gov.sus.nexus.connectors.sdk.metrics.ConnectorMetrics;
 import ca.uhn.hl7v2.model.Message;
-import ca.uhn.hl7v2.util.Terser;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import java.nio.charset.Charset;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.RouteBuilder;
-import org.jboss.logging.Logger;
 
 /**
  * Rotas de fonte do LIS.
@@ -32,42 +20,53 @@ import org.jboss.logging.Logger;
  *   <li>{@code mllp://host:port} (quando {@code lis.mllp.enabled}) → {@link #RECEIVE};
  *   <li>{@code file:data/lis/in} ({@code *.hl7}, uma ou várias mensagens por arquivo) → {@link
  *       #RECEIVE};
- *   <li>{@link #RECEIVE}: parse tolerante → {@link RawMessage} → pipeline (síncrono) → ACK.
+ *   <li>{@link #RECEIVE}: {@link Hl7Receiver} do SDK (parse tolerante → RawMessage → pipeline
+ *       síncrono → ACK store-and-forward: AA persistido, AR não suportado, AE malformado).
  * </ul>
  *
- * <p>Semântica do ACK (store-and-forward): {@code AA} quando a mensagem foi parseada e persistida
- * na raw zone/ledger (falhas posteriores de publicação ficam com retry/DLQ do pipeline e NÃO geram
- * NAK, para o LIS não reenviar indefinidamente); {@code AR} para tipo de mensagem não suportado;
- * {@code AE} para mensagem malformada ou falha ao persistir.
+ * Métrica {@code connector_lis_ack_total{type}}.
  */
 @ApplicationScoped
 public class LisRoutes extends RouteBuilder {
 
   public static final String RECEIVE = "direct:lis-hl7-receive";
-  public static final String HEADER_ACK_TYPE = "CamelMllpAcknowledgementType";
-  public static final String HEADER_ACK_STRING = "CamelMllpAcknowledgementString";
-  public static final String HEADER_ACK = "CamelMllpAcknowledgement";
-  public static final String HEADER_ENTITY = "LisEntityType";
-  public static final String HEADER_CONTROL_ID = "LisControlId";
+  public static final String HEADER_ACK_TYPE = Hl7Receiver.HEADER_ACK_TYPE;
+  public static final String HEADER_ACK_STRING = Hl7Receiver.HEADER_ACK_STRING;
+  public static final String HEADER_ACK = Hl7Receiver.HEADER_ACK;
+  public static final String HEADER_ENTITY = Hl7Receiver.HEADER_ENTITY;
+  public static final String HEADER_CONTROL_ID = Hl7Receiver.HEADER_CONTROL_ID;
   public static final String METRIC_ACK = "connector_lis_ack_total";
-
-  private static final Logger LOG = Logger.getLogger(LisRoutes.class);
 
   private final LisConfig config;
   private final LisConnector connector;
   private final ProducerTemplate producer;
-  private final br.gov.sus.nexus.connectors.sdk.metrics.ConnectorMetrics metrics;
+  private final ConnectorMetrics metrics;
+  private Hl7Receiver receiver;
 
   @Inject
   public LisRoutes(
       LisConfig config,
       LisConnector connector,
       ProducerTemplate producer,
-      br.gov.sus.nexus.connectors.sdk.metrics.ConnectorMetrics metrics) {
+      ConnectorMetrics metrics) {
     this.config = config;
     this.connector = connector;
     this.producer = producer;
     this.metrics = metrics;
+  }
+
+  @PostConstruct
+  void init() {
+    this.receiver =
+        new Hl7Receiver(
+            connector.parser(),
+            connector.charset(),
+            connector.descriptor().connectorId(),
+            METRIC_ACK,
+            producer,
+            metrics,
+            (type, trigger, message) -> entityTypeOf(type, trigger),
+            (message, type, trigger) -> orderIdOf(message));
   }
 
   @Override
@@ -82,7 +81,7 @@ public class LisRoutes extends RouteBuilder {
               + "&receiveTimeout="
               + config.mllp().receiveTimeoutMs())
           .routeId("lis-mllp-source")
-          .setHeader("LisTransport", constant("mllp"))
+          .setHeader(Hl7Receiver.HEADER_TRANSPORT, constant("mllp"))
           .to(RECEIVE);
     }
 
@@ -95,7 +94,7 @@ public class LisRoutes extends RouteBuilder {
             + "&includeExt=hl7,HL7,txt,TXT")
         .routeId("lis-file-source")
         .log(LoggingLevel.INFO, "arquivo HL7 recebido: ${file:name}")
-        .setHeader("LisTransport", constant("file"))
+        .setHeader(Hl7Receiver.HEADER_TRANSPORT, constant("file"))
         .process(
             e -> {
               String text = new String(e.getIn().getBody(byte[].class), connector.charset());
@@ -108,89 +107,9 @@ public class LisRoutes extends RouteBuilder {
     from(RECEIVE).routeId("lis-hl7-receive").process(this::receive);
   }
 
-  /** Parse → RawMessage → pipeline → ACK no corpo e nos headers MLLP. */
+  /** Parse → RawMessage → pipeline → ACK no corpo e nos headers MLLP (via {@link Hl7Receiver}). */
   void receive(Exchange exchange) {
-    Object body = exchange.getIn().getBody();
-    Charset charset = connector.charset();
-    String text =
-        body instanceof byte[] bytes
-            ? new String(bytes, charset)
-            : exchange.getIn().getBody(String.class);
-    String transport = exchange.getIn().getHeader("LisTransport", "direct", String.class);
-    Message message;
-    try {
-      message = connector.parser().parse(text);
-    } catch (HL7Exception | RuntimeException e) {
-      LOG.warnf("HL7 malformado (%s): %s", transport, Pii.maskText(String.valueOf(e.getMessage())));
-      ack(
-          exchange,
-          null,
-          text,
-          AcknowledgmentCode.AE,
-          "mensagem HL7 malformada: " + e.getMessage());
-      return;
-    }
-    String type;
-    String trigger;
-    String controlId;
-    try {
-      Terser t = new Terser(message);
-      type = nz(t.get("MSH-9-1"));
-      trigger = nz(t.get("MSH-9-2"));
-      controlId = nz(t.get("MSH-10"));
-    } catch (HL7Exception e) {
-      ack(exchange, message, text, AcknowledgmentCode.AE, "MSH ilegível");
-      return;
-    }
-    String entityType = entityTypeOf(type, trigger);
-    if (entityType == null) {
-      ack(
-          exchange,
-          message,
-          text,
-          AcknowledgmentCode.AR,
-          "tipo de mensagem não suportado: " + type + "^" + trigger);
-      return;
-    }
-    String orderId = orderIdOf(message);
-    byte[] content = Hl7Parser.normalize(text).getBytes(charset);
-    RawMessage raw =
-        new RawMessage(
-            orderId.isBlank() ? controlId : orderId,
-            controlId.isBlank() ? Hashes.sha256Hex(content).substring(0, 16) : controlId,
-            entityType,
-            LisConnector.HL7_CONTENT_TYPE + "; charset=" + charset.name().toLowerCase(Locale.ROOT),
-            content,
-            Map.of(
-                LisConnector.META_MESSAGE_TYPE, type + "^" + trigger,
-                LisConnector.META_CONTROL_ID, controlId,
-                LisConnector.META_TRANSPORT, transport),
-            Instant.now());
-    try {
-      producer.sendBodyAndHeader(
-          ConnectorRuntime.INGEST, raw, PipelineHeaders.CORRELATION_ID, Ids.correlation());
-    } catch (RuntimeException e) {
-      LOG.errorf(
-          "falha ao persistir mensagem %s: %s",
-          controlId, Pii.maskText(String.valueOf(e.getMessage())));
-      ack(exchange, message, text, AcknowledgmentCode.AE, "falha ao persistir: " + e.getMessage());
-      return;
-    }
-    exchange.getIn().setHeader(HEADER_ENTITY, entityType);
-    exchange.getIn().setHeader(HEADER_CONTROL_ID, controlId);
-    ack(exchange, message, text, AcknowledgmentCode.AA, null);
-  }
-
-  private void ack(
-      Exchange exchange, Message parsed, String raw, AcknowledgmentCode code, String error) {
-    String ack =
-        parsed == null ? Hl7Acks.manualAck(raw, code, error) : Hl7Acks.ack(parsed, code, error);
-    exchange.getIn().setHeader(HEADER_ACK_TYPE, code.name());
-    exchange.getIn().setHeader(HEADER_ACK_STRING, ack);
-    exchange.getIn().setHeader(HEADER_ACK, ack.getBytes(connector.charset()));
-    exchange.getIn().setBody(ack);
-    metrics.counter(
-        METRIC_ACK, 1, "connector_id", connector.descriptor().connectorId(), "type", code.name());
+    receiver.receive(exchange);
   }
 
   static String entityTypeOf(String type, String trigger) {
@@ -201,29 +120,14 @@ public class LisRoutes extends RouteBuilder {
     return null;
   }
 
+  /**
+   * Nº do pedido: placer (ORC-2/OBR-2) ou filler (ORC-3/OBR-3) conforme {@code
+   * lis.order.id-source}.
+   */
   private String orderIdOf(Message message) {
-    try {
-      Terser t = new Terser(message);
-      List<String> candidates = new ArrayList<>();
-      boolean filler = "filler".equalsIgnoreCase(config.order().idSource());
-      for (String base : List.of("/.ORC", "/.OBR")) {
-        String placer = nz(t.get(base + "-2-1"));
-        String fill = nz(t.get(base + "-3-1"));
-        if (filler) {
-          candidates.add(fill);
-          candidates.add(placer);
-        } else {
-          candidates.add(placer);
-          candidates.add(fill);
-        }
-      }
-      return candidates.stream().filter(c -> !c.isBlank()).findFirst().orElse("");
-    } catch (HL7Exception | RuntimeException e) {
-      return "";
-    }
-  }
-
-  private static String nz(String v) {
-    return v == null ? "" : v.trim();
+    boolean filler = "filler".equalsIgnoreCase(config.order().idSource());
+    return filler
+        ? Hl7Receiver.firstTerser(message, "/.ORC-3-1", "/.OBR-3-1", "/.ORC-2-1", "/.OBR-2-1")
+        : Hl7Receiver.firstTerser(message, "/.ORC-2-1", "/.OBR-2-1", "/.ORC-3-1", "/.OBR-3-1");
   }
 }

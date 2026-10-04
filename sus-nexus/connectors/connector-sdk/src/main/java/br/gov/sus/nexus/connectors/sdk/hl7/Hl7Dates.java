@@ -1,4 +1,4 @@
-package br.gov.sus.nexus.connectors.lis;
+package br.gov.sus.nexus.connectors.sdk.hl7;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

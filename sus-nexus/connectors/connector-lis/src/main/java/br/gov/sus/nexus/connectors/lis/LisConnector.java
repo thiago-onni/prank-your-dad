@@ -7,6 +7,8 @@ import br.gov.sus.nexus.connectors.sdk.api.ConnectorException;
 import br.gov.sus.nexus.connectors.sdk.api.HealthStatus;
 import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
 import br.gov.sus.nexus.connectors.sdk.api.ValidationReport;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Fields;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Parser;
 import br.gov.sus.nexus.connectors.sdk.mapping.MappingEngine;
 import br.gov.sus.nexus.connectors.sdk.mapping.MappingLoader;
 import br.gov.sus.nexus.connectors.sdk.mapping.MappingVersion;

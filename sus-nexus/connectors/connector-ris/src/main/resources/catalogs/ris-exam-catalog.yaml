@@ -1,0 +1,31 @@
+# Catálogo de exames de imagem: código local do RIS (OBR-4-1) → SIGTAP.
+# Substitua pelo catálogo do serviço (ris.catalog.path=file:/app/config/ris-exam-catalog.yaml).
+# Códigos abaixo são exemplos da tabela SIGTAP (grupo 02 — procedimentos diagnósticos) e devem ser
+# conferidos na homologação com a competência vigente.
+catalog: ris-exam-catalog
+version: "1.0.0"
+codes:
+  RX-TORAX: "0204030153"       # radiografia de tórax (PA e perfil)
+  RX-TORAX-PA: "0204030153"
+  RX-ABDOME: "0204040019"      # radiografia de abdome simples
+  RX-COLUNA-LOMBAR: "0204020069"
+  RX-CRANIO: "0204010063"
+  RX-JOELHO: "0204060079"
+  RX-MAO: "0204060109"
+  MAMO-BILATERAL: "0204030030" # mamografia bilateral para rastreamento
+  MAMO-DIAG: "0204030188"
+  US-ABDOME-TOTAL: "0205020046"
+  US-OBSTETRICA: "0205020143"
+  US-TIREOIDE: "0205020160"
+  US-MAMA: "0205020097"
+  US-RINS: "0205020100"
+  TC-CRANIO: "0206010079"
+  TC-TORAX: "0206020031"
+  TC-ABDOME-TOTAL: "0206030010"
+  TC-COLUNA-LOMBAR: "0206010024"
+  RM-CRANIO: "0207010064"
+  RM-COLUNA-LOMBAR: "0207010030"
+  RM-JOELHO: "0207020035"
+  ECG: "0211020036"
+  ECO-TRANSTORACICO: "0205010032"
+  DENSITOMETRIA: "0204060028"

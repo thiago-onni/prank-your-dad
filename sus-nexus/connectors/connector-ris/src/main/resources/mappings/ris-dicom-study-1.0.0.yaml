@@ -1,0 +1,24 @@
+# Metadados DICOM exportados do PACS (JSON/CSV) → ExamResultRegistration by-source
+# (POST /api/v1/exams/orders/by-source/RIS/{AccessionNumber}/results).
+# Linhas planas dicom.* (DicomStudyReader: nomes normalizados, tags hex reconhecidas) + study.*
+# derivados por RisConnector: study.reported_at (StudyDate+StudyTime → ISO), study.document_ref
+# (dicom://<AE>/<StudyInstanceUID>), study.document_sha256 (SHA-256 do StudyInstanceUID),
+# study.performer_cnes, study.status. A IMAGEM NUNCA É COPIADA — só a referência ao estudo.
+# Modality/SeriesCount/InstanceCount ficam na raw zone (o contrato do core não os recebe).
+mapping_set: ris-dicom-study
+version: "1.0.0"
+entity_type: exam_result
+fields:
+  - { target: target_ref.system, constant: RIS }
+  - { source: dicom.accessionnumber, target: target_ref.source_record_id, transforms: [trim], required: true }
+  - { target: source.system, constant: RIS }
+  - { target: source.connector, constant: connector-ris }
+  - { source: dicom.accessionnumber, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: dicom.studyinstanceuid, target: source.source_record_version, transforms: [trim], required: true }
+  - { source: study.performer_cnes, target: source.cnes, transforms: [blank_to_null] }
+  - { source: study.reported_at, target: reported_at, transforms: [blank_to_null], required: true }
+  - { source: study.status, target: status, required: true }
+  - { source: study.performer_cnes, target: performer_cnes, transforms: [blank_to_null] }
+  - { source: study.document_ref, target: document_ref, required: true }
+  - { target: document_content_type, constant: application/dicom-study-ref }
+  - { source: study.document_sha256, target: document_sha256, required: true }

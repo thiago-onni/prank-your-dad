@@ -3,9 +3,11 @@ package br.gov.sus.nexus.connectors.sdk.core;
 import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CitizenRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.DischargeRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamResultRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.HospitalMovementRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacityBatch;
 import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationRequestRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationStatusChange;
@@ -107,4 +109,21 @@ public interface CoreApi {
       @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
       @HeaderParam(CORRELATION_ID) String correlationId,
       ExamResultRegistration body);
+
+  @POST
+  @Path("/hospital/episodes")
+  Response registerHospitalMovement(
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      HospitalMovementRegistration body);
+
+  /** Endpoint "by-source" (episódio localizado por sistema + nº do atendimento na origem). */
+  @POST
+  @Path("/hospital/episodes/by-source/{system}/{sourceRecordId}/discharge")
+  Response registerDischargeBySource(
+      @PathParam("system") String system,
+      @PathParam("sourceRecordId") String sourceRecordId,
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      DischargeRegistration body);
 }

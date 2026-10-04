@@ -4,10 +4,13 @@ import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentResponse;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CitizenRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.DischargeRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderResponse;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ExamResultRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.HospitalEpisodeResponse;
+import br.gov.sus.nexus.connectors.sdk.core.dto.HospitalMovementRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.IdentityResolution;
 import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacityBatch;
 import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationRequestRegistration;
@@ -231,6 +234,52 @@ public class CoreClient {
             api.registerExamResultBySource(
                 system, sourceRecordId, idempotencyKey, correlationId, body),
         ExamOrderResponse.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public HospitalEpisodeResponse registerHospitalMovement(
+      String idempotencyKey, String correlationId, HospitalMovementRegistration body) {
+    return call(
+        () -> api.registerHospitalMovement(idempotencyKey, correlationId, body),
+        HospitalEpisodeResponse.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public HospitalEpisodeResponse registerDischargeBySource(
+      String system,
+      String sourceRecordId,
+      String idempotencyKey,
+      String correlationId,
+      DischargeRegistration body) {
+    return call(
+        () ->
+            api.registerDischargeBySource(
+                system, sourceRecordId, idempotencyKey, correlationId, body),
+        HospitalEpisodeResponse.class);
   }
 
   private <T> T call(Supplier<Response> request, Class<T> type) {

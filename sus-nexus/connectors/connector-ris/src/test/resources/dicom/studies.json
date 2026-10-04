@@ -1,0 +1,31 @@
+{
+  "studies": [
+    {
+      "StudyInstanceUID": "1.2.826.0.1.3680043.8.1055.1.20260201.1001",
+      "AccessionNumber": "ACC-5001",
+      "Modality": "CR",
+      "StudyDate": "20260201",
+      "StudyTime": "101500",
+      "StudyDescription": "RX TORAX PA E PERFIL",
+      "PatientName": "FICTICIA^MARIA",
+      "PatientID": "898001234567891",
+      "AETitle": "PACS_FICT",
+      "PerformerCnes": "2131234",
+      "Series": [{"SeriesInstanceUID": "1.2.826.0.1.3680043.8.1055.1.20260201.1001.1"}, {"SeriesInstanceUID": "1.2.826.0.1.3680043.8.1055.1.20260201.1001.2"}],
+      "InstanceCount": 4
+    },
+    {
+      "0020000D": "1.2.826.0.1.3680043.8.1055.1.20260201.1002",
+      "00080050": "ACC-5002",
+      "00080060": "CT",
+      "00080020": "20260201",
+      "00080030": "113000.000",
+      "PatientName": "FICTICIO^JOAO"
+    },
+    {
+      "StudyInstanceUID": "",
+      "AccessionNumber": "ACC-5003",
+      "Modality": "US"
+    }
+  ]
+}

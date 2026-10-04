@@ -26,6 +26,16 @@ public record ExamResultRegistration(
     String documentSha256,
     List<Observation> observations) {
 
+  /**
+   * {@code document_content_type} de um resultado de imagem referenciado por metadados DICOM: a
+   * imagem nunca é copiada; {@code document_ref} = {@code dicom://<AE title>/<StudyInstanceUID>} e
+   * {@code document_sha256} = SHA-256 do StudyInstanceUID.
+   */
+  public static final String DICOM_STUDY_REF_CONTENT_TYPE = "application/dicom-study-ref";
+
+  /** Prefixo de {@code document_ref} para estudos DICOM referenciados no PACS. */
+  public static final String DICOM_REF_SCHEME = "dicom://";
+
   @JsonInclude(JsonInclude.Include.NON_NULL)
   @JsonIgnoreProperties(ignoreUnknown = true)
   @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

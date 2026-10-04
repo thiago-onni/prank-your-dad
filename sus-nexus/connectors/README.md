@@ -6,19 +6,31 @@ Segue `sus-nexus/CONVENTIONS.md` e a seção 7 de `docs/sus-nexus/PLANO_IMPLEMEN
 ```text
 connectors/
 ├── pom.xml                  reactor Maven (quarkus-bom + quarkus-camel-bom 3.39.5, fmt-maven-plugin em verify)
-├── connector-sdk/           biblioteca: Connector, descriptor, raw zone, ledger, mapping, CoreClient, retry/DLQ, métricas, runtime Camel
+├── Dockerfile               build genérico de qualquer módulo (--build-arg CONNECTOR_MODULE, PORT)
+├── connector-sdk/           biblioteca: Connector, descriptor, raw zone, ledger, mapping, CoreClient, retry/DLQ, métricas,
+│                            runtime Camel e pacote `hl7` (HAPI: parser tolerante, campos, ACK, datas, Hl7Receiver)
 ├── connector-template/      módulo-exemplo para copiar ao criar um conector novo (README com o passo a passo)
 ├── connector-terminology/   SIGTAP (largura fixa) + CID-10/CBO/CIAP-2 (CSV) → upsertCodes      porta 8090
 ├── connector-cnes/          tbEstabelecimento CSV/DBF por competência → upsertHealthUnits        porta 8091
-└── connector-pec/           e-SUS APS/PEC (file: CSV exportado | jdbc: réplica somente leitura) porta 8092
+├── connector-pec/           e-SUS APS/PEC (file: CSV exportado | jdbc: réplica somente leitura) porta 8092
+├── connector-sisreg/        SISREG: exportações CSV/XLSX de solicitações e oferta → regulação    porta 8093
+├── connector-esus-regulacao/ e-SUS Regulação: API OAuth2 paginada ou export JSON/CSV → regulação porta 8094
+├── connector-lis/           Laboratório: HL7 v2 ORM/ORU via MLLP ou .hl7 → exames (Fase 2)      porta 8095, MLLP 2575
+├── connector-his/           Hospital (borda): HL7 v2 ADT A01..A13 → episódios/altas (Fase 3)    porta 8096, MLLP 2576
+└── connector-ris/           Imagem: HL7 v2 ORM/ORU + metadados DICOM (JSON/CSV) → exames (Fase 3) porta 8097, MLLP 2577
 ```
 
 Os endpoints de ingestão que os conectores chamam (`POST /api/v1/reference/health-units/upsert`,
 `POST /api/v1/terminology/{system}/codes/upsert`, `POST /api/v1/regulation/requests`, `POST /api/v1/regulation/capacity`,
-`POST /api/v1/exams/orders`, os dois "by-source" acima, `POST /api/v1/integration/messages`,
-`POST /api/v1/integration/connectors/{id}/heartbeat`, `POST /api/v1/integration/reconciliation`) fazem parte
-do contrato do core: `sus-nexus/contracts/openapi/core-municipal.yaml` (tags `reference`, `terminology`,
-`integration`, `regulation`, `exams`). Comandos de reprocessamento chegam pelo tópico `sus.integration.command.v1`
+`POST /api/v1/exams/orders`, `POST /api/v1/exams/orders/by-source/{system}/{id}/results`,
+`POST /api/v1/hospital/episodes`, `POST /api/v1/hospital/episodes/by-source/{system}/{id}/discharge`,
+`POST /api/v1/integration/messages`, `POST /api/v1/integration/connectors/{id}/heartbeat`,
+`POST /api/v1/integration/reconciliation`) fazem parte do contrato do core:
+`sus-nexus/contracts/openapi/core-municipal.yaml` (tags `reference`, `terminology`, `integration`, `regulation`,
+`exams`, `hospital`). Nos tipos "by-source" o `CorePublisher` lê o alvo em `target_ref` `{system, source_record_id}`
+do payload (removido antes do envio). Tipos canônicos (`CanonicalBatch`): `citizen`, `appointment`, `health_unit`,
+`code`, `regulation_request`, `regulation_status`, `provider_capacity`, `exam_order`, `exam_result`,
+`hospital_movement`, `hospital_discharge`. Comandos de reprocessamento chegam pelo tópico `sus.integration.command.v1`
 (`contracts/events/integration/reprocess.v1.schema.json`).
 
 ## Build
@@ -76,9 +88,22 @@ ISO com offset passa direto), `{year_month: {from: "MM/yyyy|yyyyMM"}}` (competê
 Fontes JSON: `br.gov.sus.nexus.connectors.sdk.parse.JsonFlattener` achata um `JsonNode` em chaves `a.b[0].c`
 (+ `lista.length`), permitindo mapear respostas de API com os mesmos caminhos.
 
+## HL7 v2 compartilhado (`sdk.hl7`)
+
+`Hl7Parser` (HAPI, `CanonicalModelClassFactory("2.5")`, sem validação estrita; normaliza envelope MLLP e `\n`;
+`splitMessages` para arquivos com várias mensagens), `Hl7Fields` (modelo plano `msh.*`, `pid.*`, `evn.*`, `pv1.*`,
+DG1/PR1, segmentos Z `zxx.N[.C]`, grupos ORC/OBR/OBX de ORM/ORU; timestamps já em ISO-8601 — são as fontes dos YAML),
+`Hl7Acks` (ACK/NAK a partir da mensagem ou do MSH bruto) e `Hl7Dates`. `Hl7Receiver` implementa a recepção
+store-and-forward comum a LIS/HIS/RIS: parse → `RawMessage` → pipeline síncrono → `AA` (persistido) / `AR` (tipo não
+suportado) / `AE` (malformado) nos headers MLLP do Camel; cada conector só informa o classificador `MSH-9 →
+entity_type` e o resolvedor do id de origem (nº do pedido, nº do atendimento). Conectores de borda (HIS/RIS)
+usam `connector.edge=true` (descriptor MTLS, healthcheck com topologia) e saem apenas para o barramento.
+
 ## Testes
 
 Sem serviços externos: componentes Camel `direct`/`file`, ledger em memória, raw zone/DLQ em `target/`,
 H2 em memória para o ledger JDBC e WireMock (porta dinâmica via `QuarkusTestResourceLifecycleManager`) no lugar do core
-(e da API do e-SUS Regulação). O LIS é testado por `direct:lis-hl7-receive` (sem socket MLLP) e por arquivos `.hl7`;
-XLSX de teste é gerado com POI em tempo de teste.
+(e da API do e-SUS Regulação). LIS/HIS/RIS são testados pelos `direct:*-receive` (sem socket MLLP) e por arquivos
+`.hl7` com várias mensagens; o RIS também por exports DICOM JSON/CSV. XLSX de teste é gerado com POI em tempo de teste.
+Amostras HL7/DICOM usam dados fictícios (CNS/CPF válidos de teste) e os testes afirmam que nome, nascimento, laudo e
+sumário de alta nunca aparecem no payload enviado ao core.
