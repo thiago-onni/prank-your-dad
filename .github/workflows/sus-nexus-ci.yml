@@ -416,6 +416,8 @@ jobs:
           directory: sus-nexus/platform
           framework: terraform,kubernetes,helm,github_actions
           skip_path: sus-nexus/platform/helm/sus-nexus/charts
+          # CKV2_AWS_19: falso positivo não determinístico (EIP↔NAT por for_each); skip inline não é respeitado no SARIF
+          skip_check: CKV2_AWS_19
           soft_fail: true
           output_format: sarif
           output_file_path: checkov
