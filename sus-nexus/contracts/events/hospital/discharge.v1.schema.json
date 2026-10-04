@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/hospital/discharge/1.0.0",
+  "title": "sus.hospital.discharge.* — data",
+  "description": "Alta hospitalar e contrarreferência (HOS-003/004/008). Gatilho do fluxo pós-alta; plano de seguimento por referência (data_ref).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "hospital_episode_id", "hospital_cnes", "discharged_at", "disposition"],
+  "properties": {
+    "action": { "type": "string", "enum": ["completed", "counter_referral_received"] },
+    "hospital_episode_id": { "type": "string", "pattern": "^hep_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "hospital_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "discharged_at": { "type": "string", "format": "date-time" },
+    "admitted_at": { "type": "string", "format": "date-time" },
+    "length_of_stay_days": { "type": "integer", "minimum": 0 },
+    "disposition": { "type": "string", "enum": ["home", "home_with_care", "transfer", "against_advice", "deceased", "other"] },
+    "principal_diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "code"],
+      "properties": {
+        "system": { "type": "string", "enum": ["CID10"] },
+        "code": { "type": "string" }
+      }
+    },
+    "procedures_count": { "type": "integer", "minimum": 0 },
+    "readmission_within_30d": { "type": "boolean" },
+    "followup_plan_present": { "type": "boolean" },
+    "followup_due_days": { "type": "integer", "minimum": 0 },
+    "reference_health_unit_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "reference_team_ine": { "type": "string" },
+    "risk_level": { "type": "string", "enum": ["low", "medium", "high"], "description": "Classificado por regra aprovada e versionada (HOS-005); nunca por LLM." },
+    "risk_rule_version": { "type": "string" },
+    "care_lines": { "type": "array", "items": { "type": "string" } },
+    "counter_referral_document_present": { "type": "boolean" }
+  }
+}

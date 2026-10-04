@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/careplan/careplan/1.0.0",
+  "title": "sus.careplan.* — data",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "care_plan_id", "care_line", "status", "protocol_version"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "updated", "closed"] },
+    "care_plan_id": { "type": "string", "pattern": "^cp_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "care_line": { "type": "string" },
+    "status": { "type": "string", "enum": ["active", "on_hold", "completed", "cancelled"] },
+    "protocol_id": { "type": "string" },
+    "protocol_version": { "type": "string" },
+    "health_unit_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "team_ine": { "type": "string" },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["professional", "rule", "workflow", "hospital_discharge"] },
+        "id": { "type": "string" }
+      }
+    },
+    "items_total": { "type": "integer", "minimum": 0 },
+    "items_due": { "type": "integer", "minimum": 0 },
+    "items_overdue": { "type": "integer", "minimum": 0 },
+    "closed_reason": { "type": "string", "maxLength": 500 }
+  }
+}

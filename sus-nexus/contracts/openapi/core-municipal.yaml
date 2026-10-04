@@ -19,6 +19,8 @@ tags:
   - name: integration
   - name: regulation
   - name: exams
+  - name: hospital
+  - name: careplan
   - name: terminology
   - name: reference
   - name: audit
@@ -1278,6 +1280,448 @@ paths:
                   content_type: { type: string }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/hospital/episodes:
+    get:
+      tags: [hospital]
+      summary: Internações e passagens por urgência (HOS-006)
+      operationId: listHospitalEpisodes
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: hospital_cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/HospitalEpisodeStatus' }
+        - name: discharged_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: discharged_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: reference_cnes
+          in: query
+          description: UBS de referência do cidadão (para a APS acompanhar sua população)
+          schema: { type: string }
+        - name: followup_status
+          in: query
+          schema: { type: string, enum: [pending, contacted, scheduled, closed, escalated] }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HospitalEpisode' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [hospital]
+      summary: Registrar movimentação ADT vinda do HIS (admissão, transferência, leito, alta, óbito)
+      operationId: registerHospitalMovement
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HospitalMovementRegistration' }
+      responses:
+        '201':
+          description: Episódio criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        '200':
+          description: Episódio atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}:
+    get:
+      tags: [hospital]
+      operationId: getHospitalEpisode
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/discharge:
+    post:
+      tags: [hospital]
+      summary: Registrar alta/sumário de alta (metadados) e disparar o fluxo pós-alta (HOS-003/004)
+      operationId: registerDischarge
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DischargeRegistration' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/counter-referral:
+    post:
+      tags: [hospital]
+      summary: Registrar contrarreferência recebida (HOS-008) — metadados e referência segura
+      operationId: registerCounterReferral
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CounterReferralRegistration' }
+      responses:
+        '201':
+          description: Registrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/followup:
+    post:
+      tags: [hospital]
+      summary: Registrar resultado da tentativa de contato pós-alta (CUI-006)
+      operationId: registerDischargeFollowup
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [contact_made, appointment_scheduled, deceased, moved, refused, not_found] }
+                note: { type: string, maxLength: 500 }
+                contacted_at: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/by-source/{system}/{sourceRecordId}/discharge:
+    post:
+      tags: [hospital]
+      summary: Alta por identificador de origem (uso dos conectores)
+      operationId: registerDischargeBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DischargeRegistration' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans:
+    get:
+      tags: [careplan]
+      operationId: listCarePlans
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, on_hold, completed, cancelled] }
+        - name: team_ine
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CarePlan' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [careplan]
+      summary: Criar plano de cuidado a partir de um protocolo vigente (CUI-001)
+      operationId: createCarePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarePlanCreate' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}:
+    get:
+      tags: [careplan]
+      operationId: getCarePlan
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}/items/{itemId}:
+    post:
+      tags: [careplan]
+      summary: Registrar realização/desfecho de um item previsto (CUI-002)
+      operationId: updateCarePlanItem
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [planned, scheduled, done, missed, cancelled] }
+                performed_at: { type: string, format: date-time }
+                evidence_ref: { type: string, description: Referência ao evento/atendimento/exame que comprova }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}/close:
+    post:
+      tags: [careplan]
+      operationId: closeCarePlan
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [completed, cancelled] }
+                reason: { type: string, minLength: 5, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/caregaps:
+    get:
+      tags: [careplan]
+      summary: Lacunas de cuidado / lista de busca ativa (CUI-003/004)
+      operationId: listCareGaps
+      parameters:
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: gap_kind
+          in: query
+          schema: { $ref: '#/components/schemas/CareGapKind' }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: team_ine
+          in: query
+          schema: { type: string }
+        - name: microarea
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, resolved], default: open }
+        - name: min_days_overdue
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CareGap' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/caregaps/{careGapId}/resolve:
+    post:
+      tags: [careplan]
+      summary: Registrar desfecho da busca ativa (CUI-006)
+      operationId: resolveCareGap
+      parameters:
+        - name: careGapId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution: { type: string, enum: [performed, scheduled, contact_made, refused, moved, deceased, not_found, cancelled] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareGap' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/protocols:
+    get:
+      tags: [careplan]
+      summary: Protocolos de linha de cuidado (configuráveis, versionados — CUI-009)
+      operationId: listProtocols
+      parameters:
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, in_review, approved, active, revoked] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [careplan]
+      summary: Criar nova versão de protocolo (rascunho)
+      operationId: createProtocolVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolCreate' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/protocols/{protocolId}/versions/{version}/transition:
+    post:
+      tags: [careplan]
+      summary: Ciclo de aprovação (draft → in_review → approved → active → revoked) com responsável e testes anexados
+      operationId: transitionProtocolVersion
+      parameters:
+        - name: protocolId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [submit, approve, activate, revoke] }
+                justification: { type: string, maxLength: 500 }
+                effective_from: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/admin/rules:
     get:
       tags: [admin]
@@ -1348,6 +1792,16 @@ components:
       schema: { type: string }
     orderId:
       name: orderId
+      in: path
+      required: true
+      schema: { type: string }
+    episodeId:
+      name: episodeId
+      in: path
+      required: true
+      schema: { type: string }
+    carePlanId:
+      name: carePlanId
       in: path
       required: true
       schema: { type: string }
@@ -2296,3 +2750,257 @@ components:
         source_system: { type: string }
         source_record_id: { type: string }
         version: { type: integer }
+
+    HospitalEpisodeStatus:
+      type: string
+      enum: [admitted, in_progress, transferred, discharged, deceased, cancelled]
+
+    HospitalMovementRegistration:
+      type: object
+      required: [source, citizen_ref, hospital_cnes, episode_class, movement, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        hospital_cnes: { type: string }
+        episode_class: { type: string, enum: [inpatient, emergency, observation, day_hospital] }
+        movement: { type: string, enum: [admit, transfer, bed_change, discharge, death, cancel] }
+        occurred_at: { type: string, format: date-time }
+        ward: { type: string }
+        bed: { type: string }
+        attending_professional_id: { type: string }
+        admission_source: { type: string, enum: [emergency, regulation, transfer, elective, other] }
+        regulation_source_record_id: { type: string }
+        principal_diagnosis_cid: { type: string, description: Código CID-10; omitido quando a política classificar como highly_restricted }
+        aih_number: { type: string }
+        reason: { type: string, maxLength: 500 }
+
+    DischargeRegistration:
+      type: object
+      required: [source, discharged_at, disposition]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        discharged_at: { type: string, format: date-time }
+        disposition: { type: string, enum: [home, home_with_care, transfer, against_advice, deceased, other] }
+        principal_diagnosis_cid: { type: string }
+        procedures_count: { type: integer, minimum: 0 }
+        followup_plan_present: { type: boolean }
+        followup_due_days: { type: integer, minimum: 0 }
+        care_lines: { type: array, items: { type: string } }
+        summary_document_ref: { type: string, description: Referência segura ao sumário de alta na origem/object storage (HOS-009/010) }
+        summary_document_sha256: { type: string }
+
+    CounterReferralRegistration:
+      type: object
+      required: [source, received_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        received_at: { type: string, format: date-time }
+        target_health_unit_cnes: { type: string }
+        document_ref: { type: string }
+        document_sha256: { type: string }
+        recommendations_count: { type: integer, minimum: 0 }
+
+    HospitalEpisode:
+      type: object
+      required: [id, citizen_id, hospital_cnes, episode_class, status, admitted_at, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        hospital_cnes: { type: string }
+        hospital_name: { type: string }
+        episode_class: { type: string, enum: [inpatient, emergency, observation, day_hospital] }
+        status: { $ref: '#/components/schemas/HospitalEpisodeStatus' }
+        admitted_at: { type: string, format: date-time }
+        discharged_at: { type: string, format: date-time }
+        length_of_stay_days: { type: integer }
+        disposition: { type: string }
+        ward: { type: string }
+        bed: { type: string }
+        admission_source: { type: string }
+        regulation_request_id: { type: string }
+        principal_diagnosis_cid: { type: string, description: Presente apenas quando a política permitir }
+        aih_number: { type: string }
+        readmission_within_30d: { type: boolean }
+        previous_episode_id: { type: string }
+        reference_health_unit_cnes: { type: string }
+        reference_team_ine: { type: string }
+        risk_level: { type: string, enum: [low, medium, high] }
+        risk_rule_version: { type: string }
+        followup:
+          type: object
+          properties:
+            status: { type: string, enum: [pending, contacted, scheduled, closed, escalated] }
+            task_id: { type: string }
+            due_at: { type: string, format: date-time }
+            outcome: { type: string }
+            contacted_at: { type: string, format: date-time }
+            care_plan_id: { type: string }
+        counter_referral:
+          type: object
+          properties:
+            received_at: { type: string, format: date-time }
+            has_document: { type: boolean }
+            recommendations_count: { type: integer }
+        has_summary_document: { type: boolean }
+        movements:
+          type: array
+          items:
+            type: object
+            properties:
+              movement: { type: string }
+              occurred_at: { type: string, format: date-time }
+              ward: { type: string }
+              bed: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    CareGapKind:
+      type: string
+      enum: [consultation_overdue, exam_overdue, vaccine_overdue, return_overdue, no_contact, lost_to_followup, post_discharge_no_contact]
+
+    CarePlanItem:
+      type: object
+      required: [id, kind, title, status]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [consultation, exam, vaccine, return, home_visit, procedure, education, other] }
+        title: { type: string }
+        code: { type: string }
+        code_system: { type: string }
+        expected_by: { type: string, format: date-time }
+        periodicity_days: { type: integer }
+        status: { type: string, enum: [planned, scheduled, done, missed, cancelled] }
+        performed_at: { type: string, format: date-time }
+        evidence_ref: { type: string }
+        overdue: { type: boolean }
+
+    CarePlan:
+      type: object
+      required: [id, citizen_id, care_line, status, protocol_id, protocol_version, items, created_at]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        care_line: { type: string }
+        status: { type: string, enum: [active, on_hold, completed, cancelled] }
+        protocol_id: { type: string }
+        protocol_version: { type: string }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        responsible_professional_id: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [professional, rule, workflow, hospital_discharge] }
+            id: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CarePlanItem' }
+        open_gaps: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        closed_reason: { type: string }
+        version: { type: integer }
+
+    CarePlanCreate:
+      type: object
+      required: [citizen_id, protocol_id]
+      properties:
+        citizen_id: { type: string }
+        protocol_id: { type: string }
+        protocol_version: { type: string, description: Omitido = versão vigente }
+        team_ine: { type: string }
+        health_unit_cnes: { type: string }
+        responsible_professional_id: { type: string }
+        start_at: { type: string, format: date-time }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [professional, rule, workflow, hospital_discharge] }
+            id: { type: string }
+
+    CareGap:
+      type: object
+      required: [id, citizen_id, care_line, gap_kind, status, detected_at, protocol_version]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        citizen_display_name: { type: string }
+        care_plan_id: { type: string }
+        care_line: { type: string }
+        gap_kind: { $ref: '#/components/schemas/CareGapKind' }
+        status: { type: string, enum: [open, resolved] }
+        expected_by: { type: string, format: date-time }
+        days_overdue: { type: integer }
+        protocol_id: { type: string }
+        protocol_version: { type: string }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        microarea: { type: string }
+        task_id: { type: string }
+        detected_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolution: { type: string }
+        contact_valid: { type: boolean }
+
+    ProtocolItemRule:
+      type: object
+      required: [kind, title, due_in_days]
+      properties:
+        kind: { type: string, enum: [consultation, exam, vaccine, return, home_visit, procedure, education, other] }
+        title: { type: string }
+        code: { type: string }
+        code_system: { type: string }
+        due_in_days: { type: integer, minimum: 0, description: Prazo a partir do início do plano (ou do item anterior quando periodicity) }
+        periodicity_days: { type: integer }
+        gap_after_days: { type: integer, description: Dias após o prazo para considerar lacuna }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        condition:
+          type: object
+          description: Expressão restrita avaliada sobre atributos do cidadão (ex. idade, sexo, risco) — sem código
+          additionalProperties: true
+
+    Protocol:
+      type: object
+      required: [id, care_line, name, version, status, items]
+      properties:
+        id: { type: string }
+        care_line: { type: string }
+        name: { type: string }
+        version: { type: string }
+        status: { type: string, enum: [draft, in_review, approved, active, revoked] }
+        description: { type: string }
+        eligibility:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProtocolItemRule' }
+        lost_to_followup_days: { type: integer }
+        test_cases_count: { type: integer }
+        approved_by: { type: string }
+        effective_from: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    ProtocolCreate:
+      type: object
+      required: [care_line, name, items]
+      properties:
+        care_line: { type: string }
+        name: { type: string }
+        description: { type: string }
+        base_version: { type: string }
+        eligibility:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ProtocolItemRule' }
+        lost_to_followup_days: { type: integer }
+        test_cases:
+          type: array
+          description: Casos de teste anexados (obrigatórios para aprovação — plano 8.3)
+          items:
+            type: object
+            additionalProperties: true

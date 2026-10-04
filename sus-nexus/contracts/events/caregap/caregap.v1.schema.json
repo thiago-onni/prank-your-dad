@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/caregap/caregap/1.0.0",
+  "title": "sus.caregap.* — data",
+  "description": "Lacuna de cuidado detectada por protocolo (CUI-002/003). Base da busca ativa.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "care_gap_id", "care_line", "gap_kind", "protocol_version", "detected_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["detected", "resolved"] },
+    "care_gap_id": { "type": "string", "pattern": "^gap_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "care_plan_id": { "type": "string" },
+    "care_line": { "type": "string" },
+    "gap_kind": { "type": "string", "enum": ["consultation_overdue", "exam_overdue", "vaccine_overdue", "return_overdue", "no_contact", "lost_to_followup", "post_discharge_no_contact"] },
+    "expected_by": { "type": "string", "format": "date-time" },
+    "days_overdue": { "type": "integer", "minimum": 0 },
+    "protocol_id": { "type": "string" },
+    "protocol_version": { "type": "string" },
+    "health_unit_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "team_ine": { "type": "string" },
+    "microarea": { "type": "string" },
+    "detected_at": { "type": "string", "format": "date-time" },
+    "resolved_at": { "type": "string", "format": "date-time" },
+    "resolution": { "type": "string", "enum": ["performed", "scheduled", "contact_made", "refused", "moved", "deceased", "not_found", "cancelled"] },
+    "task_id": { "type": "string" }
+  }
+}
