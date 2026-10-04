@@ -375,6 +375,9 @@ jobs:
           GITLEAKS_ENABLE_COMMENTS: "false"
       - name: trivy fs (vulnerabilidades, segredos, misconfig)
         uses: aquasecurity/trivy-action@master
+        env:
+          # evita resolver POMs no Maven Central (429) — lockfiles/poms locais bastam
+          TRIVY_OFFLINE_SCAN: "true"
         with:
           scan-type: fs
           scan-ref: sus-nexus
