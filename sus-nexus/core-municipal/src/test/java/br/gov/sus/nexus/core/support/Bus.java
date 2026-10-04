@@ -23,9 +23,14 @@ public class Bus {
       Map.of(
           "citizen-out", List.of("journey-identity-in"),
           "merge-out", List.of("journey-merge-in", "tasks-merge-in"),
-          "appointment-out", List.of("journey-appointment-in"),
-          "task-out", List.of("journey-task-in", "tasks-task-in"),
-          "integration-command-out", List.of());
+          "appointment-out", List.of("journey-appointment-in", "exams-appointment-in"),
+          "task-out", List.of("journey-task-in", "tasks-task-in", "exams-task-in"),
+          "integration-command-out", List.of(),
+          "regulation-request-out",
+              List.of("journey-regulation-request-in", "regulation-request-in"),
+          "regulation-status-out", List.of("journey-regulation-status-in", "regulation-status-in"),
+          "exam-order-out", List.of("journey-exam-order-in", "exams-order-in"),
+          "exam-result-out", List.of("journey-exam-result-in", "exams-result-in"));
 
   @Inject
   @Connector("smallrye-in-memory")

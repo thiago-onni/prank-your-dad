@@ -11,7 +11,9 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
  * Consumidores que alimentam a timeline: {@code sus.identity.citizen.v1} ({@code
  * journey-identity-in}), {@code sus.identity.merge.v1} ({@code journey-merge-in}), {@code
  * sus.schedule.appointment.v1} ({@code journey-appointment-in}) e {@code sus.task.v1} ({@code
- * journey-task-in}). Idempotentes via {@code event_inbox} (grupo {@code core-journey}).
+ * journey-task-in}), {@code sus.regulation.request.v1}/{@code status.v1} ({@code
+ * journey-regulation-*-in}) e {@code sus.exam.order.v1}/{@code result.v1} ({@code
+ * journey-exam-*-in}). Idempotentes via {@code event_inbox} (grupo {@code core-journey}).
  */
 @ApplicationScoped
 public class TimelineConsumers {
@@ -43,5 +45,29 @@ public class TimelineConsumers {
   @Blocking
   public void onTask(String payload) {
     processor.process(payload, CONSUMER_GROUP, projector::projectTask);
+  }
+
+  @Incoming("journey-regulation-request-in")
+  @Blocking
+  public void onRegulationRequest(String payload) {
+    processor.process(payload, CONSUMER_GROUP, projector::projectRegulation);
+  }
+
+  @Incoming("journey-regulation-status-in")
+  @Blocking
+  public void onRegulationStatus(String payload) {
+    processor.process(payload, CONSUMER_GROUP, projector::projectRegulation);
+  }
+
+  @Incoming("journey-exam-order-in")
+  @Blocking
+  public void onExamOrder(String payload) {
+    processor.process(payload, CONSUMER_GROUP, projector::projectExam);
+  }
+
+  @Incoming("journey-exam-result-in")
+  @Blocking
+  public void onExamResult(String payload) {
+    processor.process(payload, CONSUMER_GROUP, projector::projectExam);
   }
 }

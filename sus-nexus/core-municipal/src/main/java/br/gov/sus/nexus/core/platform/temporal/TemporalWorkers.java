@@ -1,18 +1,19 @@
-package br.gov.sus.nexus.core.tasks.infrastructure.temporal;
+package br.gov.sus.nexus.core.platform.temporal;
 
-import io.quarkus.arc.ClientProxy;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 /**
  * Registra os workers Temporal (fila {@code sus.temporal.task-queue}) no start da aplicação,
- * somente quando {@code sus.temporal.enabled=true}.
+ * somente quando {@code sus.temporal.enabled=true}. Os workflows/activities de cada módulo são
+ * registrados pelos seus {@link WorkflowRegistrar}.
  */
 @ApplicationScoped
 public class TemporalWorkers {
@@ -20,8 +21,7 @@ public class TemporalWorkers {
   private static final Logger LOG = Logger.getLogger(TemporalWorkers.class);
 
   @Inject TemporalClientProvider provider;
-  @Inject TaskSlaActivitiesImpl taskSlaActivities;
-  @Inject MpiReviewActivitiesImpl mpiReviewActivities;
+  @Inject Instance<WorkflowRegistrar> registrars;
 
   private WorkerFactory factory;
 
@@ -43,13 +43,13 @@ public class TemporalWorkers {
   }
 
   /**
-   * Registra workflows e activities (também usado pelos testes com worker do ambiente de teste).
+   * Registra workflows e activities de todos os módulos (também usado pelos testes com worker do
+   * ambiente de teste).
    */
   public void register(Worker worker) {
-    worker.registerWorkflowImplementationTypes(
-        TaskSlaWorkflowImpl.class, MpiReviewWorkflowImpl.class);
-    worker.registerActivitiesImplementations(
-        ClientProxy.unwrap(taskSlaActivities), ClientProxy.unwrap(mpiReviewActivities));
+    for (WorkflowRegistrar registrar : registrars) {
+      registrar.register(worker);
+    }
   }
 
   void onStop(@Observes ShutdownEvent ev) {

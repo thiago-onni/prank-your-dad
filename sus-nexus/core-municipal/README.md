@@ -1,7 +1,8 @@
 # SUS Nexus — `core-municipal`
 
 Monólito modular do barramento municipal de saúde digital (Fase 1 — fundação + segunda leva:
-`integration`, `scheduling`, `tasks`, `journey`, Kafka, Temporal, OPA, idempotência).
+`integration`, `scheduling`, `tasks`, `journey`, Kafka, Temporal, OPA, idempotência; Fase 2 —
+`regulation` e `exams` com workflows `RegulationSlaWorkflow` e `ExamFollowUpWorkflow`).
 Java 21 + Quarkus 3.39.x + PostgreSQL 16 (+ Kafka, Temporal e OPA em prod). Segue `../CONVENTIONS.md`
 e o plano em `docs/sus-nexus/PLANO_IMPLEMENTACAO.md` (§5.1–5.8, §8).
 
@@ -69,7 +70,13 @@ Endpoints auxiliares: `/q/health` (liveness/readiness), `/q/metrics` (Prometheus
 
 Parâmetros SUS Nexus (`application.properties`): `sus.authz.mode` (`rbac` | `opa`), `sus.authz.opa-timeout`,
 `sus.idempotency.ttl` (PT72H) / `purge-every`, `sus.scheduling.duplicate-window-hours` (72),
-`sus.temporal.enabled|target|namespace|task-queue`, `sus.outbox.relay.enabled|every|batch-size`.
+`sus.temporal.enabled|target|namespace|task-queue`, `sus.outbox.relay.enabled|every|batch-size`,
+`sus.regulation.documents-required-kinds` (tipos em que `attached_documents_count=0` gera pendência;
+padrão `procedure,surgery,admission`), `sus.exams.not-scheduled-days` (15), `sus.exams.result-pending-days`
+(7), `sus.exams.followup-days` (10), `sus.exams.document-base-url`, `sus.exams.document-signing-key`
+(HMAC-SHA256 da URL assinada do laudo; **trocar em produção**), `sus.exams.document-link-ttl` (PT5M).
+Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
+elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
 
 Parâmetros do MPI ficam em `sus.mpi.*` (`application.properties`): `threshold.high/low`,
 `jaro-winkler.agree/partial`, `blocking.*` e pesos m/u por campo (`weights.<campo>.m|u`).
@@ -94,7 +101,10 @@ Sem Docker: no perfil `test` o Kafka é substituído pelo conector **in-memory**
 `OutboxRelay.relayOnce()` → canais de saída → canais de entrada que assinam o mesmo tópico), o Temporal
 roda **in-process** (`TestWorkflowEnvironment`, time-skipping, cliente injetado no
 `TemporalClientProvider`) e o OPA é um **WireMock** (`OpaAuthorizationPolicyTest` unitário e
-`OpaProfileTest` com `sus.authz.mode=opa`).
+`OpaProfileTest` com `sus.authz.mode=opa`). Os testes de Fase 2 (`RegulationFlowTest`,
+`RegulationSlaWorkflowTest`, `ExamFlowTest`, `ExamFollowUpWorkflowTest`) cobrem o ciclo completo, as
+pendências, os eventos contra os schemas de `regulation/` e `exam/`, a timeline (ACS não vê laudos) e o
+isolamento de tenant.
 
 ## Estrutura
 
@@ -115,6 +125,7 @@ br.gov.sus.nexus.core
 │   ├── errors/          ProblemException + mappers RFC 9457
 │   ├── logging/         PiiMasker, PiiLogFilter (quarkus.log.console.filter=pii-mask)
 │   ├── pagination/      Cursor opaco, Page { items, next_cursor }
+│   ├── temporal/        TemporalClientProvider, TemporalWorkers (descobre os WorkflowRegistrar dos módulos)
 │   └── ids/             Ulid com prefixos
 ├── sharedkernel/        Cns, Cpf, Cnes, Cbo, Competence, IdentifierHash (HMAC por tenant), Masks
 ├── audit/               audit_log encadeado por hash (append-only), access_log, @AuditedAccess,
@@ -137,9 +148,17 @@ br.gov.sus.nexus.core
 ├── tasks/               care_task + task_history + sla_policy (seed global; override por tenant); máquina de
 │                        estados; TaskCommands/TaskQueries (API pública); workflows Temporal TaskSlaWorkflow e
 │                        MpiReviewWorkflow; consumidores `tasks-task-in` (starter) e `tasks-merge-in` (mpi_review)
-└── journey/             read model timeline_event (projeções de identity/schedule/task; merge reatribui, unmerge
-                         reverte); GET /api/v1/citizens/{id}/timeline (keyset occurred_at+id, filtragem por
-                         sensibilidade via AuthorizationPolicy, redação por obrigações) e /summary (JOR-008)
+├── regulation/          fila regulatória espelhada do sistema oficial (regulation_request + status_history +
+│                        decision [somente registro] + issue [REG-005] + source_link + provider_capacity [REG-006]
+│                        + regulation_sla_policy [REG-010]); /api/v1/regulation/*; consumidor `ingest-regulation-in`;
+│                        RegulationSlaWorkflow; o barramento NUNCA decide nem muda prioridade (REG-009)
+├── exams/               pedidos de exame (exam_order + status_history + exam_result [só metadados + document_ref]
+│                        + source_link), pendências EXA-004/005/009, tempos de ciclo EXA-010, URL assinada do laudo
+│                        com access_log; /api/v1/exams/orders/*; consumidor `ingest-exam-in`; ExamFollowUpWorkflow
+└── journey/             read model timeline_event (projeções de identity/schedule/task/regulation/exam; merge
+                         reatribui, unmerge reverte); GET /api/v1/citizens/{id}/timeline (keyset occurred_at+id,
+                         filtragem por sensibilidade via AuthorizationPolicy, redação por obrigações) e /summary
+                         (JOR-008: open_tasks, open_regulation_requests, pending_exams, next_appointment_at)
 ```
 
 Cada módulo de domínio tem `api/` (contratos públicos), `domain/`, `application/` e
@@ -147,10 +166,33 @@ Cada módulo de domínio tem `api/` (contratos públicos), `domain/`, `applicati
 outros módulos e que `platform`/`sharedkernel` não conhecem módulos.
 
 Um schema PostgreSQL por módulo (`platform`, `audit`, `reference`, `terminology`, `identity`,
-`integration`, `scheduling`, `tasks`, `journey`), migrações em
-`src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V012). Todas as tabelas com
+`integration`, `scheduling`, `tasks`, `journey`, `regulation`, `exams`), migrações em
+`src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V014). Todas as tabelas com
 `tenant_id` têm RLS (`platform.current_tenant()` ↔ `app.tenant_id`); terminologia é global e
-`tasks.sla_policy` expõe linhas globais (`tenant_id IS NULL`) mais as do tenant.
+`tasks.sla_policy`/`regulation.regulation_sla_policy` expõem linhas globais (`tenant_id IS NULL`)
+mais as do tenant.
+
+## Regulação (`/api/v1/regulation`) e exames (`/api/v1/exams`)
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /regulation/requests` | operador_integracao, regulador | upsert por `(tenant, source.system, source_record_id)`; cidadão via identity.api; `sla_due_at = requested_at + política(prioridade)`; `cid_code` **não** é persistido |
+| `POST /regulation/requests/{id}/status` e `.../by-source/{system}/{sourceRecordId}/status` | operador_integracao, regulador | histórico + `regulation_decision` (authorized/denied/returned); `appointment_source_record_id` vincula o agendamento (scheduling.api); `returned` abre pendência; `no_show` → tarefa `no_show_recovery`; agente de IA → 403 (REG-009) |
+| `POST /regulation/requests/{id}/issues` | regulador, agente_ia | origem `agent` exige papel `agente_ia` (aprovação humana ocorre no ai-service); registrado em `audit_log` |
+| `GET /regulation/requests` | regulador, gestor, agendador, profissional_aps, operador_integracao, agente_ia | filtros do contrato; `issue=incomplete|returned|expired|duplicate|no_capacity|sla_breached`; `sort=waiting_time_desc` (padrão: `requested_at` asc), `priority_desc`, `created_at_asc`; cursor por deslocamento; `@AuditedAccess` |
+| `GET/POST /regulation/capacity` | leitura ampla / operador_integracao, regulador, gestor | upsert por `(tenant, provider_cnes, service_code, competence)`; itens inválidos contam como `rejected`; reavalia `no_capacity` dos pedidos abertos do serviço |
+| `GET /regulation/queues/summary?group_by=` | gestor, regulador | agregação SQL: `open_requests`, `by_priority`, `avg/p90_waiting_days` (`percentile_cont`), `sla_breached`, `with_issues`, `scheduled_30d`, `no_show_30d`, `capacity_available` (competência ≥ atual; só para `service_code`/`provider_cnes`) |
+| `POST /exams/orders` | operador_integracao, profissional_aps | upsert por vínculo de origem; `regulation_source_record_id`/`appointment_source_record_id` vinculam regulação e agenda |
+| `POST /exams/orders/{id}/status` | operador_integracao, profissional_aps | `scheduled` grava `scheduled_at`; `performed`/`collected` gravam `performed_at` |
+| `POST /exams/orders/{id}/results` e `.../by-source/{system}/{sourceRecordId}/results` | operador_integracao | só metadados; observações codificadas (texto livre descartado); marca `reported`; `sus.exam.result.available` com `data_ref = document_ref`; `critical=true` → `critical_flagged` + tarefa `exam_result_followup` urgente ao solicitante **sem conteúdo** (EXA-008) |
+| `GET /exams/orders[/{id}]` | leitura ampla | `issues` derivadas (not_scheduled, result_pending, no_result_followup, inconclusive, critical, integration_failure) e `cycle_times` em horas (EXA-010); `@AuditedAccess` |
+| `GET /exams/orders/{id}/results/{rid}/document` | profissional_aps, profissional_hospitalar, regulador | URL assinada (HMAC-SHA256, 5 min) para `sus.exams.document-base-url` + `document_ref`; `access_log` (`exam_result`/`document_link`) com finalidade; 404 sem documento |
+
+Pendências de regulação (REG-005, origem `rule`, reavaliadas a cada escrita): `clinical_justification`
+(`justification_present=false`), `missing_document` (`attached_documents_count=0` nos tipos configurados),
+`duplicate` (mesmo cidadão + serviço com outro pedido aberto), `no_capacity` (serviço com oferta cadastrada e
+sem `available > 0` em competência ≥ à do pedido), `sla_breached` (prazo vencido sem decisão). Decisão
+registrada resolve as pendências de regra; encerramento resolve todas.
 
 ## Kafka — canais e tópicos
 
@@ -167,27 +209,45 @@ tenant do envelope, correlation id, transação nova com o inbox na mesma transa
 | `integration-status-in` | `sus.integration.status.v1` | `core-integration-status` | registry de conectores (health, métricas, gaps) |
 | `tasks-task-in` | `sus.task.v1` | `core-tasks-sla` | `created` inicia `TaskSlaWorkflow`; `completed/cancelled` sinalizam |
 | `tasks-merge-in` | `sus.identity.merge.v1` | `core-tasks-merge` | `case_opened` → tarefa `mpi_review` + `MpiReviewWorkflow`; decisão conclui |
-| `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1` | `core-journey` | projeções da timeline |
-| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev) |
+| `ingest-regulation-in` | `sus.ingest.regulation.v1` | `core-ingest-regulation` | `data` = `RegulationRequestRegistration` (tem `kind`) ou `RegulationStatusChange` (pedido por `source_record_id`) |
+| `ingest-exam-in` | `sus.ingest.exam.v1` | `core-ingest-exam` | `data` = `ExamOrderRegistration` (`exam_code`), `ExamResultRegistration` (`reported_at`) ou `ExamStatusChange` |
+| `regulation-request-in`, `regulation-status-in` | `sus.regulation.request.v1`, `sus.regulation.status.v1` | `core-regulation-sla` | `created` inicia `RegulationSlaWorkflow`; `status.changed` sinaliza |
+| `exams-order-in`, `exams-result-in`, `exams-task-in`, `exams-appointment-in` | `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.task.v1`, `sus.schedule.appointment.v1` | `core-exams-followup` | `created` inicia `ExamFollowUpWorkflow`; status/laudo/tarefa concluída/falta sinalizam |
+| `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in`, `journey-regulation-request-in`, `journey-regulation-status-in`, `journey-exam-order-in`, `journey-exam-result-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1`, `sus.regulation.request.v1`, `sus.regulation.status.v1`, `sus.exam.order.v1`, `sus.exam.result.v1` | `core-journey` | projeções da timeline (regulação e laudos: `restricted`) |
+| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
 
 Eventos produzidos: `sus.identity.citizen.*`, `sus.identity.merge.*`, `sus.schedule.appointment.*`
 (`created|confirmed|cancelled|rescheduled|attended|no_show|duplicate_detected`), `sus.task.*`
-(`created|assigned|completed|escalated|sla_breached|cancelled`) e `sus.integration.reprocess.requested`
-(tópico `sus.integration.command.v1`), todos validados nos testes contra `contracts/events/**`.
+(`created|assigned|completed|escalated|sla_breached|cancelled`), `sus.integration.reprocess.requested`
+(tópico `sus.integration.command.v1`), `sus.regulation.request.{created|updated|returned|cancelled}`,
+`sus.regulation.status.changed` (`actor_kind` nunca `agent`), `sus.exam.order.{created|status_changed}` e
+`sus.exam.result.{available|critical_flagged}` (`data_ref` = referência do laudo; nunca valores), todos
+validados nos testes contra `contracts/events/**`.
 
 ## Temporal
 
-`temporal-sdk` no runtime; conexão real só com `sus.temporal.enabled=true` (`TemporalWorkers` registra
-os workers na fila `sus.temporal.task-queue` no `StartupEvent`). Workflows determinísticos com
+`temporal-sdk` no runtime; conexão real só com `sus.temporal.enabled=true` (`platform.temporal.TemporalWorkers`
+registra na fila `sus.temporal.task-queue`, no `StartupEvent`, os `WorkflowRegistrar` de cada módulo — as
+activities de cada módulo usam `namePrefix` para não colidir). Workflows determinísticos com
 `Workflow.getVersion`; toda I/O em activities idempotentes (`TenantTransactions.runAs` + serviços):
 
 - `TaskSlaWorkflow` (`task-sla:<task_id>`): timer até `due_at`; se a tarefa segue aberta → `breachSla`
   (evento `sla_breached` + escalonamento para `escalate_to` da `sla_policy`); sinais `completed`/`cancelled`.
 - `MpiReviewWorkflow` (`mpi-review:<case_id>`): garante a tarefa `mpi_review` (fila `cadastro_mestre`),
   aguarda `decided` até o SLA de revisão, escalona e conclui a tarefa com a decisão.
+- `RegulationSlaWorkflow` (`regulation-sla:<request_id>`, REG-010): timer em 50 % do SLA (pendência
+  documental aberta → tarefa `regulation_pending_document` para a UBS solicitante) e em 100 % (pendência
+  `sla_breached`, `sus.regulation.status.changed` com `sla_breached=true` e `actor_kind=workflow`, tarefa
+  `generic` "SLA de regulação vencido" na fila `regulacao`); sinal `status_changed` encerra ao haver decisão.
+- `ExamFollowUpWorkflow` (`exam-followup:<exam_order_id>`, Workflow 1): N dias sem agendamento → pendência
+  `not_scheduled` + tarefa `exam_not_scheduled` (UBS solicitante); falta → `no_show_recovery`; realizado sem
+  laudo em 7 d → `result_pending`; laudo sem retorno em M dias → `exam_result_followup`; encerra em
+  cancelamento/não realização ou quando a tarefa de retorno é concluída (`sus.task.completed` com origem
+  `exam-followup:<id>`). Reconcilia com o estado persistido (`snapshot`) a cada prazo.
 
-Os starters ficam nos **consumidores** (`TaskEventsConsumer`, `IdentityMergeConsumer`), não nos serviços,
-com `WorkflowIdReusePolicy=REJECT_DUPLICATE` — replay de eventos não duplica workflows.
+Os starters ficam nos **consumidores** (`TaskEventsConsumer`, `IdentityMergeConsumer`,
+`RegulationEventsConsumer`, `ExamEventsConsumer`), não nos serviços, com
+`WorkflowIdReusePolicy=REJECT_DUPLICATE` — replay de eventos não duplica workflows.
 
 ## Autorização (OPA) e obrigações
 

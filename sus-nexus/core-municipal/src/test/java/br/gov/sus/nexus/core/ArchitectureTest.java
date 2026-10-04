@@ -23,7 +23,9 @@ class ArchitectureTest {
           "integration",
           "scheduling",
           "tasks",
-          "journey");
+          "journey",
+          "regulation",
+          "exams");
   static JavaClasses classes;
 
   @BeforeAll

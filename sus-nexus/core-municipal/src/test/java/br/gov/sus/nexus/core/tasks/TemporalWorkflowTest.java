@@ -8,14 +8,14 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import br.gov.sus.nexus.core.platform.ids.Ulid;
+import br.gov.sus.nexus.core.platform.temporal.TemporalClientProvider;
+import br.gov.sus.nexus.core.platform.temporal.TemporalWorkers;
 import br.gov.sus.nexus.core.support.Api.Registration;
 import br.gov.sus.nexus.core.support.Await;
 import br.gov.sus.nexus.core.support.Outbox;
 import br.gov.sus.nexus.core.tasks.infrastructure.temporal.MpiReviewWorkflow;
 import br.gov.sus.nexus.core.tasks.infrastructure.temporal.TaskSlaWorkflow;
 import br.gov.sus.nexus.core.tasks.infrastructure.temporal.TaskWorkflowStarter;
-import br.gov.sus.nexus.core.tasks.infrastructure.temporal.TemporalClientProvider;
-import br.gov.sus.nexus.core.tasks.infrastructure.temporal.TemporalWorkers;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import io.temporal.client.WorkflowStub;

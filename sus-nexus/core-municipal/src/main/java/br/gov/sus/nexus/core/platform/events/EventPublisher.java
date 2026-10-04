@@ -53,7 +53,7 @@ public class EventPublisher {
             event.subject(),
             event.source(),
             event.data(),
-            null,
+            event.dataRef(),
             event.privacy(),
             new EventEnvelope.Trace(corr, event.causationId(), SCHEMA_VERSION),
             Boolean.FALSE);

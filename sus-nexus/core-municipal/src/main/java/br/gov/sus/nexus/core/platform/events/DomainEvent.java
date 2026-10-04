@@ -18,6 +18,7 @@ import java.util.Map;
  * @param data payload conforme schema do tópico
  * @param privacy classificação e finalidades
  * @param causationId evento/mensagem que causou este (opcional)
+ * @param dataRef referência segura ao dado completo (ex.: laudo) que NUNCA trafega no evento
  */
 public record DomainEvent(
     String aggregateType,
@@ -29,7 +30,33 @@ public record DomainEvent(
     EventEnvelope.Source source,
     Map<String, Object> data,
     EventEnvelope.Privacy privacy,
-    String causationId) {
+    String causationId,
+    String dataRef) {
+
+  public DomainEvent(
+      String aggregateType,
+      String aggregateId,
+      String eventType,
+      String eventVersion,
+      OffsetDateTime occurredAt,
+      EventEnvelope.Subject subject,
+      EventEnvelope.Source source,
+      Map<String, Object> data,
+      EventEnvelope.Privacy privacy,
+      String causationId) {
+    this(
+        aggregateType,
+        aggregateId,
+        eventType,
+        eventVersion,
+        occurredAt,
+        subject,
+        source,
+        data,
+        privacy,
+        causationId,
+        null);
+  }
 
   public static EventEnvelope.Privacy restricted(List<String> purposes) {
     return new EventEnvelope.Privacy("restricted", purposes);

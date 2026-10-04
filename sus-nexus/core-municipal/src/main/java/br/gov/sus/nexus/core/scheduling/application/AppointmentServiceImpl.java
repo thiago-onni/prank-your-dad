@@ -82,7 +82,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         reg.occurredAt() == null ? OffsetDateTime.now(ZoneOffset.UTC) : reg.occurredAt();
 
     Optional<AppointmentSourceLink> link =
-        links.find(tenant, reg.source().system(), reg.source().sourceRecordId());
+        links.findBySource(tenant, reg.source().system(), reg.source().sourceRecordId());
     if (link.isEmpty()) {
       Appointment a = new Appointment();
       a.id = Ulid.generate(Ulid.APPOINTMENT);
@@ -299,6 +299,25 @@ public class AppointmentServiceImpl implements AppointmentService {
   @TenantTransactional
   public Optional<OffsetDateTime> nextAppointmentAt(String citizenId) {
     return appointments.nextActive(citizenId, Instant.now()).map(i -> i.atOffset(ZoneOffset.UTC));
+  }
+
+  @Override
+  @TenantTransactional
+  public Optional<AppointmentDto> findBySourceRecord(String sourceSystem, String sourceRecordId) {
+    if (sourceRecordId == null || sourceRecordId.isBlank()) {
+      return Optional.empty();
+    }
+    String tenant = tenantContext.require();
+    Optional<AppointmentSourceLink> link =
+        sourceSystem == null
+            ? Optional.empty()
+            : links.findBySource(tenant, sourceSystem, sourceRecordId.trim());
+    if (link.isEmpty()) {
+      link = links.findAnySystem(tenant, sourceRecordId.trim());
+    }
+    return link.map(l -> appointments.findById(l.appointmentId))
+        .filter(Objects::nonNull)
+        .map(a -> toDto(a, false));
   }
 
   // ---------------------------------------------------------------------

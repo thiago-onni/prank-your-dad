@@ -251,6 +251,8 @@
                     <include>schedule/*.schema.json</include>
                     <include>task/*.schema.json</include>
                     <include>integration/*.schema.json</include>
+                    <include>regulation/*.schema.json</include>
+                    <include>exam/*.schema.json</include>
                   </includes>
                 </resource>
               </resources>

@@ -30,4 +30,10 @@ public interface AppointmentService {
 
   /** Próximo agendamento ativo do cidadão (JOR-008). */
   Optional<OffsetDateTime> nextAppointmentAt(String citizenId);
+
+  /**
+   * Agendamento vinculado ao registro de origem ({@code source_record_id}); quando {@code
+   * sourceSystem} é informado, prefere o vínculo daquele sistema e cai para qualquer sistema.
+   */
+  Optional<AppointmentDto> findBySourceRecord(String sourceSystem, String sourceRecordId);
 }

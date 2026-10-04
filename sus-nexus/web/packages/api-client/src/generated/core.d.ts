@@ -175,6 +175,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exams/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pedidos de exame (ciclo pedido → agendamento → realização → laudo → retorno) */
+        get: operations["listExamOrders"];
+        put?: never;
+        /** Registrar pedido de exame vindo de um sistema de origem */
+        post: operations["registerExamOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/orders/{orderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getExamOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/orders/{orderId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar resultado/laudo (metadados e referência segura; EXA-006/007) */
+        post: operations["registerExamResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/orders/{orderId}/results/{resultId}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obter referência segura (URL assinada, curta) ao laudo — gera access_log */
+        get: operations["getExamResultDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/orders/{orderId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar mudança de status (EXA-002) */
+        post: operations["registerExamOrderStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/orders/by-source/{system}/{sourceRecordId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar resultado/laudo identificando o pedido pelo registro de origem (LIS via HL7 ORU sem id interno)
+         * @description Equivalente a `POST /exams/orders/{orderId}/results`, mas o pedido é localizado por
+         *     (`source.system`, `source.source_record_id`) do pedido já ingerido via `POST /exams/orders`
+         *     (ex.: número de pedido ORC-2/ORC-3 do HL7 ORM). 404 quando o pedido de origem não existe no tenant.
+         */
+        post: operations["registerExamResultBySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/integration/connectors": {
         parameters: {
             query?: never;
@@ -408,6 +515,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/regulation/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oferta/capacidade por prestador e serviço (REG-006) */
+        get: operations["listProviderCapacity"];
+        put?: never;
+        post: operations["upsertProviderCapacity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/queues/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Indicadores da fila por especialidade/procedimento (tempo de espera, SLA, pendências) */
+        get: operations["getRegulationQueueSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fila regulatória (REG-004) */
+        get: operations["listRegulationRequests"];
+        put?: never;
+        /** Registrar solicitação vinda do sistema oficial de regulação (porta única; não decide) */
+        post: operations["registerRegulationRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRegulationRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/requests/{requestId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar pendência documental/administrativa (humano ou agente com aprovação) */
+        post: operations["addRegulationIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/requests/{requestId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar mudança de status recebida do sistema oficial (decisão, agendamento, devolução, realização, falta) */
+        post: operations["registerRegulationStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulation/requests/by-source/{system}/{sourceRecordId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar mudança de status identificando o pedido pelo registro de origem (conectores sem id interno)
+         * @description Equivalente a `POST /regulation/requests/{requestId}/status`, mas o pedido é localizado por
+         *     (`source.system`, `source.source_record_id`) do registro já ingerido via `POST /regulation/requests`.
+         *     Usado por conectores (SISREG, e-SUS Regulação) que recebem eventos de status sem conhecer o id interno.
+         *     404 quando nenhum pedido com esse registro de origem existe no tenant.
+         */
+        post: operations["registerRegulationStatusBySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks": {
         parameters: {
             query?: never;
@@ -631,6 +863,12 @@ export interface components {
             open_tasks?: number;
             pending_exams?: number;
         };
+        /** @description municipal_citizen_id OU identificador de origem para resolução */
+        CitizenRef: {
+            identifier_system?: components["schemas"]["IdentifierSystem"];
+            identifier_value?: string;
+            municipal_citizen_id?: string;
+        };
         CitizenRegistration: {
             address?: {
                 city_ibge?: string;
@@ -768,6 +1006,124 @@ export interface components {
         };
         /** @enum {string} */
         Domain: "identity" | "aps" | "schedule" | "regulation" | "exam" | "hospital" | "careplan" | "task" | "production" | "communication";
+        ExamOrder: {
+            appointment_id?: string;
+            care_line?: string;
+            category?: string;
+            citizen_id: string;
+            code_system?: string;
+            /** @description EXA-010 (em horas) */
+            cycle_times?: {
+                perform_to_report?: number;
+                report_to_followup?: number;
+                request_to_schedule?: number;
+                schedule_to_perform?: number;
+            };
+            exam_code: string;
+            exam_description?: string;
+            id: string;
+            issues?: ("not_scheduled" | "no_result_followup" | "result_pending" | "integration_failure" | "inconclusive" | "critical")[];
+            /** Format: date-time */
+            performed_at?: string;
+            performer_cnes?: string;
+            priority?: string;
+            regulation_request_id?: string;
+            /** Format: date-time */
+            reported_at?: string;
+            /** Format: date-time */
+            requested_at: string;
+            requesting_cnes?: string;
+            requesting_professional_id?: string;
+            requesting_unit_name?: string;
+            results?: components["schemas"]["ExamResult"][];
+            /** Format: date-time */
+            scheduled_at?: string;
+            source_record_id?: string;
+            source_system: string;
+            status: components["schemas"]["ExamOrderStatus"];
+            status_history?: {
+                /** Format: date-time */
+                occurred_at?: string;
+                reason?: string;
+                status?: components["schemas"]["ExamOrderStatus"];
+            }[];
+            version?: number;
+        };
+        ExamOrderRegistration: {
+            appointment_source_record_id?: string;
+            care_line?: string;
+            /** @enum {string} */
+            category?: "laboratory" | "imaging" | "other";
+            citizen_ref: components["schemas"]["CitizenRef"];
+            /**
+             * @default SIGTAP
+             * @enum {string}
+             */
+            code_system: "SIGTAP" | "LOINC" | "LOCAL";
+            exam_code: string;
+            exam_description?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            /** @enum {string} */
+            priority?: "routine" | "priority" | "urgent";
+            regulation_source_record_id?: string;
+            /** Format: date-time */
+            requested_at: string;
+            requesting_cnes?: string;
+            requesting_professional_id?: string;
+            source: components["schemas"]["SourceRefInput"];
+            status: components["schemas"]["ExamOrderStatus"];
+        };
+        /** @enum {string} */
+        ExamOrderStatus: "requested" | "authorized" | "scheduled" | "collected" | "performed" | "reported" | "cancelled" | "not_performed";
+        ExamResult: {
+            critical?: boolean;
+            followup_task_id?: string;
+            has_document?: boolean;
+            id: string;
+            observations_count?: number;
+            performer_cnes?: string;
+            /** Format: date-time */
+            reported_at: string;
+            source_system: string;
+            /** @enum {string} */
+            status: "final" | "preliminary" | "amended" | "inconclusive" | "cancelled";
+        };
+        ExamResultRegistration: {
+            /** @description Marcado conforme mensagem de origem (EXA-007) */
+            critical?: boolean;
+            document_content_type?: string;
+            /** @description Referência segura no object storage ou no sistema de origem; nunca o conteúdo */
+            document_ref?: string;
+            document_sha256?: string;
+            /** @description Resultados estruturados mínimos (sem texto livre), quando autorizados */
+            observations?: {
+                abnormal?: boolean;
+                code: string;
+                /** @enum {string} */
+                code_system: "LOINC" | "SIGTAP" | "LOCAL";
+                unit?: string;
+                value?: number;
+                value_text_masked?: string;
+            }[];
+            performer_cnes?: string;
+            /** Format: date-time */
+            reported_at: string;
+            source: components["schemas"]["SourceRefInput"];
+            /** @enum {string} */
+            status: "final" | "preliminary" | "amended" | "inconclusive" | "cancelled";
+        };
+        ExamStatusChange: {
+            appointment_source_record_id?: string;
+            /** Format: date-time */
+            occurred_at: string;
+            performer_cnes?: string;
+            reason?: string;
+            /** Format: date-time */
+            scheduled_at?: string;
+            source: components["schemas"]["SourceRefInput"];
+            status: components["schemas"]["ExamOrderStatus"];
+        };
         HealthUnit: {
             active?: boolean;
             address?: string;
@@ -923,6 +1279,20 @@ export interface components {
             source_record_id?: string;
             source_system: string;
         };
+        ProviderCapacity: {
+            available?: number;
+            /** @default SIGTAP */
+            code_system: string;
+            competence: string;
+            offered: number;
+            provider_cnes: string;
+            provider_name?: string;
+            service_code: string;
+            source_system?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            used?: number;
+        };
         /** @enum {string} */
         Purpose: "care_coordination" | "regulation" | "scheduling" | "identity_management" | "production_audit" | "public_health_surveillance" | "management_analytics" | "integration_operations" | "security_audit";
         ReconciliationEntry: {
@@ -941,6 +1311,130 @@ export interface components {
         };
         /** @enum {string} */
         RegistrationState: "validated" | "divergent" | "incomplete" | "duplicate" | "pending";
+        RegulationIssue: {
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "missing_document" | "missing_field" | "clinical_justification" | "duplicate" | "other" | "sla_breached" | "no_capacity" | "expired";
+            origin?: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "user" | "agent" | "rule" | "workflow" | "connector";
+                version?: string;
+            };
+            /** Format: date-time */
+            resolved_at?: string;
+            /** @enum {string} */
+            status: "open" | "resolved";
+        };
+        /** @enum {string} */
+        RegulationKind: "consultation" | "exam" | "procedure" | "surgery" | "admission";
+        /** @enum {string} */
+        RegulationPriority: "elective" | "priority" | "urgent" | "emergency";
+        RegulationQueueItem: {
+            avg_waiting_days?: number;
+            by_priority?: {
+                [key: string]: number;
+            };
+            capacity_available?: number;
+            group_key: string;
+            group_label?: string;
+            no_show_30d?: number;
+            open_requests: number;
+            p90_waiting_days?: number;
+            scheduled_30d?: number;
+            sla_breached?: number;
+            with_issues?: number;
+        };
+        RegulationRequest: {
+            appointment_id?: string;
+            attached_documents_count?: number;
+            citizen_id: string;
+            code_system?: string;
+            decision_reason?: string;
+            id: string;
+            issues?: components["schemas"]["RegulationIssue"][];
+            justification_present?: boolean;
+            kind: components["schemas"]["RegulationKind"];
+            priority?: components["schemas"]["RegulationPriority"];
+            provider_cnes?: string;
+            provider_name?: string;
+            regulator_id?: string;
+            /** Format: date-time */
+            requested_at: string;
+            requested_service_code: string;
+            requesting_cnes?: string;
+            requesting_professional_id?: string;
+            requesting_unit_name?: string;
+            /** Format: date-time */
+            scheduled_at?: string;
+            service_description?: string;
+            sla_breached?: boolean;
+            /** Format: date-time */
+            sla_due_at?: string;
+            source_record_id?: string;
+            source_system: string;
+            specialty?: string;
+            status: components["schemas"]["RegulationStatus"];
+            status_history?: {
+                actor?: string;
+                /** Format: date-time */
+                occurred_at?: string;
+                reason?: string;
+                status?: components["schemas"]["RegulationStatus"];
+            }[];
+            version?: number;
+            waiting_days: number;
+        };
+        RegulationRequestRegistration: {
+            attached_documents_count?: number;
+            /** @description Somente quando a finalidade permitir; omitido para condições highly_restricted */
+            cid_code?: string;
+            citizen_ref: components["schemas"]["CitizenRef"];
+            /**
+             * @default SIGTAP
+             * @enum {string}
+             */
+            code_system: "SIGTAP" | "LOCAL";
+            decision_reason?: string;
+            /** @description Indica se há justificativa clínica (o texto permanece no sistema oficial) */
+            justification_present?: boolean;
+            kind: components["schemas"]["RegulationKind"];
+            /** Format: date-time */
+            occurred_at?: string;
+            priority?: components["schemas"]["RegulationPriority"];
+            provider_cnes?: string;
+            regulator_id?: string;
+            /** Format: date-time */
+            requested_at: string;
+            requested_service_code: string;
+            requesting_cnes?: string;
+            requesting_professional_cbo?: string;
+            requesting_professional_id?: string;
+            /** Format: date-time */
+            scheduled_at?: string;
+            source: components["schemas"]["SourceRefInput"];
+            specialty?: string;
+            status: components["schemas"]["RegulationStatus"];
+        };
+        /** @enum {string} */
+        RegulationStatus: "requested" | "pending_documents" | "returned" | "under_review" | "authorized" | "denied" | "scheduled" | "cancelled" | "no_show" | "performed" | "expired";
+        RegulationStatusChange: {
+            appointment_source_record_id?: string;
+            /** Format: date-time */
+            occurred_at: string;
+            priority?: components["schemas"]["RegulationPriority"];
+            provider_cnes?: string;
+            reason?: string;
+            regulator_id?: string;
+            return_to_origin?: boolean;
+            /** Format: date-time */
+            scheduled_at?: string;
+            source: components["schemas"]["SourceRefInput"];
+            status: components["schemas"]["RegulationStatus"];
+        };
         RuleSet: {
             approved_by?: string;
             current_version: string;
@@ -957,6 +1451,13 @@ export interface components {
             /** @description Nome do arquivo/lote de origem */
             source_record_id: string;
             /** @description Hash ou versão do arquivo */
+            source_record_version?: string;
+            system: string;
+        };
+        SourceRefInput: {
+            cnes?: string;
+            connector: string;
+            source_record_id: string;
             source_record_version?: string;
             system: string;
         };
@@ -1060,8 +1561,14 @@ export interface components {
         /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
         idempotencyKey: string;
         limit: number;
+        orderId: string;
         /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
         purpose: components["schemas"]["Purpose"];
+        requestId: string;
+        /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
+        sourceRecordId: string;
+        /** @description Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS */
+        sourceSystem: string;
         taskId: string;
     };
     requestBodies: never;
@@ -1443,6 +1950,229 @@ export interface operations {
                         items: components["schemas"]["TimelineEvent"][];
                         next_cursor?: string | null;
                     };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listExamOrders: {
+        parameters: {
+            query?: {
+                citizen_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                issue?: "not_scheduled" | "no_result_followup" | "result_pending" | "integration_failure" | "inconclusive" | "critical";
+                limit?: components["parameters"]["limit"];
+                requesting_cnes?: string;
+                status?: components["schemas"]["ExamOrderStatus"];
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ExamOrder"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerExamOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamOrderRegistration"];
+            };
+        };
+        responses: {
+            /** @description Atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
+                };
+            };
+            /** @description Criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getExamOrder: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                orderId: components["parameters"]["orderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerExamResult: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                orderId: components["parameters"]["orderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamResultRegistration"];
+            };
+        };
+        responses: {
+            /** @description Registrado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getExamResultDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                orderId: components["parameters"]["orderId"];
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        content_type?: string;
+                        /** Format: date-time */
+                        expires_at: string;
+                        /** Format: uri */
+                        url: string;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerExamOrderStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                orderId: components["parameters"]["orderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamStatusChange"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerExamResultBySource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
+                sourceRecordId: components["parameters"]["sourceRecordId"];
+                /** @description Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS */
+                system: components["parameters"]["sourceSystem"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamResultRegistration"];
+            };
+        };
+        responses: {
+            /** @description Registrado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOrder"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -1879,6 +2609,292 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpsertResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProviderCapacity: {
+        parameters: {
+            query?: {
+                competence?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                provider_cnes?: string;
+                service_code?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProviderCapacity"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    upsertProviderCapacity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    items: components["schemas"]["ProviderCapacity"][];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpsertResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getRegulationQueueSummary: {
+        parameters: {
+            query?: {
+                group_by?: "service_code" | "specialty" | "provider_cnes" | "requesting_cnes" | "priority";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RegulationQueueItem"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRegulationRequests: {
+        parameters: {
+            query?: {
+                citizen_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                /** @description Pendências (REG-005) */
+                issue?: "incomplete" | "returned" | "expired" | "duplicate" | "no_capacity" | "sla_breached";
+                limit?: components["parameters"]["limit"];
+                priority?: components["schemas"]["RegulationPriority"];
+                provider_cnes?: string;
+                requesting_cnes?: string;
+                service_code?: string;
+                sort?: "waiting_time_desc" | "priority_desc" | "created_at_asc";
+                specialty?: string;
+                status?: components["schemas"]["RegulationStatus"];
+                territory?: string;
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RegulationRequest"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerRegulationRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegulationRequestRegistration"];
+            };
+        };
+        responses: {
+            /** @description Atualizada (mesmo source_record_id) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
+                };
+            };
+            /** @description Criada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getRegulationRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                requestId: components["parameters"]["requestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addRegulationIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: components["parameters"]["requestId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    description: string;
+                    /** @enum {string} */
+                    kind: "missing_document" | "missing_field" | "clinical_justification" | "duplicate" | "other";
+                    origin?: {
+                        id?: string;
+                        /** @enum {string} */
+                        kind?: "user" | "agent" | "rule";
+                        version?: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Criada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerRegulationStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                requestId: components["parameters"]["requestId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegulationStatusChange"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerRegulationStatusBySource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path: {
+                /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
+                sourceRecordId: components["parameters"]["sourceRecordId"];
+                /** @description Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS */
+                system: components["parameters"]["sourceSystem"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegulationStatusChange"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegulationRequest"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -96,13 +96,19 @@ public final class SchedulingRepositories {
 
   @ApplicationScoped
   public static class SourceLinks implements PanacheRepositoryBase<AppointmentSourceLink, String> {
-    public Optional<AppointmentSourceLink> find(
+    public Optional<AppointmentSourceLink> findBySource(
         String tenantId, String sourceSystem, String sourceRecordId) {
       return find(
               "tenantId = ?1 and sourceSystem = ?2 and sourceRecordId = ?3",
               tenantId,
               sourceSystem,
               sourceRecordId)
+          .firstResultOptional();
+    }
+
+    public Optional<AppointmentSourceLink> findAnySystem(String tenantId, String sourceRecordId) {
+      return find(
+              "tenantId = ?1 and sourceRecordId = ?2 order by createdAt", tenantId, sourceRecordId)
           .firstResultOptional();
     }
   }

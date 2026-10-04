@@ -1,5 +1,6 @@
 package br.gov.sus.nexus.core.tasks.infrastructure.temporal;
 
+import br.gov.sus.nexus.core.platform.temporal.TemporalClientProvider;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowExecutionAlreadyStarted;

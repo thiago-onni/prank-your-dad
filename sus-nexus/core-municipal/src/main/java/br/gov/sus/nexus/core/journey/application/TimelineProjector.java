@@ -159,6 +159,71 @@ public class TimelineProjector {
     return save(t);
   }
 
+  /**
+   * {@code sus.regulation.request.*} e {@code sus.regulation.status.changed} — sem
+   * CID/justificativa.
+   */
+  public boolean projectRegulation(Inbound in) {
+    String citizenId = in.citizenId();
+    if (citizenId == null) {
+      return false;
+    }
+    JsonNode d = in.data();
+    TimelineEvent t = base(in, citizenId, "regulation");
+    t.status = d.path("status").asText("requested");
+    t.cnes = text(d.path("requesting_cnes"));
+    t.professionalRef = text(d.path("requesting_professional_id"));
+    String service = text(d.path("requested_service_code"));
+    String priority = text(d.path("priority"));
+    boolean statusEvent = in.eventType().startsWith("sus.regulation.status.");
+    if (statusEvent) {
+      t.summary =
+          "Regulação: status "
+              + t.status
+              + (d.path("sla_breached").asBoolean(false) ? " (SLA vencido)" : "");
+    } else {
+      t.summary =
+          "Solicitação regulatória "
+              + describe(in.action())
+              + (service == null ? "" : " — " + service)
+              + (priority == null ? "" : " (" + priority + ")");
+    }
+    t.detailRef = "/api/v1/regulation/requests/" + d.path("regulation_request_id").asText();
+    return save(t);
+  }
+
+  /** {@code sus.exam.order.*} (internal) e {@code sus.exam.result.*} (restricted; sem valores). */
+  public boolean projectExam(Inbound in) {
+    String citizenId = in.citizenId();
+    if (citizenId == null) {
+      return false;
+    }
+    JsonNode d = in.data();
+    TimelineEvent t = base(in, citizenId, "exam");
+    t.cnes = text(d.path("requesting_cnes"));
+    t.careLine = text(d.path("care_line"));
+    boolean result = in.eventType().startsWith("sus.exam.result.");
+    if (result) {
+      t.status = d.path("result_status").asText("final");
+      t.summary =
+          "critical_flagged".equals(in.action())
+              ? "Resultado crítico de exame sinalizado"
+              : "Laudo de exame disponível";
+      if (!"restricted".equals(t.sensitivity) && !"highly_restricted".equals(t.sensitivity)) {
+        t.sensitivity = "restricted";
+      }
+    } else {
+      t.status = d.path("status").asText("requested");
+      String code = text(d.path("exam_code"));
+      t.summary =
+          "Pedido de exame "
+              + ("created".equals(in.action()) ? "criado" : "com status " + t.status)
+              + (code == null ? "" : " — " + code);
+    }
+    t.detailRef = "/api/v1/exams/orders/" + d.path("exam_order_id").asText();
+    return save(t);
+  }
+
   // ---------------------------------------------------------------------
 
   private TimelineEvent base(Inbound in, String citizenId, String domain) {

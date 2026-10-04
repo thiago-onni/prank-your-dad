@@ -37,7 +37,11 @@ public class OutboxRelay {
           "merge_case", "merge-out",
           "appointment", "appointment-out",
           "care_task", "task-out",
-          "integration_message", "integration-command-out");
+          "integration_message", "integration-command-out",
+          "regulation_request", "regulation-request-out",
+          "regulation_status", "regulation-status-out",
+          "exam_order", "exam-order-out",
+          "exam_result", "exam-result-out");
 
   @Inject EntityManager entityManager;
   @Inject ObjectMapper objectMapper;
@@ -61,6 +65,22 @@ public class OutboxRelay {
   @Inject
   @Channel("integration-command-out")
   MutinyEmitter<String> integrationCommandOut;
+
+  @Inject
+  @Channel("regulation-request-out")
+  MutinyEmitter<String> regulationRequestOut;
+
+  @Inject
+  @Channel("regulation-status-out")
+  MutinyEmitter<String> regulationStatusOut;
+
+  @Inject
+  @Channel("exam-order-out")
+  MutinyEmitter<String> examOrderOut;
+
+  @Inject
+  @Channel("exam-result-out")
+  MutinyEmitter<String> examResultOut;
 
   @ConfigProperty(name = "sus.outbox.relay.enabled", defaultValue = "false")
   boolean enabled;
@@ -158,6 +178,10 @@ public class OutboxRelay {
       case "appointment-out" -> appointmentOut;
       case "task-out" -> taskOut;
       case "integration-command-out" -> integrationCommandOut;
+      case "regulation-request-out" -> regulationRequestOut;
+      case "regulation-status-out" -> regulationStatusOut;
+      case "exam-order-out" -> examOrderOut;
+      case "exam-result-out" -> examResultOut;
       default -> null;
     };
   }

@@ -1,4 +1,4 @@
-package br.gov.sus.nexus.core.tasks.infrastructure.temporal;
+package br.gov.sus.nexus.core.platform.temporal;
 
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;

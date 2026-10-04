@@ -1,5 +1,6 @@
 package br.gov.sus.nexus.core.journey.application;
 
+import br.gov.sus.nexus.core.exams.api.ExamService;
 import br.gov.sus.nexus.core.identity.api.CitizenDetail;
 import br.gov.sus.nexus.core.identity.api.CitizenService;
 import br.gov.sus.nexus.core.journey.api.CitizenOperationalSummary;
@@ -14,6 +15,7 @@ import br.gov.sus.nexus.core.platform.security.AuthorizationPolicy;
 import br.gov.sus.nexus.core.platform.security.CurrentActor;
 import br.gov.sus.nexus.core.platform.tenant.TenantContext;
 import br.gov.sus.nexus.core.platform.tenant.TenantTransactional;
+import br.gov.sus.nexus.core.regulation.api.RegulationService;
 import br.gov.sus.nexus.core.scheduling.api.AppointmentService;
 import br.gov.sus.nexus.core.tasks.api.TaskQueries;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -55,6 +57,8 @@ public class JourneyServiceImpl implements JourneyService {
   @Inject CitizenService citizens;
   @Inject AppointmentService appointments;
   @Inject TaskQueries tasks;
+  @Inject RegulationService regulation;
+  @Inject ExamService exams;
 
   @Override
   @TenantTransactional
@@ -162,8 +166,8 @@ public class JourneyServiceImpl implements JourneyService {
         repository.lastOccurred(citizenId, "aps").map(i -> i.atOffset(ZoneOffset.UTC)).orElse(null),
         appointments.nextAppointmentAt(citizenId).orElse(null),
         tasks.countOpen(citizenId),
-        0,
-        0,
+        regulation.countOpen(citizenId),
+        exams.countPending(citizenId),
         repository
             .lastOccurred(citizenId, "hospital")
             .map(i -> i.atOffset(ZoneOffset.UTC))

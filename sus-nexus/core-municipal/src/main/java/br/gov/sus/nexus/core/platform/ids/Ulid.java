@@ -40,6 +40,14 @@ public final class Ulid {
   public static final String DEAD_LETTER = "dlq_";
   public static final String RECONCILIATION = "rec_";
   public static final String TIMELINE_EVENT = "tle_";
+  public static final String REGULATION_REQUEST = "reg_";
+  public static final String REGULATION_HISTORY = "rsh_";
+  public static final String REGULATION_DECISION = "rdec_";
+  public static final String REGULATION_ISSUE = "ris_";
+  public static final String PROVIDER_CAPACITY = "cap_";
+  public static final String EXAM_ORDER = "exo_";
+  public static final String EXAM_HISTORY = "esh_";
+  public static final String EXAM_RESULT = "exr_";
 
   private static final char[] ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
   private static final Pattern ULID_PATTERN = Pattern.compile("^[0-9A-HJKMNP-TV-Z]{26}$");
