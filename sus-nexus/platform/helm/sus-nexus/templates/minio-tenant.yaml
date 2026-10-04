@@ -93,6 +93,8 @@ spec:
       objectLock: false
     - name: audit-archive
       objectLock: true
+    - name: production-exports
+      objectLock: false
     {{- if or .Values.minio.lakehouseBucket (and .Values.lakehouse .Values.lakehouse.enabled) }}
     - name: lakehouse
       objectLock: false

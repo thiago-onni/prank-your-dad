@@ -66,7 +66,8 @@ public class OpaAuthorizationPolicy implements AuthorizationPolicy {
           "citizen_cnes",
           "citizen_microarea",
           "assignee",
-          "citizen_id");
+          "citizen_id",
+          "created_by");
 
   @Inject ObjectMapper objectMapper;
   @Inject Instance<CurrentActor> currentActor;

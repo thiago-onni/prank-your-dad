@@ -734,7 +734,9 @@ export interface paths {
         /**
          * Aprovação humana obrigatória do lote (PRO-010)
          * @description Papéis `auditor` ou `gestor`, com justificativa (≥ 10 caracteres). Agente de IA → 403 mesmo que o
-         *     token carregue outro papel. Lote fora de `draft` → 409. Registrado em `audit_log`.
+         *     token carregue outro papel. **Quatro olhos**: quem gerou o lote (`created_by`) não pode aprová-lo →
+         *     403 `urn:sus-nexus:problem:four-eyes` (no serviço e na política OPA `sus.production`, ação
+         *     `approve_batch` com `resource.created_by`). Lote fora de `draft` → 409. Registrado em `audit_log`.
          */
         post: operations["approveProductionBatch"];
         delete?: never;
@@ -754,7 +756,10 @@ export interface paths {
         put?: never;
         /**
          * Exportar lote aprovado em layout configurável (arquivo + sha256); marca registros `exported`
-         * @description Gera o arquivo no armazenamento de exportação (`ExportStorage`) e devolve a referência e o SHA-256.
+         * @description Gera o arquivo no armazenamento de exportação (`ExportStorage`: `file` em dev/test ou `s3` — bucket
+         *     `production-exports` com SSE, chave `<tenant>/<competência>/<lote>/<arquivo>`, sem sobrescrita) e
+         *     devolve a referência (`file://` ou `s3://`) e o SHA-256. O arquivo contém CNS em claro: acesso ao
+         *     diretório/bucket restrito à credencial do core.
          *     Layouts: `bpa_mag_ref_v1` (BPA-Mag simplificado — **layout de referência a homologar** com o
          *     validador oficial; só BPA-C/BPA-I) e `csv_ref_v1` (qualquer tipo). A transmissão oficial continua
          *     no sistema oficial (SIA/SIH); o barramento só marca `exported`. Papel: auditor. Agente de IA → 403.
@@ -820,7 +825,8 @@ export interface paths {
          *     registro (`production_record_id` ou `record_source`). `rejected` reabre pendência com o motivo
          *     oficial (issue `official_rejection`) e tarefa `production_issue`; `paid` grava o valor. Idempotente
          *     por `(source.system, source.source_record_id, outcome, registro/lote)`. Papéis: operador_integracao,
-         *     auditor.
+         *     auditor. Cada registro afetado publica `sus.production.outcome.<outcome>` (inclusive `transmitted`
+         *     por lote: um evento por registro, além de `sus.production.submission.transmitted` do lote).
          */
         post: operations["registerProductionOutcome"];
         delete?: never;
@@ -908,6 +914,35 @@ export interface paths {
         get: operations["getProductionRecordBySource"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nova versão da regra de pré-auditoria `production-validation` do tenant
+         * @description "Configuração antes de código" (plano §8.3). Papéis `gestor` ou `admin_municipal` (+ OPA
+         *     `create_rule_version`); agente de IA → 403. O jsonb é validado contra a gramática restrita do
+         *     avaliador (`kind=validation_rules`; regras com `id` único, `severity` error|warning, `message`,
+         *     `field`, `enabled` e condição de violação `when` com `all`/`any`/`not` e
+         *     `fact`/`op`/`value`; operadores eq, ne, gt, ge, lt, le, in, contains_any, is_true, is_false,
+         *     present; somente fatos calculados pelo core) e **todos os casos de teste anexados são executados
+         *     antes de ativar** (`expected` = ids das regras violadas). Qualquer falha → 422 com `errors`, nada é
+         *     gravado. Sucesso: nova versão (número sequencial) ativa para o tenant, revogando a versão anterior
+         *     do próprio tenant; a versão global (seed) permanece para os demais. Registrado em `audit_log` com
+         *     a justificativa. Novas pré-auditorias passam a gravar `rule_version` = `production-validation/<n>`.
+         */
+        post: operations["createProductionRuleVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2185,6 +2220,49 @@ export interface components {
         };
         /** @enum {string} */
         ProductionRecordStatus: "generated" | "validated" | "pending" | "exported" | "transmitted" | "received" | "rejected" | "corrected" | "approved" | "paid";
+        ProductionRuleVersion: {
+            approved_by?: string;
+            /** Format: date-time */
+            effective_from?: string;
+            /** @description rv_<ULID> */
+            id: string;
+            /** @description production-validation/<versão> (gravado em rule_version das pendências) */
+            label: string;
+            /** @description Versão vigente antes da ativação (global ou do tenant) */
+            previous_label?: string;
+            /** @enum {string} */
+            rule_set: "production-validation";
+            rules_count?: number;
+            /** @enum {string} */
+            status: "active";
+            test_cases_count?: number;
+            version: string;
+        };
+        ProductionRuleVersionCreate: {
+            /** @description Definição jsonb (`kind=validation_rules`) — ver descrição da operação */
+            definition: {
+                /** @enum {string} */
+                kind: "validation_rules";
+                rules: {
+                    enabled?: boolean;
+                    field?: string;
+                    id: string;
+                    message: string;
+                    /** @enum {string} */
+                    severity: "error" | "warning";
+                    /** @description Condição de violação: { all|any: [...] } | { not: {...} } | { fact, op, value } */
+                    when: Record<string, unknown>;
+                }[];
+            };
+            justification: string;
+            test_cases: {
+                /** @description Ids das regras que devem ser violadas */
+                expected: string[];
+                facts: {
+                    [key: string]: unknown;
+                };
+            }[];
+        };
         ProductionSummary: {
             by_kind?: {
                 estimated?: number;
@@ -4388,6 +4466,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProductionRuleVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionRuleVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Versão validada, testada e ativada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRuleVersion"];
                 };
             };
             default: components["responses"]["Problem"];

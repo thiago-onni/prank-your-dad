@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 @QuarkusTest
 @TestProfile(OpaProfileTest.Profile.class)
 @QuarkusTestResource(value = OpaProfileTest.OpaMock.class, restrictToAnnotatedClass = true)
-class OpaProfileTest {
+public class OpaProfileTest {
 
   public static class Profile implements QuarkusTestProfile {
     @Override
@@ -44,7 +44,7 @@ class OpaProfileTest {
   }
 
   public static class OpaMock implements QuarkusTestResourceLifecycleManager {
-    static WireMockServer server;
+    public static WireMockServer server;
 
     @Override
     public Map<String, String> start() {

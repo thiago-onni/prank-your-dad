@@ -26,6 +26,7 @@
     <assertj.version>3.27.3</assertj.version>
     <temporal.version>1.39.0</temporal.version>
     <wiremock.version>3.13.2</wiremock.version>
+    <awssdk.version>2.55.11</awssdk.version>
 
     <compiler-plugin.version>3.14.0</compiler-plugin.version>
     <surefire-plugin.version>3.5.3</surefire-plugin.version>
@@ -141,6 +142,28 @@
     </dependency>
 
     <!-- Utilitários -->
+    <!-- Exportação de produção em object storage (S3/MinIO): AWS SDK v2 síncrono leve, como o
+         fhir-gateway (sem netty/apache client; HTTP via HttpURLConnection) -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${awssdk.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${awssdk.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-text</artifactId>

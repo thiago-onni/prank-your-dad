@@ -1,5 +1,6 @@
 package br.gov.sus.nexus.core.platform.rules;
 
+import br.gov.sus.nexus.core.platform.ids.Ulid;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -63,6 +64,65 @@ public class RuleSets {
     } catch (Exception e) {
       throw new IllegalStateException("definição de regra ilegível: " + r[0], e);
     }
+  }
+
+  /**
+   * Cria e ativa uma nova versão do conjunto para o tenant corrente (número sequencial sobre as
+   * versões visíveis — globais + do tenant), revogando a versão ativa anterior do próprio tenant; a
+   * versão global (seed) permanece, mas a do tenant tem precedência. Serializa criações
+   * concorrentes com {@code FOR UPDATE} no {@code rule_set}. O chamador já validou a definição e
+   * executou os casos de teste. Deve ser chamado dentro de transação com tenant aplicado.
+   */
+  public RuleVersion activateNewVersion(
+      String ruleSetName,
+      String tenantId,
+      JsonNode definition,
+      JsonNode testCases,
+      String actorId) {
+    @SuppressWarnings("unchecked")
+    List<Object> sets =
+        entityManager
+            .createNativeQuery("select id from platform.rule_set where name = ?1 for update")
+            .setParameter(1, ruleSetName)
+            .getResultList();
+    if (sets.isEmpty()) {
+      throw new IllegalArgumentException("conjunto de regras inexistente: " + ruleSetName);
+    }
+    String ruleSetId = (String) sets.get(0);
+    Number max =
+        (Number)
+            entityManager
+                .createNativeQuery(
+                    "select coalesce(max(case when version ~ '^[0-9]+$' then version::int end), 0)"
+                        + " from platform.rule_version where rule_set_id = ?1")
+                .setParameter(1, ruleSetId)
+                .getSingleResult();
+    String version = String.valueOf(max.intValue() + 1);
+    entityManager
+        .createNativeQuery(
+            "update platform.rule_version set status = 'revoked' where rule_set_id = ?1"
+                + " and tenant_id = ?2 and status = 'active'")
+        .setParameter(1, ruleSetId)
+        .setParameter(2, tenantId)
+        .executeUpdate();
+    String id = Ulid.generate(Ulid.RULE_VERSION);
+    entityManager
+        .createNativeQuery(
+            "insert into platform.rule_version (id, tenant_id, rule_set_id, version, status,"
+                + " definition, test_cases, approved_by, approved_at, effective_from, created_by)"
+                + " values (?1, ?2, ?3, ?4, 'active', cast(?5 as jsonb), cast(?6 as jsonb), ?7,"
+                + " now(), now(), ?7)")
+        .setParameter(1, id)
+        .setParameter(2, tenantId)
+        .setParameter(3, ruleSetId)
+        .setParameter(4, version)
+        .setParameter(5, definition.toString())
+        .setParameter(6, testCases.toString())
+        .setParameter(7, actorId)
+        .executeUpdate();
+    return current(ruleSetName)
+        .filter(v -> v.id().equals(id))
+        .orElseThrow(() -> new IllegalStateException("nova versão não ficou vigente: " + id));
   }
 
   static Instant toInstant(Object v) {

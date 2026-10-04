@@ -34,6 +34,8 @@ import br.gov.sus.nexus.core.production.api.ProductionRecordDto;
 import br.gov.sus.nexus.core.production.api.ProductionRecordRegistration;
 import br.gov.sus.nexus.core.production.api.ProductionRecordResult;
 import br.gov.sus.nexus.core.production.api.ProductionRecordStatus;
+import br.gov.sus.nexus.core.production.api.ProductionRuleVersionCreate;
+import br.gov.sus.nexus.core.production.api.ProductionRuleVersionDto;
 import br.gov.sus.nexus.core.production.api.ProductionService;
 import br.gov.sus.nexus.core.production.api.ProductionSummary;
 import br.gov.sus.nexus.core.production.domain.ProductionBatch;
@@ -124,6 +126,7 @@ public class ProductionServiceImpl implements ProductionService {
   @Inject PreAuditor preAuditor;
   @Inject ProductionDeadlines deadlines;
   @Inject ExportStorage storage;
+  @Inject ProductionRuleVersions ruleVersions;
   @Inject CitizenService citizens;
   @Inject HealthUnitService healthUnits;
   @Inject TerminologyService terminology;
@@ -859,6 +862,14 @@ public class ProductionServiceImpl implements ProductionService {
       throw DomainValidationException.field("justification", "justificativa obrigatória");
     }
     ProductionBatch b = loadBatch(batchId);
+    if (b.createdBy == null || b.createdBy.equals(currentActor.actorId())) {
+      // quatro olhos (PRO-010): quem gerou o lote não o aprova (também na política OPA)
+      throw new ProblemException(
+          403,
+          "Quatro olhos",
+          ProductionAuthorization.FOUR_EYES_DETAIL,
+          ProductionAuthorization.FOUR_EYES_TYPE);
+    }
     if (!"draft".equals(b.status)) {
       throw new ConflictException("lote em " + b.status + " não pode ser aprovado");
     }
@@ -929,7 +940,8 @@ public class ProductionServiceImpl implements ProductionService {
             + System.currentTimeMillis()
             + "."
             + rendered.extension();
-    ExportStorage.StoredFile file = storage.store(b.tenantId, name, rendered.content());
+    ExportStorage.StoredFile file =
+        storage.store(b.tenantId, b.competence, b.id, name, rendered.content());
     Instant now = Instant.now();
     b.status = "exported";
     b.exportLayout = layout;
@@ -1166,9 +1178,8 @@ public class ProductionServiceImpl implements ProductionService {
     if ("rejected".equals(outcome)) {
       reopenForRejection(r, o);
     }
-    if (!"transmitted".equals(outcome)) {
-      events.publishOutcome(row, r, o.source().system());
-    }
+    // um evento de outcome por registro, inclusive no transmitido por lote (outcome.v1)
+    events.publishOutcome(row, r, o.source().system());
     return true;
   }
 
@@ -1259,6 +1270,17 @@ public class ProductionServiceImpl implements ProductionService {
   // ---------------------------------------------------------------------
   // painel (PRO-009) e prazos (PRO-007)
   // ---------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------
+  // versão da regra de pré-auditoria (plano §8.3)
+  // ---------------------------------------------------------------------
+
+  @Override
+  @TenantTransactional
+  public ProductionRuleVersionDto createRuleVersion(ProductionRuleVersionCreate create) {
+    rejectAgents("alterar a regra de pré-auditoria");
+    return ruleVersions.create(create);
+  }
 
   @Override
   @TenantTransactional

@@ -1,35 +1,32 @@
 package br.gov.sus.nexus.core.production.infrastructure;
 
 import br.gov.sus.nexus.core.production.application.ExportStorage;
-import jakarta.enterprise.context.ApplicationScoped;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * {@link ExportStorage} em sistema de arquivos ({@code sus.production.export-dir}). O arquivo nunca
- * é sobrescrito (CREATE_NEW): reexportar gera novo nome. Referência {@code file://...}.
+ * {@link ExportStorage} em sistema de arquivos ({@code sus.production.export-dir}; padrão em
+ * dev/test). O arquivo nunca é sobrescrito (CREATE_NEW): reexportar gera novo nome. Referência
+ * {@code file://...}. Criado por {@link ExportStorageProducer}.
  */
-@ApplicationScoped
 public class FileExportStorage implements ExportStorage {
 
-  @ConfigProperty(name = "sus.production.export-dir")
-  String exportDir;
+  private final Path root;
+
+  public FileExportStorage(String exportDir) {
+    this.root = Path.of(exportDir).toAbsolutePath().normalize();
+  }
 
   @Override
-  public StoredFile store(String tenantId, String name, byte[] content) {
-    if (!tenantId.matches("^ibge_[0-9]{7}$") || !name.matches("^[A-Za-z0-9_.-]+$")) {
-      throw new IllegalArgumentException("nome de arquivo de exportação inválido");
-    }
+  public StoredFile store(
+      String tenantId, String competence, String batchId, String name, byte[] content) {
+    ExportStorage.checkKey(tenantId, competence, batchId, name);
     try {
-      Path dir = Path.of(exportDir).toAbsolutePath().normalize().resolve(tenantId);
+      Path dir = root.resolve(tenantId).resolve(competence).resolve(batchId);
       Files.createDirectories(dir);
       Path file = dir.resolve(name);
       Files.write(file, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
@@ -43,7 +40,7 @@ public class FileExportStorage implements ExportStorage {
   public byte[] read(String ref) {
     try {
       Path file = Path.of(URI.create(ref)).normalize();
-      if (!file.startsWith(Path.of(exportDir).toAbsolutePath().normalize())) {
+      if (!file.startsWith(root)) {
         throw new IllegalArgumentException("referência fora do diretório de exportação");
       }
       return Files.readAllBytes(file);
@@ -53,10 +50,6 @@ public class FileExportStorage implements ExportStorage {
   }
 
   public static String sha256(byte[] content) {
-    try {
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException(e);
-    }
+    return ExportStorage.sha256(content);
   }
 }

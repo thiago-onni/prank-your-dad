@@ -9,7 +9,7 @@ package sus.authz
 
 import rego.v1
 
-policy_version := "1.0.0"
+policy_version := "2.0.0"
 
 default allow := false
 
@@ -175,6 +175,11 @@ deny_reasons contains reason if {
 	action_is("export")
 	count(permits) == 0
 	some reason in data.sus.export.deny_reasons
+}
+
+deny_reasons contains reason if {
+	count(permits) == 0
+	some reason in data.sus.production.deny_reasons
 }
 
 # ---------------------------------------------------------------------------

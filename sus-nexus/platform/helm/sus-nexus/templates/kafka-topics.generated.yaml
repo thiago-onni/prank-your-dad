@@ -2630,7 +2630,7 @@ metadata:
   annotations:
     sus-nexus.gov.br/topic: sus.production.outcome.v1
     sus-nexus.gov.br/partition-key: data.production_record_id
-    sus-nexus.gov.br/events: "received,accepted,rejected,paid"
+    sus-nexus.gov.br/events: "transmitted,received,accepted,rejected,paid"
     sus-nexus.gov.br/schema-compatibility: BACKWARD
 spec:
   topicName: sus.production.outcome.v1

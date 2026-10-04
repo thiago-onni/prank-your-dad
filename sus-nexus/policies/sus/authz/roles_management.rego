@@ -47,12 +47,14 @@ permits contains permit("gestor.read_aggregate", true, [], false, false) if {
 
 # ---------------------------------------------------------------------------
 # auditor — produção e evidências, finalidade production_audit,
-# identificadores mascarados.
+# identificadores mascarados. Nunca agentes (o agente de IA só lê pendências
+# de produção — ver sus.production).
 # ---------------------------------------------------------------------------
 
 permits contains permit("auditor.read_production", true, data.data.redactions.auditor, false, false) if {
 	tenant_match
 	has_role("auditor")
+	not is_agent
 	action_in({"read", "write"})
 	type_in(production_types)
 	purpose_allowed_for("auditor")

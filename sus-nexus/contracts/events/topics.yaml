@@ -127,7 +127,8 @@ topics:
   - name: sus.production.outcome.v1
     class: domain
     key: data.production_record_id
-    events: [received, accepted, rejected, paid]
+    # transmitted: um evento por registro quando o retorno de transmissão chega (por lote ou registro)
+    events: [transmitted, received, accepted, rejected, paid]
 
   # ---- comunicação e consentimento ----
   - name: sus.communication.v1

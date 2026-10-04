@@ -53,6 +53,37 @@ public class PreAuditor {
   /** Fato de entrada guardado no registro: validade (DV) do CNS/CPF informado pela origem. */
   public static final String INPUT_IDENTIFIER_VALID = "citizen_identifier_input_valid";
 
+  /**
+   * Fatos calculados por {@link #evaluate} — únicos nomes aceitos nas condições de uma nova versão
+   * da regra ({@code POST /api/v1/production/rules}); um fato com erro de digitação nunca
+   * dispararia a regra.
+   */
+  public static final java.util.Set<String> FACTS =
+      java.util.Set.of(
+          "kind",
+          "requires_citizen",
+          "citizen_resolved",
+          INPUT_IDENTIFIER_VALID,
+          "citizen_identifier_valid",
+          "cnes_registered",
+          "cnes_active",
+          "procedure_valid_in_competence",
+          "cbo_exists",
+          "cbo_compatible",
+          "instrument_compatible",
+          "sex_compatible",
+          "age_compatible",
+          "quantity_within_max",
+          "duplicate",
+          "attendance_in_competence",
+          "competence_open",
+          "apac_number_present",
+          "aih_number_present",
+          "cid_valid",
+          "evidence_present",
+          "hospital_episode_linked",
+          "professional_cbo_linked");
+
   static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
   static final int MAX_PREVIOUS_COMPETENCES = 3;
 

@@ -25,7 +25,8 @@ policies/
 │   │   └── authz_test.rego
 │   ├── agents/       data.sus.agents  — ferramentas de agentes de IA, kill switch
 │   ├── fhir/         data.sus.fhir    — escopos SMART-like e redação de elementos FHIR
-│   └── export/       data.sus.export  — exportações (SEC-008)
+│   ├── export/       data.sus.export  — exportações (SEC-008)
+│   └── production/   data.sus.production — produção BPA/APAC/AIH (registros, pendências, lotes, retornos, regra)
 ├── data/             dados estáticos (montados em data.data.*)
 │   ├── roles.json        catálogo de papéis + grupos (merge_roles, export_roles, ...)
 │   ├── purposes.json     finalidades por papel
@@ -44,7 +45,7 @@ policies/
 
 ```bash
 cd sus-nexus/policies
-make test      # opa fmt --diff --fail + opa check --strict + opa test -v  (173 casos)
+make test      # opa fmt --diff --fail + opa check --strict + opa test -v  (204 casos)
 make check     # só formatação + verificação estrita
 make bundle    # bundle/bundle.tar.gz (revision = VERSION+git sha)
 make eval      # decisão para examples/aps_read_team.json
@@ -91,7 +92,7 @@ make eval EXAMPLE=examples/break_glass.json
 |---|---|
 | `subject.client_type` | `user` \| `service` \| `agent` |
 | `subject.roles` | ver `data/roles.json`: `admin_municipal`, `gestor`, `profissional_aps`, `acs`, `regulador`, `agendador`, `profissional_hospitalar`, `auditor`, `dpo`, `operador_integracao`, `cadastro_mestre` |
-| `action` | `read` \| `write` \| `reveal_identifier` \| `merge` \| `unmerge` \| `reprocess` \| `export` \| `transition_task` |
+| `action` | `read` \| `write` \| `reveal_identifier` \| `merge` \| `unmerge` \| `reprocess` \| `export` \| `transition_task`; produção (§5): `register_record` \| `correct` \| `create_batch` \| `approve_batch` \| `export_batch` \| `register_outcome` \| `create_rule_version` |
 | `resource.type` | `citizen` \| `timeline_event` \| `merge_case` \| `task` \| `integration_message` \| `appointment` \| `regulation_request` \| `production_record` \| `audit_log` \| `identifier` — e os tipos estendidos de `data/domains.json#resource_types` (`care_plan`, `access_log`, `dlq_message`, `indicator`, `connector`, `policy`, ...) |
 | `resource.domain` | `identity` \| `aps` \| `schedule` \| `regulation` \| `exam` \| `hospital` \| `careplan` \| `task` \| `production` \| `communication` |
 | `resource.sensitivity` | `public` < `internal` < `restricted` < `highly_restricted` |
@@ -138,7 +139,7 @@ Campos opcionais do contrato (`citizen_*`, `assignee`) podem ser omitidos para r
 | `regulador` | `regulation_request`, `task`; `timeline_event` em `regulation`/`exam`/`schedule`/`identity`; `hospital`/`careplan` só até `restricted` | `regulation_request`, `task` | `purpose = regulation`. Sem vínculo (filas do município). |
 | `agendador` | `citizen` (identity), `appointment`, `timeline_event`/`task` em `schedule`/`task` | `appointment`, `task` | `scheduling`; até `restricted`; mascara; sem clínico. |
 | `profissional_hospitalar` | `hospital` + `identity` | `timeline_event`/`task`/`care_plan` em `hospital`/`task`/`careplan` | `citizen_cnes ∈ cnes`; `care_coordination`. |
-| `auditor` | `production_record`, `production_evidence`; `timeline_event`/`task` em `production` | `production_*` | `production_audit`; mascara; redige `clinical_notes`. |
+| `auditor` | `production_record`, `production_evidence`; `timeline_event`/`task` em `production` | `production_*` | `production_audit`; mascara; redige `clinical_notes`. Nunca `client_type=agent` (desde 2.0.0). Ações específicas de produção: §5. |
 | `dpo` | `audit_log`, `access_log`, `decision_log`, `policy` | — | `security_audit`; mascara. |
 | `operador_integracao` | `integration_message`, `dlq_message`, `reconciliation_report` | `reprocess`/`write` (justificativa) | `integration_operations`; mascara; redige `payload_sensitive`. |
 | `cadastro_mestre` | `citizen`, `identifier`, `merge_case` (identity) | idem | `identity_management`. Merge/unmerge. |
@@ -198,6 +199,32 @@ Interações: `read`/`vread`/`history` → `r`, `search` → `s`, `create` → `
 ## 4. Exportações — `data.sus.export`
 
 Mesmo input de `sus.authz` com `action="export"`. Permitido apenas para `dpo` (`audit_log`, `access_log`, `decision_log`; `security_audit`), `gestor` (agregados) e `auditor` (`production_record`/`production_evidence`; `production_audit`). Obrigações sempre `mask_identifiers=true` e `require_justification=true` (o fluxo de aprovação, marca d'água e expiração do link ficam no serviço — SEC-008). `data.sus.authz.decision` já incorpora essas regras e razões; `data.sus.export.decision` existe para avaliação isolada.
+
+## 5. Produção — `data.sus.production`
+
+Mesmo input de `sus.authz`; `data.sus.authz.permits` incorpora `data.sus.production.permits` (o core chama
+`/v1/data/sus/authz/decision`), e `data.sus.production.decision` existe para avaliação isolada. Matriz (espelha o
+`ProductionResource` do core; finalidade `production_audit` — o `operador_integracao` também pode declarar
+`integration_operations`; obrigações: mascarar, `log_access`, redação do auditor):
+
+| `action` | `resource.type` | Papéis | Observações |
+|---|---|---|---|
+| `read` | `production_record` | auditor, gestor, operador_integracao, admin_municipal | |
+| `read` | `production_issue` | auditor, gestor, admin_municipal; **agente** | agente (`client_type=agent` ou papel `agente_ia`) só aqui (`production.agent_read_issues`) |
+| `read` | `production_batch`, `production_summary` | auditor, gestor, admin_municipal | |
+| `read` | `production_deadline` | auditor, gestor, operador_integracao, admin_municipal | |
+| `register_record` | `production_record` | operador_integracao, auditor | |
+| `correct` | `production_record` | auditor | `require_justification` |
+| `create_batch` | `production_batch` | auditor | |
+| `approve_batch` | `production_batch` | auditor, gestor | **quatro olhos**: `resource.created_by != subject.id`; sem `created_by` nega; `require_justification` |
+| `export_batch` | `production_batch` | auditor | gera o arquivo oficial (CNS em claro) — não é o `export` de dados do §4 |
+| `register_outcome` | `production_outcome` | operador_integracao, auditor | |
+| `create_rule_version` | `production_rule` | gestor, admin_municipal | `require_justification` |
+
+Agentes nunca executam ações de escrita de produção, mesmo acumulando papéis humanos. Razões de negação:
+`production_agent_read_only`, `production_four_eyes_creator_cannot_approve`, `production_batch_creator_unknown`,
+`production_role_not_allowed`, `production_purpose_not_allowed` (além de `tenant_mismatch`/`no_matching_rule`).
+Testes em `sus/production/production_test.rego`.
 
 ## Como os serviços chamam o OPA
 
@@ -302,4 +329,4 @@ Via API: `POST /v1/compile` com `{"query": "data.sus.authz.filter == true", "inp
 
 ## Cobertura de testes
 
-`make test` executa 160 casos: tenant mismatch (todos os pacotes), cada papel com casos permitidos e negados (vínculo, finalidade, sensibilidade, domínio), acumulação de papéis, `reveal_identifier`, `merge/unmerge`, break-glass (justificativa curta, agente, papel não elegível, export/merge, tenant), exportações, agentes (forbidden, não catalogada, não concedida, kill switch global/agente/ferramenta/tenant, rebaixamento de classe, identidade incompleta, integridade do catálogo) e escopos FHIR (patient/user/system, compartimento, restrito com redação, `highly_restricted`, escopos malformados, interações desconhecidas).
+`make test` executa 204 casos (inclui `sus/production`: matriz por ação, finalidade, tenant, quatro olhos, agente só lendo pendências, decisão isolada): tenant mismatch (todos os pacotes), cada papel com casos permitidos e negados (vínculo, finalidade, sensibilidade, domínio), acumulação de papéis, `reveal_identifier`, `merge/unmerge`, break-glass (justificativa curta, agente, papel não elegível, export/merge, tenant), exportações, agentes (forbidden, não catalogada, não concedida, kill switch global/agente/ferramenta/tenant, rebaixamento de classe, identidade incompleta, integridade do catálogo) e escopos FHIR (patient/user/system, compartimento, restrito com redação, `highly_restricted`, escopos malformados, interações desconhecidas).

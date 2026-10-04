@@ -63,6 +63,12 @@ public interface ProductionService {
 
   List<ProductionDeadlineDto> deadlines(String fromCompetence, String toCompetence);
 
+  /**
+   * Nova versão da regra {@code production-validation} do tenant: valida o jsonb, executa os casos
+   * de teste anexados e só então ativa (revoga a anterior do tenant). Humanos gestor/admin.
+   */
+  ProductionRuleVersionDto createRuleVersion(ProductionRuleVersionCreate create);
+
   // --- suporte ao ProductionPreAuditWorkflow / CompetenceDeadlineJob ---
 
   /** Estado da pré-auditoria para o workflow. */

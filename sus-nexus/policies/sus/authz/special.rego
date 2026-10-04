@@ -86,6 +86,15 @@ permits contains p if {
 }
 
 # ---------------------------------------------------------------------------
+# produção (registros, pendências, lotes, retornos, regras) — delegado ao
+# pacote sus.production (matriz por ação, quatro olhos, agente só lê pendências).
+# ---------------------------------------------------------------------------
+
+permits contains p if {
+	some p in data.sus.production.permits
+}
+
+# ---------------------------------------------------------------------------
 # break-glass (SEC-011) — leitura de dado clínico fora do vínculo por papéis
 # clínicos elegíveis e pelo admin_municipal. Nunca para agentes; nunca para
 # export/merge/unmerge (ação restrita a `read`). Gera obrigação de alerta ao

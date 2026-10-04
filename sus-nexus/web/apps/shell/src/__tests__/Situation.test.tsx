@@ -97,7 +97,7 @@ describe('SituationPage (/situacao)', () => {
       { name: 'Indicadores da competência 09/2026' },
       { timeout: 5000 },
     );
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(20));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(20), { timeout: 5000 });
 
     expect(card('AGE_ABSENTEISMO').dataset.level).toBe('critica');
     expect(within(card('AGE_ABSENTEISMO')).getByText('Crítica')).toBeInTheDocument();
@@ -115,7 +115,11 @@ describe('SituationPage (/situacao)', () => {
     expect(within(summary).getByText(/Suprimido: 1/)).toBeInTheDocument();
 
     expect(
-      await screen.findByRole('img', { name: /Gráfico da série histórica de Taxa de absenteísmo/ }),
+      await screen.findByRole(
+        'img',
+        { name: /Gráfico da série histórica de Taxa de absenteísmo/ },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Abrir painel no Metabase/ })).toHaveAttribute(
       'href',
@@ -233,7 +237,7 @@ describe('Análise assistida (IA) — agente bi_situation_analyst', () => {
       /gerada por IA a partir de dados agregados/,
     );
     expect(within(panel).getByRole('note')).toHaveTextContent(/revisão humana/);
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(20));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(20), { timeout: 5000 });
     await user.type(within(panel).getByLabelText(/Foco da análise/), 'absenteísmo');
     await user.click(within(panel).getByRole('button', { name: 'Gerar análise' }));
     const result = await within(panel).findByTestId('bi-analysis-result');

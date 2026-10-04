@@ -305,6 +305,22 @@ class ProductionFlowTest {
         .post("/api/v1/production/batches/" + batchId + "/approve")
         .then()
         .statusCode(403);
+    // quatro olhos: a auditora que gerou o lote não pode aprová-lo (nem acumulando o papel gestor)
+    for (String roles : List.of("auditor", "auditor,gestor")) {
+      actor(TENANT_A, "auditora.carla", roles)
+          .body(Map.of("justification", "Conferido pela própria auditora que gerou o lote"))
+          .post("/api/v1/production/batches/" + batchId + "/approve")
+          .then()
+          .statusCode(403)
+          .contentType("application/problem+json")
+          .body("type", equalTo("urn:sus-nexus:problem:four-eyes"))
+          .body("detail", containsString("quem gerou o lote"));
+    }
+    auditor(TENANT_A)
+        .get("/api/v1/production/batches/" + batchId)
+        .then()
+        .body("status", equalTo("draft"))
+        .body("created_by", equalTo("auditora.carla"));
     gestor(TENANT_A)
         .body(Map.of("justification", "ok"))
         .post("/api/v1/production/batches/" + batchId + "/approve")
@@ -413,6 +429,20 @@ class ProductionFlowTest {
         .then()
         .body("status", equalTo("transmitted"))
         .body("protocol_number", equalTo("PROT-123"));
+    // retorno transmitted por lote ⇒ um evento sus.production.outcome.transmitted por registro
+    for (String id : List.of(okId, warnId)) {
+      List<Outbox.Row> transmitted =
+          Outbox.rowsFor(id).stream()
+              .filter(r -> r.eventType().equals("sus.production.outcome.transmitted"))
+              .toList();
+      assertThat(transmitted).hasSize(1);
+      assertThat(transmitted.get(0).payload().path("data").path("record_status").asText())
+          .isEqualTo("transmitted");
+      assertThat(transmitted.get(0).payload().path("data").path("batch_id").asText())
+          .isEqualTo(batchId);
+      assertThat(transmitted.get(0).payload().path("data").path("production_record_id").asText())
+          .isEqualTo(id);
+    }
     Map<String, Object> rejection = new LinkedHashMap<>();
     rejection.put("source", source("SIA", "RET-R-" + warnId));
     rejection.put("outcome", "rejected");

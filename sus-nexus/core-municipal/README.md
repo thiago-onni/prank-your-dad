@@ -86,8 +86,11 @@ lacunas; desligada no perfil `test`, onde `CareGapDetectionJob.runOnce()` é inv
 `sus.production.deadline-day` (10) / `deadline-zone` (`America/Sao_Paulo`) — prazo padrão quando a
 competência não tem linha em `production.production_deadline`, `sus.production.deadline-alert-cron`
 (alertas D-5/D-1; desligado no `test`, onde `CompetenceDeadlineJob.runOnce(Instant)` é invocado),
-`sus.production.export-dir` (`SUS_PRODUCTION_EXPORT_DIR`; arquivos de exportação — **diretório restrito**:
-o arquivo contém CNS em claro) e `sus.production.export-origin-name|acronym|document` (cabeçalho BPA-Mag).
+`sus.production.export-storage` (`SUS_PRODUCTION_EXPORT_STORAGE`: `file` — padrão em dev/test — ou `s3`),
+`sus.production.export-dir` (`SUS_PRODUCTION_EXPORT_DIR`; modo `file` — **diretório restrito**: o arquivo contém
+CNS em claro), `sus.production.s3.bucket` (`production-exports`) / `region` / `endpoint` (MinIO) / `path-style` /
+`access-key` / `secret-key` / `prefix` / `sse` (`AES256` padrão, `aws:kms` + `kms-key-id`, `none` só em dev sem
+KMS) — variáveis `SUS_PRODUCTION_S3_*` — e `sus.production.export-origin-name|acronym|document` (cabeçalho BPA-Mag).
 Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
 elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
 O prazo do contato pós-alta fica em `tasks.sla_policy` (`post_discharge_followup` × prioridade = risco:
@@ -139,7 +142,13 @@ SHA-256 conferido no arquivo; retornos (transmitido por lote, rejeitado reabre p
 pago com valor, idempotência); painel; prazos e alertas D-5/D-1; ingestão `ingest-production-in`; AIH
 conciliada com episódio ADT; isolamento de tenant; eventos contra os 4 schemas de `production/`; produção
 ausente da timeline; workflow com time-skipping (expiração no prazo → `deadline_missed`; correção encerra);
-casos de teste anexados à regra vigente e larguras do layout.
+casos de teste anexados à regra vigente e larguras do layout. `ProductionRuleVersionTest` cobre `POST
+/production/rules` (papéis, jsonb inválido, casos de teste que falham → 422, ativação v2/v3 com revogação, pré-auditoria
+usando a nova versão); `ProductionOpaTest` (perfil `sus.authz.mode=opa`, OPA em WireMock) verifica o input enviado
+ao OPA nas ações de produção, 403 nas negações, quatro olhos no serviço mesmo com a política permitindo e
+fail-closed; `S3ExportStorageTest` testa o `S3ExportStorage` contra um S3/MinIO falso (WireMock: chave, SSE,
+escrita condicional, checksum SHA-256, leitura só do bucket) e a seleção `file|s3`. O fluxo principal também cobre
+o quatro olhos (403 `four-eyes`) e um evento `sus.production.outcome.transmitted` por registro.
 
 ## Estrutura
 
@@ -282,16 +291,25 @@ Dado **administrativo de faturamento**: nenhum consumidor do `journey` assina `s
 
 | Operação | Papéis | Observações |
 |---|---|---|
-| `POST /production/records` | operador_integracao, auditor | upsert por `(tenant, source.system, source_record_id)`; reenvio idêntico → 200 inalterado; registro já exportado/processado → 409; CNS do profissional e CNS/CPF do cidadão (DV validado) viram hash (HMAC por tenant) + máscara + cifra AES-GCM (só para a exportação); cidadão via identity.api; pré-auditoria imediata → `validated` ou `pending` + tarefa `production_issue` (fila `auditoria`, prioridade `high`; `urgent` perto do prazo/rejeição/prazo vencido; prazo = prazo da competência) |
-| `GET /production/records[/{id}]`, `.../by-source/{system}/{id}` | auditor, gestor, operador_integracao, admin_municipal | filtros do contrato; pendências e histórico; `@AuditedAccess` |
-| `POST /production/records/{id}/corrections` | auditor | justificativa ≥ 10 (400 sem); `pending`/`validated`/`rejected`; registro em lote rascunho sai do lote, em lote aprovado → 409; avisos dispensáveis (`waive_issue_ids`), erros não (422); rejeição oficial é resolvida e o registro volta a ser elegível (reapresentação); `production_record_history` + `audit_log`; sinaliza o workflow após o commit; agente de IA → 403 mesmo com outro papel |
-| `GET /production/issues` | auditor, gestor, **agente_ia**, admin_municipal | filtros severity/rule/competence/cnes/kind/status (padrão `open`)/record_id; sem dado do cidadão |
-| `POST /production/batches` | auditor | todos os `validated` da competência/CNES/tipo fora de lote; sem elegíveis → 422; nasce `draft` |
-| `POST /production/batches/{id}/approve` | auditor, gestor | **aprovação humana obrigatória** (PRO-010) com justificativa; só `draft`; agente → 403 |
-| `POST /production/batches/{id}/export` | auditor | só lote `approved`; `bpa_mag_ref_v1` (BPA-C/BPA-I) ou `csv_ref_v1`; grava via `ExportStorage` (arquivo, `CREATE_NEW`), devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
-| `POST /production/outcomes` | operador_integracao, auditor | `transmitted`/`received`/`accepted` por lote ou registro; `rejected` (motivo oficial → pendência `official_rejection` + tarefa) e `paid` (valor obrigatório) só por registro; idempotente por origem do retorno; lote → `processed` quando todos os registros têm desfecho final |
+| `POST /production/records` | operador_integracao, auditor (+ OPA `register_record`) | upsert por `(tenant, source.system, source_record_id)`; reenvio idêntico → 200 inalterado; registro já exportado/processado → 409; CNS do profissional e CNS/CPF do cidadão (DV validado) viram hash (HMAC por tenant) + máscara + cifra AES-GCM (só para a exportação); cidadão via identity.api; pré-auditoria imediata → `validated` ou `pending` + tarefa `production_issue` (fila `auditoria`, prioridade `high`; `urgent` perto do prazo/rejeição/prazo vencido; prazo = prazo da competência) |
+| `GET /production/records[/{id}]`, `.../by-source/{system}/{id}` | auditor, gestor, operador_integracao, admin_municipal (+ OPA `read`) | filtros do contrato; pendências e histórico; `@AuditedAccess` |
+| `POST /production/records/{id}/corrections` | auditor (+ OPA `correct`) | justificativa ≥ 10 (400 sem); `pending`/`validated`/`rejected`; registro em lote rascunho sai do lote, em lote aprovado → 409; avisos dispensáveis (`waive_issue_ids`), erros não (422); rejeição oficial é resolvida e o registro volta a ser elegível (reapresentação); `production_record_history` + `audit_log`; sinaliza o workflow após o commit; agente de IA → 403 mesmo com outro papel |
+| `GET /production/issues` | auditor, gestor, **agente_ia**, admin_municipal (+ OPA `read`) | filtros severity/rule/competence/cnes/kind/status (padrão `open`)/record_id; sem dado do cidadão |
+| `POST /production/batches` | auditor (+ OPA `create_batch`) | todos os `validated` da competência/CNES/tipo fora de lote; sem elegíveis → 422; nasce `draft` |
+| `POST /production/batches/{id}/approve` | auditor, gestor (+ OPA `approve_batch`) | **aprovação humana obrigatória** (PRO-010) com justificativa; só `draft`; agente → 403; **quatro olhos**: quem gerou o lote não aprova → 403 `urn:sus-nexus:problem:four-eyes` (serviço e política) |
+| `POST /production/batches/{id}/export` | auditor (+ OPA `export_batch`) | só lote `approved`; `bpa_mag_ref_v1` (BPA-C/BPA-I) ou `csv_ref_v1`; grava via `ExportStorage` em `<tenant>/<competência>/<lote>/<arquivo>` sem sobrescrita — `file` (`CREATE_NEW`, `file://`) ou `s3` (`S3ExportStorage`: bucket `production-exports`, SSE, `If-None-Match: *`, `x-amz-checksum-sha256`, `s3://`) —, devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
+| `POST /production/outcomes` | operador_integracao, auditor (+ OPA `register_outcome`) | `transmitted`/`received`/`accepted` por lote ou registro (cada registro afetado publica `sus.production.outcome.<outcome>`, inclusive `transmitted` por lote); `rejected` (motivo oficial → pendência `official_rejection` + tarefa) e `paid` (valor obrigatório) só por registro; idempotente por origem do retorno; lote → `processed` quando todos os registros têm desfecho final |
 | `GET /production/summary?competence=&cnes=` | gestor, auditor, admin_municipal | totais por status, corrigidos, valores (estimado = Σ quantidade × `valor` SIGTAP, validado, pago, pendente, rejeitado) e **perda evitável estimada** (pendente + rejeitado), pendências por regra e por instrumento |
+| `POST /production/rules` | gestor, admin_municipal (+ OPA `create_rule_version`) | nova versão da regra `production-validation` do tenant: jsonb validado (gramática do `RuleEvaluator`, ids únicos, severidade, só fatos de `PreAuditor.FACTS`) e **casos de teste anexados executados antes de ativar** (falha → 422, nada gravado); versão sequencial ativa no tenant, revoga a anterior do tenant (a global continua para os demais); `audit_log` com justificativa; agente → 403 |
 | `GET /production/deadlines?from=&to=` | auditor, gestor, operador_integracao, admin_municipal | prazo (tenant → global → padrão), `open|closing|closed`, dias restantes, alertas e contagens |
+
+**Autorização** — além do `@RolesAllowed`, cada operação consulta a `AuthorizationPolicy` via
+`ProductionAuthorization` (ação `<tipo>:<ação>`, ex.: `production_batch:approve_batch`; finalidade padrão
+`production_audit` quando o cliente não envia `X-Purpose-Of-Use`; atributos `domain=production`,
+`created_by` do lote na aprovação). Em `sus.authz.mode=opa` a decisão vem de `policies/sus/production`
+(via `data.sus.authz.decision`, fail-closed: OPA fora do ar ⇒ 403); em `rbac` (dev/test) a
+`RoleBasedAuthorizationPolicy` aplica a mesma matriz (sem atalho de admin, agente só lê pendências, quatro
+olhos). Negação ⇒ 403 problem+json com os motivos da política.
 
 **Pré-auditoria ("configuração antes de código")** — `PreAuditor` só calcula fatos; as regras (condição de
 violação, severidade, campo e mensagem) vivem no jsonb da versão vigente de `platform.rule_set
@@ -313,7 +331,11 @@ novas, resolve as não mais violadas, mantém avisos dispensados). Pendências f
 validador oficial (registros 01/02/03 de largura fixa, campo de controle `(Σ procedimentos + Σ quantidades) mod
 1111 + 1111`, 20 linhas por folha; campos nominais não trafegam e são completados no sistema oficial;
 especificação em `ExportLayouts`). O arquivo contém CNS em claro (decifrados só para o arquivo), por isso o
-`export-dir`/bucket deve ser restrito; em produção `ExportStorage` deve apontar para object storage com retenção.
+`export-dir`/bucket deve ser restrito: em produção use `sus.production.export-storage=s3` com o bucket
+`production-exports` (criado em `platform/compose/minio/init.sh` e no `minio-tenant` do Helm) acessível **somente**
+pela credencial do core (política dedicada com `s3:PutObject`/`s3:GetObject` nesse bucket — não reutilize a
+credencial compartilhada `sus-app`), sem acesso público/listagem para outros serviços, SSE ativo (MinIO com KMS ou
+`aws:kms`) e retenção/versionamento conforme a política do município.
 
 ## Kafka — canais e tópicos
 

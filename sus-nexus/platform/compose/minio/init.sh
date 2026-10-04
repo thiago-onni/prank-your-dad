@@ -39,6 +39,7 @@ mk exports ""
 mk backups ""
 mk audit-archive "--with-lock"
 mk lakehouse ""
+mk production-exports ""   # arquivos BPA/APAC/AIH do core (CNS em claro): acesso restrito à credencial do core
 
 mc version enable "$ALIAS/raw-zone" >/dev/null
 mc version enable "$ALIAS/backups" >/dev/null
@@ -93,6 +94,26 @@ EOF
 mc admin policy create "$ALIAS" sus-lakehouse /tmp/sus-lakehouse-policy.json >/dev/null 2>&1 || true
 mc admin user add "$ALIAS" "${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}" "${LAKEHOUSE_S3_SECRET_KEY:-sus-lakehouse-secret}" >/dev/null 2>&1 || true
 mc admin policy attach "$ALIAS" sus-lakehouse --user "${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}" >/dev/null 2>&1 || true
+
+# Usuário dedicado do core para exportações de produção (arquivo contém CNS em claro): só o bucket
+# production-exports, sem Delete (nunca sobrescreve/apaga). Core: SUS_PRODUCTION_EXPORT_STORAGE=s3,
+# SUS_PRODUCTION_S3_ENDPOINT=http://minio:9000, SUS_PRODUCTION_S3_ACCESS_KEY/SECRET_KEY abaixo e,
+# no MinIO local sem KMS, SUS_PRODUCTION_S3_SSE=none.
+cat > /tmp/sus-production-exports-policy.json <<'EOP'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketLocation", "s3:ListBucket", "s3:GetObject", "s3:PutObject"],
+      "Resource": ["arn:aws:s3:::production-exports", "arn:aws:s3:::production-exports/*"]
+    }
+  ]
+}
+EOP
+mc admin policy create "$ALIAS" sus-production-exports /tmp/sus-production-exports-policy.json >/dev/null 2>&1 || true
+mc admin user add "$ALIAS" "${PRODUCTION_S3_ACCESS_KEY:-sus-production}" "${PRODUCTION_S3_SECRET_KEY:-sus-production-secret}" >/dev/null 2>&1 || true
+mc admin policy attach "$ALIAS" sus-production-exports --user "${PRODUCTION_S3_ACCESS_KEY:-sus-production}" >/dev/null 2>&1 || true
 
 echo ">> buckets:"
 mc ls "$ALIAS"

@@ -69,6 +69,42 @@ public class RoleBasedAuthorizationPolicy implements AuthorizationPolicy {
           Map.entry("reference:read", Set.of()),
           Map.entry("terminology:read", Set.of()));
 
+  /**
+   * Produção ({@code policies/sus/production}): matriz {@code <tipo>:<ação>} → papéis, espelhando o
+   * {@code ProductionResource}. Sem atalho de {@code admin_municipal}; agente de IA só lê
+   * pendências; quatro olhos na aprovação do lote ({@code created_by} ≠ ator).
+   */
+  private static final Map<String, Set<String>> PRODUCTION =
+      Map.ofEntries(
+          Map.entry(
+              "production_record:read",
+              Set.of(
+                  Roles.AUDITOR, Roles.GESTOR, Roles.OPERADOR_INTEGRACAO, Roles.ADMIN_MUNICIPAL)),
+          Map.entry(
+              "production_issue:read",
+              Set.of(Roles.AUDITOR, Roles.GESTOR, Roles.ADMIN_MUNICIPAL, Roles.AGENTE_IA)),
+          Map.entry(
+              "production_batch:read", Set.of(Roles.AUDITOR, Roles.GESTOR, Roles.ADMIN_MUNICIPAL)),
+          Map.entry(
+              "production_summary:read",
+              Set.of(Roles.AUDITOR, Roles.GESTOR, Roles.ADMIN_MUNICIPAL)),
+          Map.entry(
+              "production_deadline:read",
+              Set.of(
+                  Roles.AUDITOR, Roles.GESTOR, Roles.OPERADOR_INTEGRACAO, Roles.ADMIN_MUNICIPAL)),
+          Map.entry(
+              "production_record:register_record",
+              Set.of(Roles.OPERADOR_INTEGRACAO, Roles.AUDITOR)),
+          Map.entry("production_record:correct", Set.of(Roles.AUDITOR)),
+          Map.entry("production_batch:create_batch", Set.of(Roles.AUDITOR)),
+          Map.entry("production_batch:approve_batch", Set.of(Roles.AUDITOR, Roles.GESTOR)),
+          Map.entry("production_batch:export_batch", Set.of(Roles.AUDITOR)),
+          Map.entry(
+              "production_outcome:register_outcome",
+              Set.of(Roles.OPERADOR_INTEGRACAO, Roles.AUDITOR)),
+          Map.entry(
+              "production_rule:create_rule_version", Set.of(Roles.GESTOR, Roles.ADMIN_MUNICIPAL)));
+
   /** Domínios clínicos cujos eventos restritos o ACS não vê (contrato OPA, papel {@code acs}). */
   private static final Set<String> CLINICAL_DOMAINS = Set.of("aps", "hospital", "exam");
 
@@ -76,6 +112,9 @@ public class RoleBasedAuthorizationPolicy implements AuthorizationPolicy {
 
   @Override
   public Decision evaluate(Input input) {
+    if (PRODUCTION.containsKey(input.action())) {
+      return production(input, PRODUCTION.get(input.action()));
+    }
     if (input.roles().contains(Roles.ADMIN_MUNICIPAL)) {
       return Decision.allow();
     }
@@ -95,6 +134,26 @@ public class RoleBasedAuthorizationPolicy implements AuthorizationPolicy {
       }
     }
     return Decision.deny("papel insuficiente para " + input.action());
+  }
+
+  private static Decision production(Input input, Set<String> allowed) {
+    boolean agent = input.roles().contains(Roles.AGENTE_IA);
+    if (agent && !"production_issue:read".equals(input.action())) {
+      return Decision.deny("production_agent_read_only");
+    }
+    if (input.roles().stream().noneMatch(allowed::contains)) {
+      return Decision.deny("production_role_not_allowed");
+    }
+    if ("production_batch:approve_batch".equals(input.action())) {
+      Object createdBy = input.attributes().get("created_by");
+      if (createdBy == null) {
+        return Decision.deny("production_batch_creator_unknown");
+      }
+      if (createdBy.equals(input.actorId())) {
+        return Decision.deny("production_four_eyes_creator_cannot_approve");
+      }
+    }
+    return Decision.allow();
   }
 
   /**
