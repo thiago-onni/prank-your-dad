@@ -256,6 +256,7 @@
                     <include>hospital/*.schema.json</include>
                     <include>careplan/*.schema.json</include>
                     <include>caregap/*.schema.json</include>
+                    <include>production/*.schema.json</include>
                   </includes>
                 </resource>
               </resources>

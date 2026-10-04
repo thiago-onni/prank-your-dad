@@ -5,7 +5,9 @@ Monólito modular do barramento municipal de saúde digital (Fase 1 — fundaç�
 `regulation` e `exams` com workflows `RegulationSlaWorkflow` e `ExamFollowUpWorkflow`; Fase 3 —
 `hospital` (ADT, alta, pós-alta com `DischargeFollowUpWorkflow`), `careplan` (protocolos versionados,
 planos, lacunas e `CareGapDetectionJob`) e `consent` mínimo, com regras configuráveis em
-`platform.rule_set`/`rule_version`).
+`platform.rule_set`/`rule_version`; Fase 4 — `production` (pré-auditoria BPA-C/BPA-I/APAC/AIH por regras
+versionadas, `ProductionPreAuditWorkflow`, lotes com aprovação humana, exportação em layout de referência,
+retornos oficiais, painel e prazos por competência).
 Java 21 + Quarkus 3.39.x + PostgreSQL 16 (+ Kafka, Temporal e OPA em prod). Segue `../CONVENTIONS.md`
 e o plano em `docs/sus-nexus/PLANO_IMPLEMENTACAO.md` (§5.1–5.8, §8).
 
@@ -80,7 +82,12 @@ padrão `procedure,surgery,admission`), `sus.exams.not-scheduled-days` (15), `su
 (HMAC-SHA256 da URL assinada do laudo; **trocar em produção**), `sus.exams.document-link-ttl` (PT5M),
 `sus.privacy.highly-restricted-cid-prefixes` (prefixos/intervalos CID-10 classificados
 `highly_restricted`; padrão `F,B20-B24,O`), `sus.careplan.gap-detection-cron` (varredura diária de
-lacunas; desligada no perfil `test`, onde `CareGapDetectionJob.runOnce()` é invocado explicitamente).
+lacunas; desligada no perfil `test`, onde `CareGapDetectionJob.runOnce()` é invocado explicitamente),
+`sus.production.deadline-day` (10) / `deadline-zone` (`America/Sao_Paulo`) — prazo padrão quando a
+competência não tem linha em `production.production_deadline`, `sus.production.deadline-alert-cron`
+(alertas D-5/D-1; desligado no `test`, onde `CompetenceDeadlineJob.runOnce(Instant)` é invocado),
+`sus.production.export-dir` (`SUS_PRODUCTION_EXPORT_DIR`; arquivos de exportação — **diretório restrito**:
+o arquivo contém CNS em claro) e `sus.production.export-origin-name|acronym|document` (cabeçalho BPA-Mag).
 Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
 elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
 O prazo do contato pós-alta fica em `tasks.sla_policy` (`post_discharge_followup` × prioridade = risco:
@@ -122,7 +129,17 @@ sensível (só equipe/hospital; eventos e timeline `highly_restricted` sem o có
 ingestão `ingest-hospital-in`, o workflow pós-alta (escalonamento + lacuna + `not_found`), o ciclo de
 aprovação de protocolos (sem casos de teste → 422; `profissional_aps` não aprova → 403; ativação revoga
 a vigente; tenant B só vê as globais), evidência automática por agendamento/exame, job de lacunas,
-perda de seguimento, eventos `careplan/` e `caregap/` e o summary.
+perda de seguimento, eventos `careplan/` e `caregap/` e o summary. Os de Fase 4 (`ProductionFlowTest`,
+`ProductionPreAuditWorkflowTest`, `ProductionRulesTest`) cobrem registro válido → `validated`; inválido por
+CBO/sexo/idade/quantidade/instrumento/duplicidade/competência/CNES/procedimento/identificação → `pending` com
+pendências e `rule_version` + tarefa `production_issue` (fila `auditoria`, sem cidadão); correção com
+justificativa revalida (agente de IA → 403, inclusive com papel `auditor` no token); aviso dispensável e erro
+não; lote só com `validated`; aprovação exige papel e justificativa; exportação BPA-Mag de referência com
+SHA-256 conferido no arquivo; retornos (transmitido por lote, rejeitado reabre pendência com motivo oficial,
+pago com valor, idempotência); painel; prazos e alertas D-5/D-1; ingestão `ingest-production-in`; AIH
+conciliada com episódio ADT; isolamento de tenant; eventos contra os 4 schemas de `production/`; produção
+ausente da timeline; workflow com time-skipping (expiração no prazo → `deadline_missed`; correção encerra);
+casos de teste anexados à regra vigente e larguras do layout.
 
 ## Estrutura
 
@@ -183,6 +200,13 @@ br.gov.sus.nexus.core
 │                        active→revoked; globais seed: gestante, hipertensão, diabetes) + care_plan + care_plan_item +
 │                        care_gap; /api/v1/careplans, /caregaps, /protocols; consumidores de evidência
 │                        `careplan-appointment-in`/`careplan-exam-in`; CareGapDetectionJob (@Scheduled diário)
+├── production/          production_record (CNS/CPF só hash + máscara + cifra) + history [append-only] +
+│                        validation_issue (rule_id, rule_version, severity, origem rule|workflow|official_return)
+│                        + batch/batch_item + submission + outcome + source_link + deadline (+ alertas);
+│                        PreAuditor (fatos) + rule_set `production-validation` (regras); ExportLayouts
+│                        (BPA-Mag de referência, CSV) via ExportStorage; /api/v1/production/*; consumidores
+│                        `ingest-production-in` e `production-record-in`; ProductionPreAuditWorkflow
+│                        (Workflow 3) e CompetenceDeadlineJob; NÃO projetado na timeline
 ├── consent/             consent + communication_preference (só value_masked/value_hash); API interna consent.api
 │                        (contact_valid em caregaps e summary); sem REST nesta fase
 └── journey/             read model timeline_event (projeções de identity/schedule/task/regulation/exam/hospital/
@@ -198,11 +222,13 @@ outros módulos e que `platform`/`sharedkernel` não conhecem módulos.
 
 Um schema PostgreSQL por módulo (`platform`, `audit`, `reference`, `terminology`, `identity`,
 `integration`, `scheduling`, `tasks`, `journey`, `regulation`, `exams`, `hospital`, `careplan`,
-`consent`), migrações em `src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V018; V015 cria
-`platform.rule_set`/`rule_version` e as políticas de SLA pós-alta). Todas as tabelas com
+`consent`, `production`), migrações em `src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V020; V015 cria
+`platform.rule_set`/`rule_version` e as políticas de SLA pós-alta; V019 cria `production` e a regra
+`production-validation` v1; V020 acrescenta os atributos SIGTAP de pré-auditoria aos códigos de exemplo). Todas as tabelas com
 `tenant_id` têm RLS (`platform.current_tenant()` ↔ `app.tenant_id`); terminologia é global e
 `tasks.sla_policy`/`regulation.regulation_sla_policy`/`platform.rule_version`/`careplan.protocol[_version]`
-expõem linhas globais (`tenant_id IS NULL`) mais as do tenant (a do tenant tem precedência).
+expõem linhas globais (`tenant_id IS NULL`) mais as do tenant (a do tenant tem precedência) — idem
+`production.production_deadline`.
 
 ## Regulação (`/api/v1/regulation`) e exames (`/api/v1/exams`)
 
@@ -248,6 +274,47 @@ item vencido além de `gap_after_days` → item `missed` + `care_gap` (`consulta
 evento assistencial por `lost_to_followup_days` → `lost_to_followup`. Idempotente (uma lacuna aberta por
 item/plano/kind).
 
+## Produção (`/api/v1/production`) — PRO-001…010, Workflow 3
+
+Dado **administrativo de faturamento**: nenhum consumidor do `journey` assina `sus.production.*` e as tarefas
+`production_issue` são criadas **sem `citizen_id`** — produção não aparece na timeline do cidadão. Eventos sem
+`subject` (chave = id do registro/lote, conforme `topics.yaml`), CNS/CPF só por hash.
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /production/records` | operador_integracao, auditor | upsert por `(tenant, source.system, source_record_id)`; reenvio idêntico → 200 inalterado; registro já exportado/processado → 409; CNS do profissional e CNS/CPF do cidadão (DV validado) viram hash (HMAC por tenant) + máscara + cifra AES-GCM (só para a exportação); cidadão via identity.api; pré-auditoria imediata → `validated` ou `pending` + tarefa `production_issue` (fila `auditoria`, prioridade `high`; `urgent` perto do prazo/rejeição/prazo vencido; prazo = prazo da competência) |
+| `GET /production/records[/{id}]`, `.../by-source/{system}/{id}` | auditor, gestor, operador_integracao, admin_municipal | filtros do contrato; pendências e histórico; `@AuditedAccess` |
+| `POST /production/records/{id}/corrections` | auditor | justificativa ≥ 10 (400 sem); `pending`/`validated`/`rejected`; registro em lote rascunho sai do lote, em lote aprovado → 409; avisos dispensáveis (`waive_issue_ids`), erros não (422); rejeição oficial é resolvida e o registro volta a ser elegível (reapresentação); `production_record_history` + `audit_log`; sinaliza o workflow após o commit; agente de IA → 403 mesmo com outro papel |
+| `GET /production/issues` | auditor, gestor, **agente_ia**, admin_municipal | filtros severity/rule/competence/cnes/kind/status (padrão `open`)/record_id; sem dado do cidadão |
+| `POST /production/batches` | auditor | todos os `validated` da competência/CNES/tipo fora de lote; sem elegíveis → 422; nasce `draft` |
+| `POST /production/batches/{id}/approve` | auditor, gestor | **aprovação humana obrigatória** (PRO-010) com justificativa; só `draft`; agente → 403 |
+| `POST /production/batches/{id}/export` | auditor | só lote `approved`; `bpa_mag_ref_v1` (BPA-C/BPA-I) ou `csv_ref_v1`; grava via `ExportStorage` (arquivo, `CREATE_NEW`), devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
+| `POST /production/outcomes` | operador_integracao, auditor | `transmitted`/`received`/`accepted` por lote ou registro; `rejected` (motivo oficial → pendência `official_rejection` + tarefa) e `paid` (valor obrigatório) só por registro; idempotente por origem do retorno; lote → `processed` quando todos os registros têm desfecho final |
+| `GET /production/summary?competence=&cnes=` | gestor, auditor, admin_municipal | totais por status, corrigidos, valores (estimado = Σ quantidade × `valor` SIGTAP, validado, pago, pendente, rejeitado) e **perda evitável estimada** (pendente + rejeitado), pendências por regra e por instrumento |
+| `GET /production/deadlines?from=&to=` | auditor, gestor, operador_integracao, admin_municipal | prazo (tenant → global → padrão), `open|closing|closed`, dias restantes, alertas e contagens |
+
+**Pré-auditoria ("configuração antes de código")** — `PreAuditor` só calcula fatos; as regras (condição de
+violação, severidade, campo e mensagem) vivem no jsonb da versão vigente de `platform.rule_set
+production-validation` (seed v1 com casos de teste anexados): `citizen_unresolved`, `citizen_identifier_invalid`,
+`cnes_not_registered`, `cnes_inactive`, `procedure_invalid` (SIGTAP na competência), `cbo_unknown`,
+`cbo_incompatible` (atributo `cbos`), `instrument_incompatible` (`instrumentos`), `sex_incompatible` (`sexo`),
+`age_incompatible` (`idade_min/max` na data do atendimento), `quantity_exceeded` (`qt_maxima`, individualizados),
+`duplicate` (mesmo cidadão + procedimento + data + CNES, registro anterior não rejeitado),
+`attendance_outside_competence` (até 3 competências anteriores), `competence_closed` (prazo vencido),
+`apac_number_missing`, `aih_number_missing`, `cid_invalid` — erros; `evidence_missing` (BPA-I/APAC sem
+agendamento `fulfilled` do cidadão no CNES/data ou `appointment_ref`; `encounter_ref` declarado conta como
+evidência), `hospital_episode_missing` (AIH sem `hospital_episode_ref` resolvido no ADT) e
+`professional_not_linked` (profissional conhecido na base CNES sem vínculo ativo com o CBO — `reference.api
+ProfessionalDirectory`) — avisos. Cada pendência grava `rule_version`; a revalidação é idempotente (abre as
+novas, resolve as não mais violadas, mantém avisos dispensados). Pendências fora das regras: `deadline_missed`
+(workflow) e `official_rejection` (retorno oficial).
+
+**Layout de exportação** — `bpa_mag_ref_v1` é um BPA-Mag **simplificado de referência a homologar** com o
+validador oficial (registros 01/02/03 de largura fixa, campo de controle `(Σ procedimentos + Σ quantidades) mod
+1111 + 1111`, 20 linhas por folha; campos nominais não trafegam e são completados no sistema oficial;
+especificação em `ExportLayouts`). O arquivo contém CNS em claro (decifrados só para o arquivo), por isso o
+`export-dir`/bucket deve ser restrito; em produção `ExportStorage` deve apontar para object storage com retenção.
+
 ## Kafka — canais e tópicos
 
 Produção publica via **Debezium Outbox Event Router** lendo `platform.event_outbox` (CDC); o
@@ -265,13 +332,15 @@ tenant do envelope, correlation id, transação nova com o inbox na mesma transa
 | `tasks-merge-in` | `sus.identity.merge.v1` | `core-tasks-merge` | `case_opened` → tarefa `mpi_review` + `MpiReviewWorkflow`; decisão conclui |
 | `ingest-regulation-in` | `sus.ingest.regulation.v1` | `core-ingest-regulation` | `data` = `RegulationRequestRegistration` (tem `kind`) ou `RegulationStatusChange` (pedido por `source_record_id`) |
 | `ingest-exam-in` | `sus.ingest.exam.v1` | `core-ingest-exam` | `data` = `ExamOrderRegistration` (`exam_code`), `ExamResultRegistration` (`reported_at`) ou `ExamStatusChange` |
+| `ingest-production-in` | `sus.ingest.production.v1` | `core-ingest-production` | `data` = `ProductionRecordRegistration` (tem `kind`) ou `ProductionOutcomeRegistration` (tem `outcome`) |
+| `production-record-in` | `sus.production.record.v1` | `core-production-preaudit` | `created` inicia `ProductionPreAuditWorkflow` (prazo da competência lido no início) |
 | `ingest-hospital-in` | `sus.ingest.hospital.v1` | `core-ingest-hospital` | `data` = `HospitalMovementRegistration` (`movement`), `DischargeRegistration` (`disposition`; episódio por `source`) ou `CounterReferralRegistration` (`received_at`) |
 | `regulation-request-in`, `regulation-status-in` | `sus.regulation.request.v1`, `sus.regulation.status.v1` | `core-regulation-sla` | `created` inicia `RegulationSlaWorkflow`; `status.changed` sinaliza |
 | `exams-order-in`, `exams-result-in`, `exams-task-in`, `exams-appointment-in` | `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.task.v1`, `sus.schedule.appointment.v1` | `core-exams-followup` | `created` inicia `ExamFollowUpWorkflow`; status/laudo/tarefa concluída/falta sinalizam |
 | `hospital-discharge-in`, `hospital-task-in` | `sus.hospital.discharge.v1`, `sus.task.v1` | `core-hospital-followup` | `discharge.completed` (salvo óbito) inicia `DischargeFollowUpWorkflow`; `task.completed` com origem `discharge-followup:<hep>` sinaliza o contato |
 | `careplan-appointment-in`, `careplan-exam-in` | `sus.schedule.appointment.v1`, `sus.exam.order.v1` | `core-careplan-evidence` | `attended` / `performed|collected|reported` → evidência automática dos itens do plano |
 | `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in`, `journey-regulation-request-in`, `journey-regulation-status-in`, `journey-exam-order-in`, `journey-exam-result-in`, `journey-hospital-adt-in`, `journey-hospital-discharge-in`, `journey-careplan-in`, `journey-caregap-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1`, `sus.regulation.request.v1`, `sus.regulation.status.v1`, `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.hospital.adt.v1`, `sus.hospital.discharge.v1`, `sus.careplan.v1`, `sus.caregap.v1` | `core-journey` | projeções da timeline (regulação, laudos, hospital e careplan: `restricted`; hospital com CID sensível: `highly_restricted`; resumo nunca contém CID) |
-| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out`, `hospital-adt-out`, `hospital-discharge-out`, `careplan-out`, `caregap-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
+| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out`, `hospital-adt-out`, `hospital-discharge-out`, `careplan-out`, `caregap-out`, `production-record-out`, `production-validation-out`, `production-submission-out`, `production-outcome-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
 
 Eventos produzidos: `sus.identity.citizen.*`, `sus.identity.merge.*`, `sus.schedule.appointment.*`
 (`created|confirmed|cancelled|rescheduled|attended|no_show|duplicate_detected`), `sus.task.*`
@@ -282,8 +351,11 @@ Eventos produzidos: `sus.identity.citizen.*`, `sus.identity.merge.*`, `sus.sched
 `sus.hospital.adt.{admitted|transferred|bed_changed|discharged|deceased}` e
 `sus.hospital.discharge.{completed|counter_referral_received}` (`restricted`, ou `highly_restricted` com o CID
 omitido do payload; `data_ref` = sumário de alta), `sus.careplan.{created|updated|closed}` e
-`sus.caregap.{detected|resolved}` (`restricted`; só ids, códigos e contagens), todos validados nos testes
-contra `contracts/events/**`.
+`sus.caregap.{detected|resolved}` (`restricted`; só ids, códigos e contagens),
+`sus.production.record.{created|validated|pending|corrected}`, `sus.production.validation.{issue_found|issue_resolved}`,
+`sus.production.submission.{batch_generated|batch_approved|exported|transmitted}` (`data_ref` = arquivo exportado)
+e `sus.production.outcome.{received|accepted|rejected|paid}` (`restricted`, finalidade `production_audit`; sem
+`subject`, CNS/CPF só hash), todos validados nos testes contra `contracts/events/**`.
 
 ## Temporal
 
@@ -311,11 +383,19 @@ activities de cada módulo usam `namePrefix` para não colidir). Workflows deter
   escalonando a mesma tarefa), nova tarefa `active_search` para a equipe/microárea e lacuna
   `post_discharge_no_contact` (careplan.api); vencido o segundo prazo (`escalate_after` da política) →
   encerra como `not_found` (tarefas concluídas, lacuna resolvida). Contato efetivo/desfecho final encerra.
+- `ProductionPreAuditWorkflow` (`production-preaudit:<prod_id>`, Workflow 3): activity `validate` (revalidação
+  idempotente); pendente → aguarda o sinal `corrected` (correção humana ou reenvio da origem, enviado **após o
+  commit**) até o prazo da competência, revalidando a cada sinal; prazo vencido ainda pendente → `expire`
+  (pendência `deadline_missed`, origem `workflow`, tarefa urgente). O lote continua exigindo aprovação humana.
+- `CompetenceDeadlineWorkflow` é implementado como job `@Scheduled` (`CompetenceDeadlineJob`, percorre
+  `production.active_tenants()`): para cada competência com produção em pré-auditoria, o alerta mais urgente
+  aplicável de `alert_days` (D-5 → tarefa `high`, D-1 → `urgent`, fila `auditoria`, origem
+  `production-deadline:<competência>:D-n`), idempotente por `production_deadline_alert`; `runOnce(Instant)`.
 - `CareGapDetectionWorkflow` é implementado como job `@Scheduled` (`CareGapDetectionJob`, cron diário por
   tenant com planos ativos), invocável em testes e operação via `runOnce()`.
 
 Os starters ficam nos **consumidores** (`TaskEventsConsumer`, `IdentityMergeConsumer`,
-`RegulationEventsConsumer`, `ExamEventsConsumer`, `HospitalEventsConsumer`), não nos serviços, com
+`RegulationEventsConsumer`, `ExamEventsConsumer`, `HospitalEventsConsumer`, `ProductionEventsConsumer`), não nos serviços, com
 `WorkflowIdReusePolicy=REJECT_DUPLICATE` — replay de eventos não duplica workflows.
 
 ## Autorização (OPA) e obrigações

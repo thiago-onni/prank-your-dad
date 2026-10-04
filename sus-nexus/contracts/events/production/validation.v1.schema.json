@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/production/validation/1.0.0",
+  "title": "sus.production.validation.* — data",
+  "description": "Pendência de pré-auditoria encontrada/resolvida (PRO-003/004/006). Cada pendência registra a regra e a versão aplicadas (reprodutibilidade).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "production_record_id", "issue_id", "rule_id", "rule_version", "severity", "status"],
+  "properties": {
+    "action": { "type": "string", "enum": ["issue_found", "issue_resolved"] },
+    "production_record_id": { "type": "string", "pattern": "^prod_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "issue_id": { "type": "string", "pattern": "^pis_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "rule_id": { "type": "string" },
+    "rule_version": { "type": "string" },
+    "severity": { "type": "string", "enum": ["error", "warning"] },
+    "field": { "type": "string" },
+    "origin": { "type": "string", "enum": ["rule", "workflow", "official_return"] },
+    "status": { "type": "string", "enum": ["open", "resolved", "waived"] },
+    "kind": { "type": "string", "enum": ["bpa_c", "bpa_i", "apac", "aih"] },
+    "competence": { "type": "string", "pattern": "^[0-9]{4}(0[1-9]|1[0-2])$" },
+    "cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "task_id": { "type": "string" }
+  }
+}

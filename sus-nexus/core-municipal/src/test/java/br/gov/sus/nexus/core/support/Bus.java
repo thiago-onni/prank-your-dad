@@ -45,7 +45,11 @@ public class Bus {
               "hospital-discharge-out",
               List.of("journey-hospital-discharge-in", "hospital-discharge-in")),
           Map.entry("careplan-out", List.of("journey-careplan-in")),
-          Map.entry("caregap-out", List.of("journey-caregap-in")));
+          Map.entry("caregap-out", List.of("journey-caregap-in")),
+          Map.entry("production-record-out", List.of("production-record-in")),
+          Map.entry("production-validation-out", List.of()),
+          Map.entry("production-submission-out", List.of()),
+          Map.entry("production-outcome-out", List.of()));
 
   @Inject
   @Connector("smallrye-in-memory")

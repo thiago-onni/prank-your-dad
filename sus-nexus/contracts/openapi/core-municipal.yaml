@@ -3,7 +3,7 @@ info:
   title: SUS Nexus — Core Municipal API
   version: 1.0.0
   description: |
-    API interna do core municipal (Fase 1). Contract-first: o backend implementa e o frontend gera cliente a partir deste arquivo.
+    API interna do core municipal (Fases 1–4). Contract-first: o backend implementa e o frontend gera cliente a partir deste arquivo.
     Autenticação Bearer JWT (Keycloak). Erros em RFC 9457 (application/problem+json). Paginação por cursor.
 servers:
   - url: http://localhost:8080
@@ -21,6 +21,7 @@ tags:
   - name: exams
   - name: hospital
   - name: careplan
+  - name: production
   - name: terminology
   - name: reference
   - name: audit
@@ -1722,6 +1723,377 @@ paths:
               schema: { $ref: '#/components/schemas/Protocol' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/production/records:
+    get:
+      tags: [production]
+      summary: Registros de produção com status de pré-auditoria (PRO-001..004)
+      description: |
+        Papéis: auditor (tudo), gestor, operador_integracao e admin_municipal (leitura). Dado administrativo de
+        faturamento — não aparece na timeline do cidadão. CNS/CPF só mascarados.
+      operationId: listProductionRecords
+      parameters:
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionKind' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionRecordStatus' }
+        - name: procedure_code
+          in: query
+          schema: { type: string }
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: batch_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionRecord' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [production]
+      summary: Registrar produção vinda de fonte (upsert por vínculo de origem) e pré-auditar
+      description: |
+        Upsert por `(tenant, source.system, source.source_record_id)`. A pré-auditoria roda na hora com o
+        conjunto de regras vigente `production-validation` (platform.rule_set): sem erro → `validated`;
+        com erro → `pending` + tarefa `production_issue` na fila `auditoria`. Reenvio idêntico devolve 200
+        sem alteração; atualização de registro já exportado/transmitido → 409 (corrigir no sistema oficial).
+        Papéis: operador_integracao (conectores), auditor.
+      operationId: registerProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionRecordRegistration' }
+      responses:
+        '201':
+          description: Registro criado e pré-auditado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        '200':
+          description: Registro atualizado (ou inalterado) e pré-auditado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/{recordId}:
+    get:
+      tags: [production]
+      operationId: getProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/by-source/{system}/{sourceRecordId}:
+    get:
+      tags: [production]
+      summary: Registro de produção pelo identificador de origem (uso dos conectores)
+      operationId: getProductionRecordBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/{recordId}/corrections:
+    post:
+      tags: [production]
+      summary: Corrigir registro com justificativa e revalidar (PRO-006)
+      description: |
+        Somente humano com papel `auditor` (agente de IA → 403, PRO-010). Justificativa obrigatória
+        (≥ 10 caracteres); alterações e justificativa vão para `production_record_history` e `audit_log`.
+        Permitida em `pending`, `validated` (fora de lote aprovado) e `rejected` (reapresentação). Avisos
+        podem ser dispensados (`waive_issue_ids`); erros não. Sinaliza o `ProductionPreAuditWorkflow`.
+      operationId: correctProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionCorrection' }
+      responses:
+        '200':
+          description: Corrigido e revalidado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/issues:
+    get:
+      tags: [production]
+      summary: Pendências de pré-auditoria (fila do auditor; leitura permitida ao agente de IA)
+      operationId: listProductionIssues
+      parameters:
+        - name: severity
+          in: query
+          schema: { type: string, enum: [error, warning] }
+        - name: rule
+          in: query
+          description: rule_id (ex. `cbo_incompatible`)
+          schema: { type: string }
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionKind' }
+        - name: status
+          in: query
+          description: padrão `open`
+          schema: { type: string, enum: [open, resolved, waived] }
+        - name: record_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionIssue' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches:
+    get:
+      tags: [production]
+      operationId: listProductionBatches
+      parameters:
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionBatchStatus' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionBatch' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [production]
+      summary: Gerar lote (rascunho) de uma competência/CNES/tipo — somente registros `validated` (PRO-005)
+      description: |
+        Inclui todos os registros `validated` da competência/CNES/tipo que não estão em outro lote. Sem
+        registros elegíveis → 422. Papel: auditor. O lote nasce `draft` e só pode ser exportado após
+        aprovação humana (`/approve`).
+      operationId: createProductionBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchCreate' }
+      responses:
+        '201':
+          description: Lote gerado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}:
+    get:
+      tags: [production]
+      operationId: getProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}/approve:
+    post:
+      tags: [production]
+      summary: Aprovação humana obrigatória do lote (PRO-010)
+      description: |
+        Papéis `auditor` ou `gestor`, com justificativa (≥ 10 caracteres). Agente de IA → 403 mesmo que o
+        token carregue outro papel. Lote fora de `draft` → 409. Registrado em `audit_log`.
+      operationId: approveProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchApproval' }
+      responses:
+        '200':
+          description: Aprovado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}/export:
+    post:
+      tags: [production]
+      summary: Exportar lote aprovado em layout configurável (arquivo + sha256); marca registros `exported`
+      description: |
+        Gera o arquivo no armazenamento de exportação (`ExportStorage`) e devolve a referência e o SHA-256.
+        Layouts: `bpa_mag_ref_v1` (BPA-Mag simplificado — **layout de referência a homologar** com o
+        validador oficial; só BPA-C/BPA-I) e `csv_ref_v1` (qualquer tipo). A transmissão oficial continua
+        no sistema oficial (SIA/SIH); o barramento só marca `exported`. Papel: auditor. Agente de IA → 403.
+        Lote não aprovado → 409.
+      operationId: exportProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchExportRequest' }
+      responses:
+        '200':
+          description: Exportado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/outcomes:
+    post:
+      tags: [production]
+      summary: Retorno do processamento oficial por registro ou lote (PRO-008)
+      description: |
+        `transmitted`/`received`/`accepted` aceitam escopo de lote (`batch_id`); `rejected` e `paid` exigem
+        registro (`production_record_id` ou `record_source`). `rejected` reabre pendência com o motivo
+        oficial (issue `official_rejection`) e tarefa `production_issue`; `paid` grava o valor. Idempotente
+        por `(source.system, source.source_record_id, outcome, registro/lote)`. Papéis: operador_integracao,
+        auditor.
+      operationId: registerProductionOutcome
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionOutcomeRegistration' }
+      responses:
+        '200':
+          description: Aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionOutcomeResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/summary:
+    get:
+      tags: [production]
+      summary: Painel de produção da competência (PRO-009)
+      description: Papéis gestor, auditor, admin_municipal. Contagens por status, valores estimado/pago e perda evitável estimada.
+      operationId: getProductionSummary
+      parameters:
+        - name: competence
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionSummary' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/deadlines:
+    get:
+      tags: [production]
+      summary: Competências e prazos de apresentação (PRO-007)
+      description: |
+        Prazo configurável em `production.production_deadline` (seed global: dia 10 do mês seguinte, 23:59
+        America/Sao_Paulo; linha do tenant sobrepõe). Alertas D-5 e D-1 viram tarefas na fila `auditoria`.
+      operationId: listProductionDeadlines
+      parameters:
+        - name: from
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: to
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionDeadline' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/admin/rules:
     get:
       tags: [admin]
@@ -1802,6 +2174,16 @@ components:
       schema: { type: string }
     carePlanId:
       name: carePlanId
+      in: path
+      required: true
+      schema: { type: string }
+    recordId:
+      name: recordId
+      in: path
+      required: true
+      schema: { type: string }
+    batchId:
+      name: batchId
       in: path
       required: true
       schema: { type: string }
@@ -3004,3 +3386,308 @@ components:
           items:
             type: object
             additionalProperties: true
+
+    Competence:
+      type: string
+      pattern: '^[0-9]{4}(0[1-9]|1[0-2])$'
+      description: Competência AAAAMM
+
+    ProductionKind:
+      type: string
+      enum: [bpa_c, bpa_i, apac, aih]
+      description: Instrumento de registro (BPA consolidado, BPA individualizado, APAC, AIH)
+
+    ProductionRecordStatus:
+      type: string
+      enum: [generated, validated, pending, exported, transmitted, received, rejected, corrected, approved, paid]
+
+    ProductionBatchStatus:
+      type: string
+      enum: [draft, approved, exported, transmitted, processed]
+
+    ExternalRef:
+      type: object
+      description: Referência a registro de outro domínio pelo vínculo de origem
+      required: [source_record_id]
+      properties:
+        system: { type: string }
+        source_record_id: { type: string }
+
+    ProductionRecordRegistration:
+      type: object
+      required: [source, kind, competence, cnes, professional_cbo, procedure_code, quantity, attendance_date]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        professional_cns:
+          type: string
+          writeOnly: true
+          description: CNS do profissional (opcional). Persistido só como hash (HMAC por tenant), máscara e cifra (export); nunca em claro em eventos/respostas/logs.
+        professional_cbo: { type: string, pattern: '^[0-9]{6}$' }
+        procedure_code: { type: string, pattern: '^[0-9]{10}$', description: Código SIGTAP }
+        quantity: { type: integer, minimum: 1, maximum: 999999 }
+        citizen_ref:
+          allOf:
+            - $ref: '#/components/schemas/CitizenRef'
+          description: Obrigatório para bpa_i, apac e aih (ausente → pendência citizen_unresolved). identifier_value (CNS/CPF) é validado (DV) e guardado só como hash/máscara/cifra.
+        cid_code: { type: string, description: CID-10 (opcional) }
+        attendance_date: { type: string, format: date }
+        character_of_care: { type: string, enum: [elective, urgency, work_accident, other], description: Caráter do atendimento }
+        apac_number: { type: string, maxLength: 13 }
+        aih_number: { type: string, maxLength: 13 }
+        encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+        appointment_ref: { $ref: '#/components/schemas/ExternalRef' }
+        hospital_episode_ref: { $ref: '#/components/schemas/ExternalRef' }
+
+    ProductionIssue:
+      type: object
+      required: [id, production_record_id, rule_id, rule_version, severity, message, status, created_at]
+      properties:
+        id: { type: string }
+        production_record_id: { type: string }
+        rule_id: { type: string }
+        rule_version: { type: string, description: 'ex.: production-validation/1' }
+        severity: { type: string, enum: [error, warning] }
+        field: { type: string }
+        message: { type: string }
+        status: { type: string, enum: [open, resolved, waived] }
+        origin: { type: string, enum: [rule, workflow, official_return] }
+        task_id: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolution_note: { type: string }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        procedure_code: { type: string }
+        record_status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+
+    ProductionRecord:
+      type: object
+      required: [id, kind, competence, cnes, procedure_code, quantity, status, attendance_date, source_system, source_record_id]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        health_unit_name: { type: string }
+        professional_cns_masked: { type: string }
+        professional_cbo: { type: string }
+        procedure_code: { type: string }
+        procedure_display: { type: string }
+        quantity: { type: integer }
+        citizen_id: { type: string }
+        citizen_identifier_masked: { type: string }
+        cid_code: { type: string }
+        attendance_date: { type: string, format: date }
+        character_of_care: { type: string }
+        apac_number: { type: string }
+        aih_number: { type: string }
+        appointment_id: { type: string }
+        hospital_episode_id: { type: string }
+        encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+        status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+        rule_version: { type: string }
+        validated_at: { type: string, format: date-time }
+        unit_value: { type: number, description: Valor unitário SIGTAP (atributo `valor`) na competência }
+        estimated_value: { type: number }
+        paid_amount: { type: number }
+        approved_quantity: { type: integer }
+        outcome_reason_code: { type: string }
+        outcome_reason: { type: string }
+        batch_id: { type: string }
+        deadline_at: { type: string, format: date-time }
+        correction_count: { type: integer }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ProductionIssue' }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              action: { type: string }
+              from_status: { type: string }
+              to_status: { type: string }
+              actor_id: { type: string }
+              justification: { type: string }
+              rule_version: { type: string }
+              occurred_at: { type: string, format: date-time }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    ProductionCorrection:
+      type: object
+      required: [justification, changes]
+      properties:
+        justification: { type: string, minLength: 10, maxLength: 1000 }
+        changes:
+          type: object
+          description: Campos corrigidos (somente os informados mudam)
+          properties:
+            cnes: { type: string, pattern: '^[0-9]{7}$' }
+            professional_cbo: { type: string, pattern: '^[0-9]{6}$' }
+            professional_cns: { type: string, writeOnly: true }
+            procedure_code: { type: string, pattern: '^[0-9]{10}$' }
+            quantity: { type: integer, minimum: 1 }
+            cid_code: { type: string }
+            attendance_date: { type: string, format: date }
+            competence: { $ref: '#/components/schemas/Competence' }
+            character_of_care: { type: string, enum: [elective, urgency, work_accident, other] }
+            apac_number: { type: string }
+            aih_number: { type: string }
+            citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+            encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+            appointment_ref: { $ref: '#/components/schemas/ExternalRef' }
+            hospital_episode_ref: { $ref: '#/components/schemas/ExternalRef' }
+        waive_issue_ids:
+          type: array
+          description: Pendências de severidade warning dispensadas com a mesma justificativa (erros não são dispensáveis)
+          items: { type: string }
+
+    ProductionBatchCreate:
+      type: object
+      required: [competence, cnes, kind]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+
+    ProductionBatchApproval:
+      type: object
+      required: [justification]
+      properties:
+        justification: { type: string, minLength: 10, maxLength: 1000 }
+
+    ProductionBatchExportRequest:
+      type: object
+      properties:
+        layout: { type: string, enum: [bpa_mag_ref_v1, csv_ref_v1], description: 'Padrão: bpa_mag_ref_v1 para BPA-C/BPA-I; csv_ref_v1 para APAC/AIH' }
+
+    ProductionBatch:
+      type: object
+      required: [id, competence, cnes, kind, status, records_count, created_at]
+      properties:
+        id: { type: string }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        status: { $ref: '#/components/schemas/ProductionBatchStatus' }
+        records_count: { type: integer }
+        total_quantity: { type: integer }
+        estimated_value: { type: number }
+        record_ids: { type: array, items: { type: string } }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        approved_by: { type: string }
+        approved_at: { type: string, format: date-time }
+        approval_justification: { type: string }
+        export:
+          type: object
+          properties:
+            layout: { type: string }
+            file_ref: { type: string, description: Referência no armazenamento de exportação (arquivo/object storage) }
+            sha256: { type: string }
+            size_bytes: { type: integer }
+            lines: { type: integer }
+            lines_missing_identifiers: { type: integer, description: Linhas sem CNS cifrado disponível (preenchidas com zeros — revisar antes de transmitir) }
+            exported_by: { type: string }
+            exported_at: { type: string, format: date-time }
+        protocol_number: { type: string }
+        version: { type: integer }
+
+    ProductionOutcomeRegistration:
+      type: object
+      required: [source, outcome, processed_at]
+      description: Informe exatamente um entre production_record_id, record_source e batch_id
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        outcome: { type: string, enum: [transmitted, received, accepted, rejected, paid] }
+        production_record_id: { type: string }
+        record_source: { $ref: '#/components/schemas/ExternalRef' }
+        batch_id: { type: string }
+        processed_at: { type: string, format: date-time }
+        reason_code: { type: string, maxLength: 32 }
+        reason: { type: string, maxLength: 500 }
+        paid_amount: { type: number, minimum: 0 }
+        approved_quantity: { type: integer, minimum: 0 }
+        protocol_number: { type: string, maxLength: 64 }
+
+    ProductionOutcomeResult:
+      type: object
+      required: [outcome, affected]
+      properties:
+        outcome: { type: string }
+        batch_id: { type: string }
+        unchanged: { type: boolean, description: Retorno já aplicado (idempotência) }
+        affected:
+          type: array
+          items:
+            type: object
+            properties:
+              production_record_id: { type: string }
+              status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+
+    ProductionSummary:
+      type: object
+      required: [competence, totals]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        deadline_at: { type: string, format: date-time }
+        days_to_deadline: { type: integer }
+        totals:
+          type: object
+          properties:
+            records: { type: integer }
+            generated: { type: integer }
+            validated: { type: integer }
+            pending: { type: integer }
+            exported: { type: integer }
+            transmitted: { type: integer }
+            received: { type: integer }
+            rejected: { type: integer }
+            corrected: { type: integer, description: Registros com ao menos uma correção humana }
+            approved: { type: integer }
+            paid: { type: integer }
+        values:
+          type: object
+          properties:
+            estimated: { type: number, description: Σ quantidade × valor SIGTAP }
+            validated: { type: number }
+            paid: { type: number }
+            pending: { type: number }
+            rejected: { type: number }
+            avoidable_loss_estimated: { type: number, description: Valor de registros pendentes + rejeitados ainda não corrigidos (perda evitável se tratados no prazo) }
+        issues_by_rule:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id: { type: string }
+              severity: { type: string }
+              open: { type: integer }
+        by_kind:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { $ref: '#/components/schemas/ProductionKind' }
+              records: { type: integer }
+              estimated: { type: number }
+
+    ProductionDeadline:
+      type: object
+      required: [competence, deadline_at, status]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        deadline_at: { type: string, format: date-time }
+        status: { type: string, enum: [open, closing, closed], description: closing = até 5 dias do prazo }
+        days_remaining: { type: integer }
+        alert_days: { type: array, items: { type: integer } }
+        configured_by: { type: string, enum: [global, tenant, default] }
+        pending_records: { type: integer }
+        validated_records: { type: integer }

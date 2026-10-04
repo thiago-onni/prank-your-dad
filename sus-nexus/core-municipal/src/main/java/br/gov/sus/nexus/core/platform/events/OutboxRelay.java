@@ -45,7 +45,11 @@ public class OutboxRelay {
           Map.entry("hospital_episode", "hospital-adt-out"),
           Map.entry("hospital_discharge", "hospital-discharge-out"),
           Map.entry("care_plan", "careplan-out"),
-          Map.entry("care_gap", "caregap-out"));
+          Map.entry("care_gap", "caregap-out"),
+          Map.entry("production_record", "production-record-out"),
+          Map.entry("production_issue", "production-validation-out"),
+          Map.entry("production_batch", "production-submission-out"),
+          Map.entry("production_outcome", "production-outcome-out"));
 
   @Inject EntityManager entityManager;
   @Inject ObjectMapper objectMapper;
@@ -101,6 +105,22 @@ public class OutboxRelay {
   @Inject
   @Channel("caregap-out")
   MutinyEmitter<String> careGapOut;
+
+  @Inject
+  @Channel("production-record-out")
+  MutinyEmitter<String> productionRecordOut;
+
+  @Inject
+  @Channel("production-validation-out")
+  MutinyEmitter<String> productionValidationOut;
+
+  @Inject
+  @Channel("production-submission-out")
+  MutinyEmitter<String> productionSubmissionOut;
+
+  @Inject
+  @Channel("production-outcome-out")
+  MutinyEmitter<String> productionOutcomeOut;
 
   @ConfigProperty(name = "sus.outbox.relay.enabled", defaultValue = "false")
   boolean enabled;
@@ -206,6 +226,10 @@ public class OutboxRelay {
       case "hospital-discharge-out" -> hospitalDischargeOut;
       case "careplan-out" -> carePlanOut;
       case "caregap-out" -> careGapOut;
+      case "production-record-out" -> productionRecordOut;
+      case "production-validation-out" -> productionValidationOut;
+      case "production-submission-out" -> productionSubmissionOut;
+      case "production-outcome-out" -> productionOutcomeOut;
       default -> null;
     };
   }

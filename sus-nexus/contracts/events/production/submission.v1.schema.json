@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/production/submission/1.0.0",
+  "title": "sus.production.submission.* — data",
+  "description": "Ciclo do lote de produção (PRO-005/010): gerado (somente registros validados), aprovado por humano (auditor/gestor — nunca agente), exportado em layout de referência (arquivo por data_ref + sha256) e transmitido (confirmação vinda do sistema oficial). O barramento NUNCA transmite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "batch_id", "competence", "cnes", "kind", "status", "records_count"],
+  "properties": {
+    "action": { "type": "string", "enum": ["batch_generated", "batch_approved", "exported", "transmitted"] },
+    "batch_id": { "type": "string", "pattern": "^pbat_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "competence": { "type": "string", "pattern": "^[0-9]{4}(0[1-9]|1[0-2])$" },
+    "cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "kind": { "type": "string", "enum": ["bpa_c", "bpa_i", "apac", "aih"] },
+    "status": { "type": "string", "enum": ["draft", "approved", "exported", "transmitted", "processed"] },
+    "records_count": { "type": "integer", "minimum": 0 },
+    "total_quantity": { "type": "integer", "minimum": 0 },
+    "estimated_value": { "type": "number", "minimum": 0 },
+    "approved_by": { "type": "string" },
+    "actor_kind": { "type": "string", "enum": ["user", "service", "official_system"], "description": "Nunca agent (PRO-010)." },
+    "layout": { "type": "string" },
+    "file_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "file_lines": { "type": "integer", "minimum": 0 },
+    "protocol_number": { "type": "string" }
+  }
+}

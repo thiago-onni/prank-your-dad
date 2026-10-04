@@ -40,6 +40,11 @@ topics:
     class: ingest
     key: source.source_record_id
     retention_days: 7
+  # registros de produção (BPA-C/BPA-I/APAC/AIH) e retornos do processamento oficial (SIA/SIH)
+  - name: sus.ingest.production.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
 
   # ---- identidade ----
   - name: sus.identity.citizen.v1
@@ -109,7 +114,7 @@ topics:
   - name: sus.production.record.v1
     class: domain
     key: data.production_record_id
-    events: [created, validated, pending]
+    events: [created, validated, pending, corrected]
   - name: sus.production.validation.v1
     class: domain
     key: data.production_record_id
@@ -117,11 +122,12 @@ topics:
   - name: sus.production.submission.v1
     class: domain
     key: data.batch_id
-    events: [batch_generated, transmitted]
+    # o barramento só exporta (exported); a transmissão oficial ocorre no sistema oficial e volta como retorno
+    events: [batch_generated, batch_approved, exported, transmitted]
   - name: sus.production.outcome.v1
     class: domain
     key: data.production_record_id
-    events: [accepted, rejected, paid]
+    events: [received, accepted, rejected, paid]
 
   # ---- comunicação e consentimento ----
   - name: sus.communication.v1

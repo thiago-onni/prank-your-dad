@@ -682,6 +682,102 @@ spec:
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
+  name: sus-ingest-production-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
   name: sus-identity-citizen-v1
   namespace: {{ $ns }}
   labels:
@@ -2243,7 +2339,7 @@ metadata:
   annotations:
     sus-nexus.gov.br/topic: sus.production.record.v1
     sus-nexus.gov.br/partition-key: data.production_record_id
-    sus-nexus.gov.br/events: "created,validated,pending"
+    sus-nexus.gov.br/events: "created,validated,pending,corrected"
     sus-nexus.gov.br/schema-compatibility: BACKWARD
 spec:
   topicName: sus.production.record.v1
@@ -2437,7 +2533,7 @@ metadata:
   annotations:
     sus-nexus.gov.br/topic: sus.production.submission.v1
     sus-nexus.gov.br/partition-key: data.batch_id
-    sus-nexus.gov.br/events: "batch_generated,transmitted"
+    sus-nexus.gov.br/events: "batch_generated,batch_approved,exported,transmitted"
     sus-nexus.gov.br/schema-compatibility: BACKWARD
 spec:
   topicName: sus.production.submission.v1
@@ -2534,7 +2630,7 @@ metadata:
   annotations:
     sus-nexus.gov.br/topic: sus.production.outcome.v1
     sus-nexus.gov.br/partition-key: data.production_record_id
-    sus-nexus.gov.br/events: "accepted,rejected,paid"
+    sus-nexus.gov.br/events: "received,accepted,rejected,paid"
     sus-nexus.gov.br/schema-compatibility: BACKWARD
 spec:
   topicName: sus.production.outcome.v1

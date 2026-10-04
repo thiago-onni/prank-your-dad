@@ -60,6 +60,13 @@ public final class Ulid {
   public static final String RULE_VERSION = "rv_";
   public static final String CONSENT = "cons_";
   public static final String COMMUNICATION_PREFERENCE = "cpref_";
+  public static final String PRODUCTION_RECORD = "prod_";
+  public static final String PRODUCTION_HISTORY = "prh_";
+  public static final String PRODUCTION_ISSUE = "pis_";
+  public static final String PRODUCTION_BATCH = "pbat_";
+  public static final String PRODUCTION_BATCH_ITEM = "pbi_";
+  public static final String PRODUCTION_SUBMISSION = "psub_";
+  public static final String PRODUCTION_OUTCOME = "pout_";
 
   private static final char[] ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
   private static final Pattern ULID_PATTERN = Pattern.compile("^[0-9A-HJKMNP-TV-Z]{26}$");
