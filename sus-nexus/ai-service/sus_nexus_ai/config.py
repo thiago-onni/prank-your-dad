@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     llm_api_base: str | None = None
     llm_api_key: str | None = None
     llm_mock_response: str | None = None
-    """Quando definido, LiteLLM responde com este texto (``mock_response``) — útil em homologação."""
+    """Quando definido, LiteLLM responde com este texto (``mock_response``)."""
     llm_cost_per_1k_input_usd: float = 0.00015
     llm_cost_per_1k_output_usd: float = 0.0006
 
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # --- kill switch (AIA-009) ---
     kill_switch_file: Path | None = None
     kill_switch_env: str | None = Field(default=None, alias="AI_KILL_SWITCH")
-    """JSON com ``{"global":false,"agents":[],"tools":[],"tenants":[]}`` via variável de ambiente."""
+    """JSON ``{"global":false,"agents":[],"tools":[],"tenants":[]}`` via variável de ambiente."""
 
     # --- segurança / identidade ---
     auth_mode: Literal["jwt", "mock"] = "jwt"
@@ -89,14 +89,16 @@ class Settings(BaseSettings):
 
     @property
     def keycloak_token_url(self) -> str:
-        return f"{self.keycloak_base_url}/realms/{self.keycloak_realm}/protocol/openid-connect/token"
+        return (
+            f"{self.keycloak_base_url}/realms/{self.keycloak_realm}/protocol/openid-connect/token"
+        )
 
     @property
     def resolved_jwks_url(self) -> str:
-        return (
-            self.keycloak_jwks_url
-            or f"{self.keycloak_base_url}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
-        )
+        if self.keycloak_jwks_url:
+            return self.keycloak_jwks_url
+        realm = f"{self.keycloak_base_url}/realms/{self.keycloak_realm}"
+        return f"{realm}/protocol/openid-connect/certs"
 
 
 @lru_cache(maxsize=1)
