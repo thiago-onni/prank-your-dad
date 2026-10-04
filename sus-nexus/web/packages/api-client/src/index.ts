@@ -17,6 +17,7 @@ export {
   useCoreClient,
   useAiClient,
   useCurrentPurpose,
+  useBffBaseUrl,
   type CoreApiProviderProps,
 } from './provider';
 export * from './hooks/citizens';
@@ -31,6 +32,10 @@ export * from './hooks/exams';
 export * from './hooks/hospital';
 export * from './hooks/careplans';
 export * from './hooks/production';
+export * from './hooks/situacao';
+export * from './hooks/fhir';
+export * from './situacao/types';
+export { bffGetJson } from './bff';
 export * from './ai/types';
 export {
   createAiClient,

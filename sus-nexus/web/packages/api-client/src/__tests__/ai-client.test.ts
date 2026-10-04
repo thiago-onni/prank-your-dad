@@ -68,6 +68,7 @@ describe('normalização do ai-service', () => {
       kind: 'write',
       owner: 'o',
       stub: false,
+      data_layer: 'operational',
       input_schema: {},
       output_schema: {},
     });

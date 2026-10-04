@@ -56,6 +56,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/bi_situation_analyst/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run BI situation analyst
+         * @description Análise de situação da competência (somente dados agregados; sem ações).
+         *
+         *     O município é sempre o do token (`municipality_id`); o corpo não aceita tenant nem campos
+         *     extras. Papéis: `gestor`, `auditor`, `admin_municipal` (espelho de `data.sus.agents.invoke`).
+         *     A saída (`output`) segue o `output_schema` do agente em `GET /agents`.
+         */
+        post: operations["run_bi_situation_analyst"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/approvals": {
         parameters: {
             query?: never;
@@ -366,6 +390,35 @@ export interface components {
              */
             validation_status: "not_run" | "valid" | "invalid_output";
         };
+        /**
+         * BiSituationInput
+         * @description Entrada do agente. **Sem** município/tenant (vem do token) e sem campos extras.
+         */
+        BiSituationInput: {
+            /** Care Line */
+            care_line?: string | null;
+            /**
+             * Competence
+             * @description Competência AAAAMM.
+             */
+            competence: string;
+            /**
+             * Indicators
+             * @description Subconjunto da whitelist.
+             */
+            indicators?: ("AGE_ABSENTEISMO" | "AGE_COMPARECIMENTO" | "AGE_CANCELAMENTO" | "AGE_REAPROVEITAMENTO" | "REG_ESPERA_P50_DIAS" | "REG_ESPERA_P90_DIAS" | "REG_SLA_CUMPRIDO" | "REG_DEVOLUCAO" | "REG_REALIZACAO" | "EXA_CICLO_COMPLETO" | "EXA_RESULTADO_SEM_RETORNO" | "EXA_DIAS_PEDIDO_RESULTADO_P50" | "HOS_REINTERNACAO_30D" | "HOS_CONTATO_POS_ALTA_7D" | "HOS_PERMANENCIA_MEDIA_DIAS" | "CUI_LACUNAS_RESOLVIDAS" | "TAR_SLA_CUMPRIDO" | "TAR_AUTOMACAO" | "TAR_AGENTE_SLA_CUMPRIDO" | "PRO_GLOSA")[] | null;
+            /**
+             * Question
+             * @description Foco opcional do gestor (tratado como dado; não altera consultas).
+             */
+            question?: string | null;
+            /**
+             * Trend Months
+             * @description Janela de tendência (3–6).
+             * @default 6
+             */
+            trend_months: number;
+        };
         /** DecisionRequest */
         DecisionRequest: {
             /** Justification */
@@ -434,6 +487,11 @@ export interface components {
         ToolDescriptor: {
             /** Action Class */
             action_class: string;
+            /**
+             * Data Layer
+             * @default operational
+             */
+            data_layer: string;
             /** Description */
             description: string;
             /** Input Schema */
@@ -588,6 +646,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentRunRecord"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_bi_situation_analyst: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BiSituationInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRecord"];
+                };
+            };
+            /** @description papel sem permissão ou token sem município */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

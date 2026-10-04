@@ -565,7 +565,7 @@ trino:
       pipeline:dbt,openmetadata
       analysts:analista
       analytics_identified:busca.ativa
-      bi:metabase,superset,ai-bi-agent
+      bi:metabase,superset,ai-bi-agent,sus-nexus-web
       gestor_ibge_3143302:gestor
   securityContext:
     runAsUser: 1000

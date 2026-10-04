@@ -48,4 +48,7 @@ export const coreKeys = {
   productionBatch: (id: string) => [...coreKeys.production(), 'batch', id] as const,
   productionSummary: (params: object) => [...coreKeys.production(), 'summary', params] as const,
   productionDeadlines: (params: object) => [...coreKeys.production(), 'deadlines', params] as const,
+  situation: (view: string, params: object) => [...coreKeys.all, 'situacao', view, params] as const,
+  fhirEverything: (patientId: string, params: object) =>
+    [...coreKeys.all, 'fhir', 'everything', patientId, params] as const,
 };

@@ -1,5 +1,6 @@
 import { ROLES } from '@sus-nexus/auth';
 import { t } from '@/i18n';
+import { SITUATION_ROLES } from '@/lib/situacao/roles';
 
 export interface NavItem {
   href: string;
@@ -80,8 +81,9 @@ export const NAV_ITEMS: NavItem[] = [
   {
     href: '/situacao',
     label: t.nav.situation,
-    roles: [ROLES.GESTOR, ROLES.DPO],
-    description: 'Sala de situação (F4)',
+    roles: SITUATION_ROLES,
+    description:
+      'Sala de situação: indicadores × meta, séries, desigualdade territorial, capacidade e risco',
   },
 ];
 

@@ -9,6 +9,7 @@ import {
   type AgentDescriptor,
   type AgentRunRecord,
   type ApprovalStatus,
+  type BiSituationInput,
   type KillSwitchResponse,
   type KillSwitchState,
   type RunStatus,
@@ -53,6 +54,8 @@ export interface AiClient {
   listApprovals(params?: ApprovalsQuery): Promise<AgentApproval[]>;
   getKillSwitch(): Promise<KillSwitchResponse>;
   setKillSwitch(state: KillSwitchState): Promise<KillSwitchResponse>;
+  /** Agente de BI (somente agregados; município do token; gestor/auditor/admin_municipal). */
+  runBiSituationAnalyst(input: BiSituationInput): Promise<AgentRunRecord>;
 }
 
 export function createAiRawClient(options: AiClientOptions): AiRawClient {
@@ -123,5 +126,7 @@ export function createAiClient(options: AiClientOptions): AiClient {
     getKillSwitch: async () => normalizeKillSwitch(unwrap(await raw.GET('/admin/kill-switch'))),
     setKillSwitch: async (state) =>
       normalizeKillSwitch(unwrap(await raw.POST('/admin/kill-switch', { body: state }))),
+    runBiSituationAnalyst: async (input) =>
+      normalizeRun(unwrap(await raw.POST('/agents/bi_situation_analyst/run', { body: input }))),
   };
 }

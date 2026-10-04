@@ -1,5 +1,15 @@
 export * from './lib/format';
 export * from './lib/labels';
+export {
+  maskFhirIdentifiers,
+  scrubIdentifiersInText,
+  summarizeFhirResource,
+  codeableText,
+  FHIR_TYPE_LABELS,
+  type FhirSummary,
+  type FhirSummaryField,
+  type JsonObject,
+} from './lib/fhir';
 export { CitizenHeader, type CitizenHeaderProps } from './components/CitizenHeader';
 export {
   IdentityConfidenceBadge,

@@ -36,6 +36,9 @@ import {
 } from './data';
 import { careHandlers } from './care-handlers';
 import { productionHandlers } from './production-handlers';
+import { trinoHandlers } from './trino-handlers';
+import { fhirHandlers } from './fhir-handlers';
+import { biAgentHandlers } from './bi-agent-handlers';
 import { delay, normalize, paginate, problem, readJson, requirePurpose } from './http-utils';
 
 /**
@@ -618,8 +621,11 @@ export const handlers = [
   // ---------- hospital / plano de cuidado / lacunas / protocolos ----------
   ...careHandlers,
   ...productionHandlers,
+  ...trinoHandlers,
+  ...fhirHandlers,
 
   // ---------- ai-service ----------
+  ...biAgentHandlers,
   http.get('*/agents', async () => {
     await delay();
     return HttpResponse.json(aiAgents);

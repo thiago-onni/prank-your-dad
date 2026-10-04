@@ -223,3 +223,99 @@ function inferActionClass(toolName: string): ActionClass | undefined {
   if (/\.(merge|decide|change_priority|transmit)/.test(toolName)) return 'forbidden';
   return 'requires_approval';
 }
+
+// ---------------------------------------------------------------------------------------------
+// Agente de BI (bi_situation_analyst) — entrada do contrato; saída segue o `output_schema`
+// publicado em `GET /agents` (o contrato tipa `output` como objeto livre).
+// ---------------------------------------------------------------------------------------------
+
+export type BiSituationInput = Schemas['BiSituationInput'];
+export type BiIndicatorCode = NonNullable<BiSituationInput['indicators']>[number];
+export type BiTrendClass = 'melhora' | 'piora' | 'estavel' | 'indeterminado';
+
+export interface BiOffTargetFinding {
+  indicator_code: BiIndicatorCode;
+  value: number;
+  target: number;
+  comment?: string;
+}
+export interface BiTrendFinding {
+  indicator_code: BiIndicatorCode;
+  classification: BiTrendClass;
+  first_competence?: string | null;
+  last_competence?: string | null;
+  first_value?: number | null;
+  last_value?: number | null;
+  comment?: string;
+}
+export interface BiInequalityEndpoint {
+  health_unit_cnes?: string | null;
+  team_ine?: string | null;
+  value: number;
+}
+export interface BiInequalityFinding {
+  indicator_code: BiIndicatorCode;
+  level: 'unidade' | 'territorio';
+  care_line?: string | null;
+  highest: BiInequalityEndpoint;
+  lowest: BiInequalityEndpoint;
+  ratio?: number | null;
+  comment?: string;
+}
+export interface BiHypothesis {
+  kind: 'hipotese';
+  statement: string;
+  related_indicators: BiIndicatorCode[];
+  how_to_verify?: string;
+}
+export interface BiRecommendation {
+  kind: 'recomendacao_textual';
+  action: string;
+  rationale?: string;
+  related_indicators?: BiIndicatorCode[];
+  responsible_area?: string | null;
+}
+export interface BiSourceRef {
+  indicator_code: BiIndicatorCode;
+  competence: string;
+  scope: 'municipio' | 'unidade' | 'territorio';
+  health_unit_cnes?: string | null;
+  team_ine?: string | null;
+  care_line?: string | null;
+  value?: number | null;
+  suppressed?: boolean;
+}
+export interface BiSituationOutput {
+  competence: string;
+  summary: string;
+  off_target: BiOffTargetFinding[];
+  trends: BiTrendFinding[];
+  inequalities: BiInequalityFinding[];
+  hypotheses: BiHypothesis[];
+  recommendations: BiRecommendation[];
+  data_limitations: string[];
+  sources: BiSourceRef[];
+}
+
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+/**
+ * Lê a saída do agente de BI de forma defensiva. Devolve `null` se a forma mínima não bater
+ * (a UI trata como saída inválida). Hipóteses sempre rotuladas (`kind: 'hipotese'`).
+ */
+export function parseBiSituationOutput(output: unknown): BiSituationOutput | null {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
+  const o = output as Record<string, unknown>;
+  if (typeof o.competence !== 'string' || typeof o.summary !== 'string') return null;
+  return {
+    competence: o.competence,
+    summary: o.summary,
+    off_target: arr(o.off_target) as BiOffTargetFinding[],
+    trends: arr(o.trends) as BiTrendFinding[],
+    inequalities: arr(o.inequalities) as BiInequalityFinding[],
+    hypotheses: (arr(o.hypotheses) as BiHypothesis[]).map((h) => ({ ...h, kind: 'hipotese' })),
+    recommendations: arr(o.recommendations) as BiRecommendation[],
+    data_limitations: arr(o.data_limitations).filter((x): x is string => typeof x === 'string'),
+    sources: arr(o.sources) as BiSourceRef[],
+  };
+}

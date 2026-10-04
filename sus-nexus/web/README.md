@@ -18,6 +18,8 @@ web/
 │       ├── src/app/api/ai/[...path]/route.ts     # Proxy BFF → ai-service (Bearer + tenant; lista de rotas permitida)
 │       ├── src/app/api/auth/[...nextauth]/route.ts   # Auth.js (Keycloak) ou mock
 │       ├── src/app/api/session/purpose/route.ts  # Cookie httpOnly com X-Purpose-Of-Use
+│       ├── src/app/api/situacao/[view]/route.ts  # BFF Sala de Situação → Trino (consultas fixas, município do token)
+│       ├── src/app/api/fhir/r4/[...path]/route.ts # BFF → FHIR Gateway (só Patient/$everything; CPF/CNS mascarados)
 │       ├── src/middleware.ts       # CSP com nonce + redirecionamento para /entrar
 │       ├── src/features/           # integracoes | cadastro | cidadaos | tarefas | cuidado | hospital | admin | regulacao | exames | agentes
 │       ├── src/mocks/              # MSW: dados sintéticos + handlers de todos os endpoints (core e ai-service);
@@ -119,23 +121,29 @@ docker run -p 3000:3000 --env-file web/apps/shell/.env.local sus-nexus-web
 
 ## Variáveis de ambiente (apps/shell)
 
-| Variável                                    | Padrão                                              | Descrição                                              |
-| ------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------ |
-| `AUTH_MODE`                                 | `keycloak`                                          | `mock` para desenvolvimento sem Keycloak               |
-| `AUTH_SECRET`                               | —                                                   | Segredo do Auth.js (obrigatório em `keycloak`)         |
-| `AUTH_URL`                                  | —                                                   | URL pública do shell (ex.: `http://localhost:3000`)    |
-| `AUTH_KEYCLOAK_ID` / `AUTH_KEYCLOAK_SECRET` | —                                                   | Cliente OIDC confidencial                              |
-| `AUTH_KEYCLOAK_ISSUER`                      | `http://localhost:8180/realms/sus-nexus`            | Issuer do realm                                        |
-| `AUTH_MOCK_USER` / `AUTH_MOCK_EMAIL`        | `Maria Operadora (mock)`                            | Usuário fake                                           |
-| `AUTH_MOCK_ROLES`                           | `cadastrador,operador_integracao,enfermagem,gestor` | Papéis do usuário fake (vírgula)                       |
-| `AUTH_MOCK_MUNICIPALITY`                    | `ibge_3143302`                                      | `municipality_id` do usuário fake                      |
-| `AUTH_MOCK_CNES`                            | `2126672`                                           | Lotação fake (claim `cnes`, vírgula) — UBS padrão      |
-| `AUTH_MOCK_TEAMS`                           | —                                                   | Equipes (INE) fake (claim `teams`, vírgula)            |
-| `AUTH_MOCK_MICROAREAS`                      | —                                                   | Microáreas fake (claim `microareas`; ex. ACS `01,02`)  |
-| `AUTH_SECURE_COOKIES`                       | `false` (true em produção)                          | Força cookies `Secure`                                 |
-| `CORE_API_URL`                              | `http://localhost:8080`                             | Base do core municipal (somente servidor)              |
-| `AI_SERVICE_URL`                            | `http://localhost:8090`                             | Base do ai-service (somente servidor; proxy `/api/ai`) |
-| `NEXT_PUBLIC_API_MOCK`                      | `false`                                             | `true` ativa o MSW no servidor (core **e** ai-service) |
+| Variável                                    | Padrão                                              | Descrição                                                                                      |
+| ------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `AUTH_MODE`                                 | `keycloak`                                          | `mock` para desenvolvimento sem Keycloak                                                       |
+| `AUTH_SECRET`                               | —                                                   | Segredo do Auth.js (obrigatório em `keycloak`)                                                 |
+| `AUTH_URL`                                  | —                                                   | URL pública do shell (ex.: `http://localhost:3000`)                                            |
+| `AUTH_KEYCLOAK_ID` / `AUTH_KEYCLOAK_SECRET` | —                                                   | Cliente OIDC confidencial                                                                      |
+| `AUTH_KEYCLOAK_ISSUER`                      | `http://localhost:8180/realms/sus-nexus`            | Issuer do realm                                                                                |
+| `AUTH_MOCK_USER` / `AUTH_MOCK_EMAIL`        | `Maria Operadora (mock)`                            | Usuário fake                                                                                   |
+| `AUTH_MOCK_ROLES`                           | `cadastrador,operador_integracao,enfermagem,gestor` | Papéis do usuário fake (vírgula)                                                               |
+| `AUTH_MOCK_MUNICIPALITY`                    | `ibge_3143302`                                      | `municipality_id` do usuário fake                                                              |
+| `AUTH_MOCK_CNES`                            | `2126672`                                           | Lotação fake (claim `cnes`, vírgula) — UBS padrão                                              |
+| `AUTH_MOCK_TEAMS`                           | —                                                   | Equipes (INE) fake (claim `teams`, vírgula)                                                    |
+| `AUTH_MOCK_MICROAREAS`                      | —                                                   | Microáreas fake (claim `microareas`; ex. ACS `01,02`)                                          |
+| `AUTH_SECURE_COOKIES`                       | `false` (true em produção)                          | Força cookies `Secure`                                                                         |
+| `CORE_API_URL`                              | `http://localhost:8080`                             | Base do core municipal (somente servidor)                                                      |
+| `AI_SERVICE_URL`                            | `http://localhost:8090`                             | Base do ai-service (somente servidor; proxy `/api/ai`)                                         |
+| `NEXT_PUBLIC_API_MOCK`                      | `false`                                             | `true` ativa o MSW no servidor (core, ai-service, FHIR Gateway e Trino)                        |
+| `FHIR_GATEWAY_URL`                          | `http://localhost:8081`                             | Base do FHIR Gateway (somente servidor; proxy `/api/fhir/r4`)                                  |
+| `TRINO_URL`                                 | `http://localhost:8088`                             | API HTTP do Trino (Sala de Situação; somente servidor)                                         |
+| `TRINO_USER`                                | `sus-nexus-web`                                     | Usuário de serviço do grupo `bi` no Trino (precisa constar em `groups.txt`/provedor de grupos) |
+| `TRINO_CATALOG`                             | `iceberg`                                           | Catálogo do lakehouse                                                                          |
+| `TRINO_PASSWORD`                            | —                                                   | Senha opcional do usuário de serviço (Basic, HTTPS)                                            |
+| `METABASE_URL`                              | —                                                   | Link opcional para o painel "Sala de Situação" no Metabase                                     |
 
 Papéis conhecidos (`ROLES` em `@sus-nexus/auth`): `acs`, `enfermagem`, `medico`, `cadastrador`, `regulador`, `operador_integracao`, `auditor`, `gestor`, `dpo`, `admin` e, do realm, `profissional_aps`, `profissional_hospitalar`, `admin_municipal`. Vêm de `realm_access.roles` / `resource_access.<client>.roles` do token Keycloak. A lotação vem das claims `cnes`, `teams`, `microareas` (`extractScope`) e é exposta em `session.user`.
 
@@ -159,6 +167,46 @@ Papéis conhecidos (`ROLES` em `@sus-nexus/auth`): `acs`, `enfermagem`, `medico`
 ### Dados sintéticos da Fase 3 (MSW)
 
 `src/mocks/care-data.ts` deriva tudo dos cidadãos de `data.ts` (gerador próprio, determinístico): 3 protocolos vigentes (`pre_natal` 2.1.0, `hipertensao` 1.4.0, `diabetes` 1.2.0) + versões aprovada (pré-natal 2.2.0), em revisão **sem casos de teste** (HAS 1.5.0), rascunho (DM 1.3.0) e revogada; planos de gestante (só mulheres em idade fértil), hipertensão e diabetes com itens realizados/agendados/atrasados; lacunas por item atrasado (UBS/equipe/microárea do cidadão, `contact_valid` a partir do cadastro) + perda de seguimento; 10 episódios hospitalares com risco alto/médio/baixo, uma reinternação ≤ 30 dias sem CID, um internado sem risco calculado e **um pós-alta sem contato no SLA de 72 h** (tarefa vencida + lacuna `post_discharge_no_contact`). Os handlers (`care-handlers.ts`) são stateful: o desfecho pós-alta conclui/escala a tarefa e resolve a lacuna, atualizar item resolve a lacuna vinculada, e o resumo do cidadão é recalculado.
+
+### Sala de Situação (`/situacao`, Fase 4 — S26)
+
+- **Fonte**: agregados gold pseudonimizados do dbt no Trino — `marts_aggregated.agg_indicadores_mensais`,
+  `agg_care_gaps_monthly`, `agg_hospital_monthly`, `agg_regulation_queue_current` e `marts.dim_health_unit` /
+  `marts.dim_territory`. **Nunca** `marts_identified`, bronze, staging ou silver.
+- **BFF** `GET /api/situacao/<indicadores|serie|ranking|territorios|capacidade|filtros>` (`lib/situacao/*`):
+  `withAuth` (gestor, auditor, admin_municipal; admin), whitelist de visões e parâmetros (`competence` AAAAMM,
+  `cnes` 7 dígitos, `team_ine` 10 dígitos, `indicator` ∈ códigos do `seed_metas_indicadores`, `care_line`
+  `[a-z][a-z0-9_]`); parâmetro desconhecido/repetido → 400. SQL fixo enviado como _prepared statement_
+  (`X-Trino-Prepared-Statement` + `EXECUTE … USING` com literais validados e escapados), seguindo `nextUri`
+  (só no mesmo host, limite de páginas/tempo). O filtro `tenant_id = ?` usa **sempre** o `municipality_id`
+  do token (o grupo `bi` do Trino não tem filtro de linha).
+- **Supressão**: células `0 < n < 5` chegam nulas do dbt; o BFF normaliza para `{ value: null, suppressed: true }`
+  (ou `is_suppressed`) e a tela mostra **"<5 (suprimido)"** — nunca zero; suprimidos ficam fora do ranking e
+  da desigualdade.
+- **Tela**: cartões por indicador com meta e semáforo (atingida = `is_on_target`; atenção = fora da meta até 10% de
+  distância relativa; crítica = além disso; ícone + texto), série histórica (SVG + tabela), comparação entre
+  unidades com desigualdade (maior × menor, diferença e razão), territórios (mapa esquemático SVG por unidade ×
+  equipe + tabela; sem tiles externos), capacidade e risco (internações por hospital, fila do lakehouse e fila
+  ao vivo do core `GET /api/v1/regulation/queues/summary`) e link opcional para o Metabase.
+- **Análise assistida (IA)**: painel que chama `POST /agents/bi_situation_analyst/run` pelo proxy `/api/ai`
+  (`useRunBiSituationAnalyst`; corpo `BiSituationInput` sem município). Mostra fora da meta, tendência,
+  desigualdade, hipóteses (sempre rotuladas "Hipótese"), recomendações, limitações e fontes, com aviso de que a
+  análise é gerada por IA a partir de dados agregados e exige revisão humana; `invalid_output` vira erro
+  amigável e nada da saída é exibido. Oculto para papéis sem permissão.
+- **Mocks**: `mocks/situacao-data.ts` (linhas com o schema dos modelos dbt, dois municípios), `mocks/trino-handlers.ts`
+  (protocolo `/v1/statement` + `nextUri`, nega `marts_identified`), `mocks/bi-agent-handlers.ts`.
+
+### Aba FHIR do cidadão (`/cidadaos/[id]?aba=fhir`)
+
+- `FHIRResourceViewer` (`@sus-nexus/domain-components`): resumo legível por tipo (Patient, Encounter, Observation,
+  DiagnosticReport, ServiceRequest, Appointment, CarePlan, DocumentReference, Task, Condition), JSON/árvore
+  colapsável (`collapsibleRaw`) e `masking="identifiers"` (CPF/CNS mascarados por `system` RNDS/OID e por formato
+  em qualquer texto). Utilitários sem React em `@sus-nexus/domain-components/fhir` (`maskFhirIdentifiers`,
+  `summarizeFhirResource`).
+- BFF `GET /api/fhir/r4/Patient/{id}/$everything` (`_type` whitelist, `_count` 1–200, `_cursor`): Bearer + `X-Tenant-Id`
+  - `X-Purpose-Of-Use` (obrigatória) e mascaramento de CPF/CNS **antes** de responder ao navegador.
+- Visível só para papéis clínicos/gestão (`medico`, `enfermagem`, `profissional_aps`, `profissional_hospitalar`,
+  `gestor`, `admin_municipal`, `admin`).
 
 ## Testes
 

@@ -10,6 +10,7 @@ interface CoreApiContextValue {
   client: CoreClient;
   ai: AiClient;
   purpose: Purpose | undefined;
+  bffBaseUrl: string;
 }
 
 const CoreApiContext = createContext<CoreApiContextValue | null>(null);
@@ -20,6 +21,11 @@ export interface CoreApiProviderProps {
   baseUrl?: string;
   /** Base do ai-service (padrão: `/api/ai`, o proxy BFF). */
   aiBaseUrl?: string;
+  /**
+   * Origem das rotas próprias do BFF (`/api/situacao/*`, `/api/fhir/r4/*`). Padrão: mesma origem
+   * (`''`). Testes passam uma origem absoluta.
+   */
+  bffBaseUrl?: string;
   purpose: Purpose | undefined;
   queryClient?: QueryClient;
   client?: CoreClient;
@@ -39,6 +45,7 @@ export function CoreApiProvider({
   children,
   baseUrl = '/api/core',
   aiBaseUrl = '/api/ai',
+  bffBaseUrl = '',
   purpose,
   queryClient,
   client,
@@ -48,8 +55,8 @@ export function CoreApiProvider({
   const value = useMemo<CoreApiContextValue>(() => {
     const c = client ?? createCoreClient({ baseUrl, getPurpose: () => purpose });
     const ai = aiClient ?? createAiClient({ baseUrl: aiBaseUrl });
-    return { client: c, ai, purpose };
-  }, [client, aiClient, baseUrl, aiBaseUrl, purpose]);
+    return { client: c, ai, purpose, bffBaseUrl: bffBaseUrl.replace(/\/$/, '') };
+  }, [client, aiClient, baseUrl, aiBaseUrl, bffBaseUrl, purpose]);
 
   return (
     <CoreApiContext.Provider value={value}>
@@ -74,4 +81,11 @@ export function useCurrentPurpose(): Purpose | undefined {
   const ctx = useContext(CoreApiContext);
   if (!ctx) throw new Error('useCurrentPurpose deve ser usado dentro de <CoreApiProvider>');
   return ctx.purpose;
+}
+
+/** Origem das rotas próprias do BFF (situação, FHIR). */
+export function useBffBaseUrl(): string {
+  const ctx = useContext(CoreApiContext);
+  if (!ctx) throw new Error('useBffBaseUrl deve ser usado dentro de <CoreApiProvider>');
+  return ctx.bffBaseUrl;
 }

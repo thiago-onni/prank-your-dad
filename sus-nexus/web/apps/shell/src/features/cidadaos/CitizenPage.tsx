@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useHasRole } from '@sus-nexus/auth/client';
 import { useCitizen, useHealthUnits, type MaskedIdentifier } from '@sus-nexus/api-client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sus-nexus/design-system';
 import { CitizenHeader } from '@sus-nexus/domain-components';
@@ -9,10 +10,12 @@ import { QueryState } from '@/components/QueryState';
 import { t } from '@/i18n';
 import { RevealIdentifierDialog } from './RevealIdentifierDialog';
 import { CarePlansTab } from './CarePlansTab';
+import { FhirTab } from './FhirTab';
+import { FHIR_VIEWER_ROLES } from '@/lib/situacao/roles';
 import { SummaryPanel } from './SummaryPanel';
 import { TimelineTab } from './TimelineTab';
 
-export const CITIZEN_TABS = ['resumo', 'timeline', 'plano'] as const;
+export const CITIZEN_TABS = ['resumo', 'timeline', 'plano', 'fhir'] as const;
 export type CitizenTab = (typeof CITIZEN_TABS)[number];
 
 export function isCitizenTab(value: unknown): value is CitizenTab {
@@ -27,6 +30,9 @@ export function CitizenPage({
   initialTab?: CitizenTab;
 }) {
   const query = useCitizen(citizenId);
+  // Aba FHIR só para papéis clínicos/gestão (usabilidade; o gateway aplica escopos/OPA).
+  const canSeeFhir = useHasRole(...FHIR_VIEWER_ROLES);
+  const tab = initialTab === 'fhir' && !canSeeFhir ? 'resumo' : initialTab;
   const units = useHealthUnits({ limit: 100 });
   const [revealTarget, setRevealTarget] = useState<MaskedIdentifier | null>(null);
   // Valores revelados vivem apenas em memória desta tela (somem ao recarregar).
@@ -58,11 +64,12 @@ export function CitizenPage({
                 },
               ]}
             />
-            <Tabs defaultValue={initialTab}>
+            <Tabs defaultValue={tab}>
               <TabsList aria-label={t.citizen.title}>
                 <TabsTrigger value="resumo">{t.citizen.summary}</TabsTrigger>
                 <TabsTrigger value="timeline">{t.citizen.timeline}</TabsTrigger>
                 <TabsTrigger value="plano">{t.carePlan.tab}</TabsTrigger>
+                {canSeeFhir ? <TabsTrigger value="fhir">{t.fhir.tab}</TabsTrigger> : null}
               </TabsList>
               <TabsContent value="resumo">
                 <SummaryPanel citizen={citizen} />
@@ -73,6 +80,11 @@ export function CitizenPage({
               <TabsContent value="plano">
                 <CarePlansTab citizen={citizen} />
               </TabsContent>
+              {canSeeFhir ? (
+                <TabsContent value="fhir">
+                  <FhirTab citizenId={citizen.id} />
+                </TabsContent>
+              ) : null}
             </Tabs>
             <RevealIdentifierDialog
               citizenId={citizen.id}

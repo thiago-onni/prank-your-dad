@@ -54,6 +54,27 @@ describe('proxy BFF /api/ai', () => {
     expect(Buffer.from(init?.body as ArrayBuffer).toString()).toBe(body);
   });
 
+  it('encaminha o agente de BI (bi_situation_analyst) sem tenant no corpo; o tenant vai no cabeçalho', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    const { POST } = await import('@/app/api/ai/[...path]/route');
+    const body = JSON.stringify({ competence: '202609', trend_months: 6 });
+    const res = await POST(
+      new Request('http://localhost:3000/api/ai/agents/bi_situation_analyst/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }),
+      { params: Promise.resolve({ path: ['agents', 'bi_situation_analyst', 'run'] }) },
+    );
+    expect(res.status).toBe(200);
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect((url as URL).href).toBe('http://ai.test/agents/bi_situation_analyst/run');
+    expect(new Headers(init?.headers).get('x-tenant-id')).toBe('ibge_3143302');
+    expect(Buffer.from(init?.body as ArrayBuffer).toString()).toBe(body);
+  });
+
   it('rejeita rotas fora da lista permitida (ex.: /health, /metrics, /admin/outra)', async () => {
     const { GET } = await import('@/app/api/ai/[...path]/route');
     for (const path of [['health'], ['metrics'], ['admin', 'outra'], ['..', 'agents']]) {

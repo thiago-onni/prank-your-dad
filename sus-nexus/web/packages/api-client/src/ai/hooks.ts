@@ -8,6 +8,7 @@ import type {
   AgentApproval,
   AgentDescriptor,
   AgentRunRecord,
+  BiSituationInput,
   KillSwitchResponse,
   KillSwitchState,
   ToolDescriptor,
@@ -115,6 +116,19 @@ export function useSetKillSwitch() {
     mutationFn: (state: KillSwitchState): Promise<KillSwitchResponse> => ai.setKillSwitch(state),
     onSuccess: (data) => {
       qc.setQueryData(aiKeys.killSwitch(), data);
+    },
+  });
+}
+
+/** Executa o agente de BI da Sala de Situação (análise assistida; sem ações). */
+export function useRunBiSituationAnalyst() {
+  const ai = useAiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BiSituationInput): Promise<AgentRunRecord> =>
+      ai.runBiSituationAnalyst(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: [...aiKeys.all, 'runs'] });
     },
   });
 }

@@ -26,6 +26,7 @@ export function renderWithProviders(
       <CoreApiProvider
         baseUrl="http://core.test"
         aiBaseUrl="http://ai.test"
+        bffBaseUrl="http://shell.test"
         purpose={purpose}
         queryClient={queryClient}
       >

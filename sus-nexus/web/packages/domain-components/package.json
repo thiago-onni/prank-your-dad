@@ -5,7 +5,8 @@
   "description": "Componentes de domínio do SUS Nexus (CitizenHeader, TimelineEvent, HumanApprovalPanel, ...) tipados pelo OpenAPI",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./fhir": "./src/lib/fhir.ts"
   },
   "scripts": {
     "lint": "eslint .",
