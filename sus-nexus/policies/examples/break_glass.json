@@ -1,0 +1,6 @@
+{
+  "subject": {"id": "u1", "roles": ["profissional_aps"], "tenant": "ibge_3143302", "cnes": ["1234567"], "teams": ["ine_0001"], "microareas": [], "client_type": "user"},
+  "action": "read",
+  "resource": {"type": "timeline_event", "tenant": "ibge_3143302", "domain": "hospital", "sensitivity": "highly_restricted", "citizen_team": "ine_0042", "citizen_cnes": "7654321", "citizen_microarea": "11", "assignee": {"kind": "team", "id": "ine_0042"}},
+  "context": {"purpose": "care_coordination", "break_glass": true, "break_glass_justification": "Cidadão em atendimento de urgência na UBS; equipe de origem sem acesso.", "channel": "web"}
+}

@@ -1,0 +1,6 @@
+{
+  "subject": {"id": "u1", "roles": ["profissional_aps"], "tenant": "ibge_3143302", "cnes": ["1234567"], "teams": ["ine_0001"], "microareas": ["03"], "client_type": "user"},
+  "action": "read",
+  "resource": {"type": "timeline_event", "tenant": "ibge_3143302", "domain": "aps", "sensitivity": "restricted", "citizen_team": "ine_0001", "citizen_cnes": "1234567", "citizen_microarea": "03", "assignee": {"kind": "team", "id": "ine_0001"}},
+  "context": {"purpose": "care_coordination", "break_glass": false, "break_glass_justification": "", "channel": "web"}
+}

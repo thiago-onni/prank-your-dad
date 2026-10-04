@@ -78,8 +78,26 @@
       "default_mask_identifiers": false
     }
   },
-  "clinical_roles": ["profissional_aps", "profissional_hospitalar", "regulador"],
-  "reveal_identifier_roles": ["profissional_aps", "agendador", "regulador", "auditor"],
-  "merge_roles": ["cadastro_mestre", "admin_municipal"],
-  "export_roles": ["dpo", "gestor", "auditor"]
+  "role_groups": {
+    "clinical_roles": [
+      "profissional_aps",
+      "profissional_hospitalar",
+      "regulador"
+    ],
+    "reveal_identifier_roles": [
+      "profissional_aps",
+      "agendador",
+      "regulador",
+      "auditor"
+    ],
+    "merge_roles": [
+      "cadastro_mestre",
+      "admin_municipal"
+    ],
+    "export_roles": [
+      "dpo",
+      "gestor",
+      "auditor"
+    ]
+  }
 }

@@ -1,0 +1,7 @@
+{
+  "scopes": ["user/*.rs"],
+  "interaction": "read",
+  "resourceType": "Patient",
+  "subject": {"id": "u3", "tenant": "ibge_3143302", "client_type": "user", "patient": "cit_01HZX"},
+  "resource": {"tenant": "ibge_3143302", "patient": "cit_01HZX", "security": []}
+}

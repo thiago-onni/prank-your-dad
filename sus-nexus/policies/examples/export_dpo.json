@@ -1,0 +1,6 @@
+{
+  "subject": {"id": "u9", "roles": ["dpo"], "tenant": "ibge_3143302", "cnes": [], "teams": [], "microareas": [], "client_type": "user"},
+  "action": "export",
+  "resource": {"type": "access_log", "tenant": "ibge_3143302", "domain": "task", "sensitivity": "internal"},
+  "context": {"purpose": "security_audit", "break_glass": false, "break_glass_justification": "", "channel": "web"}
+}
