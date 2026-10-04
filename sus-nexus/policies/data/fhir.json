@@ -1,0 +1,31 @@
+{
+  "fhir": {
+    "resource_types": ["Patient", "Encounter", "Condition", "Observation", "Appointment", "ServiceRequest", "Task", "CarePlan", "Organization", "Location", "Practitioner", "AuditEvent", "Bundle", "OperationOutcome", "CapabilityStatement"],
+    "interaction_permission": {
+      "read": "r",
+      "vread": "r",
+      "history": "r",
+      "search": "s",
+      "create": "c",
+      "update": "u",
+      "patch": "u",
+      "delete": "d"
+    },
+    "patient_compartment": ["Patient", "Encounter", "Condition", "Observation", "Appointment", "ServiceRequest", "Task", "CarePlan"],
+    "restricted_redactions": {
+      "*": ["extension", "meta.security"],
+      "Patient": ["telecom", "address", "identifier", "contact", "photo", "extension"],
+      "Practitioner": ["telecom", "address", "identifier", "extension"],
+      "Encounter": ["reasonCode", "diagnosis", "extension"],
+      "Condition": ["code", "note", "evidence", "extension"],
+      "Observation": ["value", "valueQuantity", "valueString", "valueCodeableConcept", "note", "component", "extension"],
+      "ServiceRequest": ["reasonCode", "note", "supportingInfo", "extension"],
+      "CarePlan": ["note", "activity", "extension"]
+    },
+    "sensitive_extensions": [
+      "http://sus.nexus/fhir/StructureDefinition/sensitivity",
+      "http://hl7.org/fhir/StructureDefinition/patient-religion",
+      "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRRacaCorEtnia"
+    ]
+  }
+}

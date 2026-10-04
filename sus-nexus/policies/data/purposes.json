@@ -1,0 +1,28 @@
+{
+  "purposes": {
+    "catalog": [
+      "care_coordination",
+      "regulation",
+      "scheduling",
+      "identity_management",
+      "production_audit",
+      "public_health_surveillance",
+      "management_analytics",
+      "integration_operations",
+      "security_audit"
+    ],
+    "by_role": {
+      "admin_municipal": ["security_audit", "management_analytics", "identity_management", "integration_operations"],
+      "gestor": ["management_analytics", "public_health_surveillance"],
+      "profissional_aps": ["care_coordination", "scheduling"],
+      "acs": ["care_coordination", "scheduling"],
+      "regulador": ["regulation"],
+      "agendador": ["scheduling"],
+      "profissional_hospitalar": ["care_coordination"],
+      "auditor": ["production_audit"],
+      "dpo": ["security_audit"],
+      "operador_integracao": ["integration_operations"],
+      "cadastro_mestre": ["identity_management"]
+    }
+  }
+}

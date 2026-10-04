@@ -1,0 +1,31 @@
+{
+  "agent_tools": {
+    "action_classes": ["auto", "requires_approval", "forbidden"],
+    "tools": {
+      "citizen.search_pseudonymized": {"action_class": "auto", "risk": "low", "owner": "identity", "description": "Busca cidadãos por atributos mínimos, retorna IDs pseudônimos."},
+      "timeline.read_summary": {"action_class": "auto", "risk": "medium", "owner": "journey", "description": "Resumo pseudonimizado da jornada do cidadão."},
+      "task.create": {"action_class": "auto", "risk": "medium", "owner": "tasks", "description": "Cria tarefa/sugestão para equipe humana."},
+      "task.add_evidence": {"action_class": "auto", "risk": "low", "owner": "tasks", "description": "Anexa evidência a uma tarefa existente."},
+      "regulation.read_request": {"action_class": "auto", "risk": "medium", "owner": "regulation", "description": "Lê solicitação de regulação (pseudonimizada)."},
+      "regulation.summarize": {"action_class": "auto", "risk": "medium", "owner": "regulation", "description": "Gera resumo/checklist de completude."},
+      "protocol.search": {"action_class": "auto", "risk": "low", "owner": "knowledge", "description": "Busca em protocolos clínicos (RAG)."},
+      "production.read_record": {"action_class": "auto", "risk": "low", "owner": "production", "description": "Lê registro de produção para pré-auditoria."},
+      "production.flag_inconsistency": {"action_class": "auto", "risk": "medium", "owner": "production", "description": "Marca inconsistência com evidência."},
+      "bi.query_aggregate": {"action_class": "auto", "risk": "low", "owner": "analytics", "description": "Consulta camada agregada (k-anonimato mínimo)."},
+      "mpi.suggest_duplicate": {"action_class": "auto", "risk": "medium", "owner": "identity", "description": "Sugere caso de duplicidade para revisão humana."},
+      "communication.send_reminder": {"action_class": "requires_approval", "risk": "high", "owner": "communication", "description": "Envia lembrete não clínico ao cidadão."},
+      "regulation.request_missing_documents": {"action_class": "requires_approval", "risk": "high", "owner": "regulation", "description": "Solicita documentos faltantes ao solicitante."},
+      "appointment.propose": {"action_class": "requires_approval", "risk": "high", "owner": "scheduling", "description": "Propõe agendamento (confirmação humana)."},
+      "careplan.suggest_update": {"action_class": "requires_approval", "risk": "high", "owner": "careplan", "description": "Sugere atualização de plano de cuidado."},
+      "task.close": {"action_class": "requires_approval", "risk": "medium", "owner": "tasks", "description": "Encerra tarefa."},
+      "regulation.change_priority": {"action_class": "forbidden", "risk": "critical", "owner": "regulation", "description": "Alterar prioridade clínica (REG-009)."},
+      "regulation.decide": {"action_class": "forbidden", "risk": "critical", "owner": "regulation", "description": "Decisão regulatória (REG-009)."},
+      "production.transmit": {"action_class": "forbidden", "risk": "critical", "owner": "production", "description": "Transmitir produção oficial (PRO-010)."},
+      "mpi.merge": {"action_class": "forbidden", "risk": "critical", "owner": "identity", "description": "Fundir cadastros (MPI-007)."},
+      "mpi.unmerge": {"action_class": "forbidden", "risk": "critical", "owner": "identity", "description": "Desfazer fusão de cadastros (MPI-007)."},
+      "communication.send_clinical_content": {"action_class": "forbidden", "risk": "critical", "owner": "communication", "description": "Enviar conteúdo clínico ao cidadão."},
+      "identifier.reveal": {"action_class": "forbidden", "risk": "critical", "owner": "identity", "description": "Revelar CPF/CNS em claro."},
+      "db.direct_access": {"action_class": "forbidden", "risk": "critical", "owner": "platform", "description": "Acesso direto ao banco (AIA-006)."}
+    }
+  }
+}

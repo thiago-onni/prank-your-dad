@@ -1,0 +1,266 @@
+/*
+ * SUS Nexus — tokens do design system.
+ * Inspirado no Padrão Digital de Governo (gov.br DS): azul #1351B4, verde #168821,
+ * amarelo #FFCD07, vermelho #E52207 e escala de cinzas.
+ *
+ * Este arquivo é processado pelo Tailwind CSS 4 do app consumidor
+ * (`@import "tailwindcss"; @import "@sus-nexus/design-system/styles.css";`).
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ---------- Paleta base (independente de tema) ---------- */
+@theme {
+  --font-sans:
+    'Rawline', 'Raleway', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --color-blue-warm-vivid-70: #1351b4;
+  --color-blue-warm-vivid-80: #0c326f;
+  --color-blue-warm-vivid-90: #071d41;
+  --color-blue-warm-20: #c5d4eb;
+  --color-blue-warm-10: #edf5ff;
+  --color-blue-warm-vivid-50: #2670e8;
+  --color-blue-warm-vivid-40: #5992ed;
+
+  --color-green-cool-vivid-50: #168821;
+  --color-green-cool-vivid-70: #154c21;
+  --color-green-cool-10: #e3f5e1;
+
+  --color-yellow-vivid-20: #ffcd07;
+  --color-yellow-vivid-40: #c99a00;
+  --color-yellow-10: #fff5c2;
+
+  --color-red-vivid-50: #e52207;
+  --color-red-vivid-70: #8b0a03;
+  --color-red-10: #fde0db;
+
+  --color-gray-2: #f8f8f8;
+  --color-gray-5: #f0f0f0;
+  --color-gray-10: #e6e6e6;
+  --color-gray-20: #cccccc;
+  --color-gray-30: #adadad;
+  --color-gray-40: #888888;
+  --color-gray-50: #767676;
+  --color-gray-60: #555555;
+  --color-gray-70: #444444;
+  --color-gray-80: #333333;
+  --color-gray-90: #1b1b1b;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --spacing: 4px;
+
+  --shadow-level-1: 0 1px 6px rgb(0 0 0 / 0.16);
+  --shadow-level-2: 0 3px 6px rgb(0 0 0 / 0.16);
+  --shadow-level-3: 0 6px 12px rgb(0 0 0 / 0.16);
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+}
+
+/* ---------- Tokens semânticos (trocam com o tema) ---------- */
+:root {
+  color-scheme: light;
+  --sn-bg: #ffffff;
+  --sn-bg-muted: #f8f8f8;
+  --sn-surface: #ffffff;
+  --sn-surface-raised: #ffffff;
+  --sn-border: #cccccc;
+  --sn-border-strong: #888888;
+  --sn-fg: #333333;
+  --sn-fg-muted: #555555;
+  --sn-fg-subtle: #767676;
+  --sn-fg-on-primary: #ffffff;
+
+  --sn-primary: #1351b4;
+  --sn-primary-hover: #0c326f;
+  --sn-primary-subtle: #edf5ff;
+  --sn-primary-fg-subtle: #0c326f;
+
+  --sn-success: #168821;
+  --sn-success-subtle: #e3f5e1;
+  --sn-success-fg-subtle: #154c21;
+
+  --sn-warning: #ffcd07;
+  --sn-warning-strong: #c99a00;
+  --sn-warning-subtle: #fff5c2;
+  --sn-warning-fg-subtle: #5c4a00;
+
+  --sn-danger: #e52207;
+  --sn-danger-hover: #8b0a03;
+  --sn-danger-subtle: #fde0db;
+  --sn-danger-fg-subtle: #8b0a03;
+
+  --sn-info: #155bcb;
+  --sn-info-subtle: #e1e9f8;
+
+  --sn-focus: #c2850c;
+  --sn-focus-width: 4px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --sn-bg: #071d41;
+  --sn-bg-muted: #0c326f;
+  --sn-surface: #0f2a5a;
+  --sn-surface-raised: #163a78;
+  --sn-border: #3c5a8c;
+  --sn-border-strong: #7f9ccb;
+  --sn-fg: #f8f8f8;
+  --sn-fg-muted: #dbe3f1;
+  --sn-fg-subtle: #b7c4dc;
+  --sn-fg-on-primary: #071d41;
+
+  --sn-primary: #c5d4eb;
+  --sn-primary-hover: #ffffff;
+  --sn-primary-subtle: #163a78;
+  --sn-primary-fg-subtle: #edf5ff;
+
+  --sn-success: #7ddc7e;
+  --sn-success-subtle: #154c21;
+  --sn-success-fg-subtle: #e3f5e1;
+
+  --sn-warning: #ffcd07;
+  --sn-warning-strong: #ffe066;
+  --sn-warning-subtle: #5c4a00;
+  --sn-warning-fg-subtle: #fff5c2;
+
+  --sn-danger: #ff8d7f;
+  --sn-danger-hover: #ffb3a9;
+  --sn-danger-subtle: #8b0a03;
+  --sn-danger-fg-subtle: #fde0db;
+
+  --sn-info: #8fb5ff;
+  --sn-info-subtle: #163a78;
+
+  --sn-focus: #ffcd07;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --sn-bg: #071d41;
+    --sn-bg-muted: #0c326f;
+    --sn-surface: #0f2a5a;
+    --sn-surface-raised: #163a78;
+    --sn-border: #3c5a8c;
+    --sn-border-strong: #7f9ccb;
+    --sn-fg: #f8f8f8;
+    --sn-fg-muted: #dbe3f1;
+    --sn-fg-subtle: #b7c4dc;
+    --sn-fg-on-primary: #071d41;
+    --sn-primary: #c5d4eb;
+    --sn-primary-hover: #ffffff;
+    --sn-primary-subtle: #163a78;
+    --sn-primary-fg-subtle: #edf5ff;
+    --sn-success: #7ddc7e;
+    --sn-success-subtle: #154c21;
+    --sn-success-fg-subtle: #e3f5e1;
+    --sn-warning: #ffcd07;
+    --sn-warning-strong: #ffe066;
+    --sn-warning-subtle: #5c4a00;
+    --sn-warning-fg-subtle: #fff5c2;
+    --sn-danger: #ff8d7f;
+    --sn-danger-hover: #ffb3a9;
+    --sn-danger-subtle: #8b0a03;
+    --sn-danger-fg-subtle: #fde0db;
+    --sn-info: #8fb5ff;
+    --sn-info-subtle: #163a78;
+    --sn-focus: #ffcd07;
+  }
+}
+
+/* Expõe os tokens semânticos como utilitários Tailwind (bg-surface, text-fg, border-border...). */
+@theme inline {
+  --color-bg: var(--sn-bg);
+  --color-bg-muted: var(--sn-bg-muted);
+  --color-surface: var(--sn-surface);
+  --color-surface-raised: var(--sn-surface-raised);
+  --color-border: var(--sn-border);
+  --color-border-strong: var(--sn-border-strong);
+  --color-fg: var(--sn-fg);
+  --color-fg-muted: var(--sn-fg-muted);
+  --color-fg-subtle: var(--sn-fg-subtle);
+  --color-fg-on-primary: var(--sn-fg-on-primary);
+  --color-primary: var(--sn-primary);
+  --color-primary-hover: var(--sn-primary-hover);
+  --color-primary-subtle: var(--sn-primary-subtle);
+  --color-primary-fg-subtle: var(--sn-primary-fg-subtle);
+  --color-success: var(--sn-success);
+  --color-success-subtle: var(--sn-success-subtle);
+  --color-success-fg-subtle: var(--sn-success-fg-subtle);
+  --color-warning: var(--sn-warning);
+  --color-warning-strong: var(--sn-warning-strong);
+  --color-warning-subtle: var(--sn-warning-subtle);
+  --color-warning-fg-subtle: var(--sn-warning-fg-subtle);
+  --color-danger: var(--sn-danger);
+  --color-danger-hover: var(--sn-danger-hover);
+  --color-danger-subtle: var(--sn-danger-subtle);
+  --color-danger-fg-subtle: var(--sn-danger-fg-subtle);
+  --color-info: var(--sn-info);
+  --color-info-subtle: var(--sn-info-subtle);
+  --color-focus: var(--sn-focus);
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--sn-bg);
+    color: var(--sn-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--sn-bg);
+    color: var(--sn-fg);
+    line-height: 1.5;
+  }
+
+  /* Foco visível (gov.br usa contorno amarelo-escuro de 4px). */
+  :focus-visible {
+    outline: var(--sn-focus-width) solid var(--sn-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--sn-primary);
+    color: var(--sn-fg-on-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility sr-only-focusable {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  &:focus,
+  &:focus-visible {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+}

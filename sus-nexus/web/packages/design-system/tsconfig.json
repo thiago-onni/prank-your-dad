@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "@testing-library/jest-dom", "vitest-axe/extend-expect"]
+  },
+  "include": ["src", ".storybook", "vitest.config.ts", "vitest.setup.ts"]
+}
