@@ -54,8 +54,41 @@ variable "enable_nat_gateway" {
 }
 
 variable "flow_logs_retention_days" {
-  type    = number
-  default = 90
+  description = "Retenção (dias) do log group dos flow logs. Mínimo 365 (0 = nunca expira)."
+  type        = number
+  default     = 365
+  validation {
+    condition     = var.flow_logs_retention_days == 0 || var.flow_logs_retention_days >= 365
+    error_message = "flow_logs_retention_days deve ser 0 (sem expiração) ou >= 365."
+  }
+}
+
+variable "kms_key_arn" {
+  description = "KMS para cifrar o log group dos flow logs (AWS). A key policy precisa autorizar logs.<região>.amazonaws.com."
+  type        = string
+  default     = null
+}
+
+variable "data_ingress_ports" {
+  description = "Portas aceitas pelo NACL do segmento de dados a partir dos segmentos app/mgmt/data (serviços de dados + kubelet/NodePort)."
+  type = list(object({
+    protocol  = optional(string, "tcp")
+    from_port = number
+    to_port   = number
+  }))
+  default = [
+    { from_port = 5432, to_port = 5432 },   # PostgreSQL (CloudNativePG)
+    { from_port = 6379, to_port = 6379 },   # Valkey/Redis
+    { from_port = 9092, to_port = 9094 },   # Kafka (plaintext interno / TLS / controller)
+    { from_port = 9000, to_port = 9001 },   # MinIO API / console
+    { from_port = 9200, to_port = 9200 },   # OpenSearch
+    { from_port = 10250, to_port = 10250 }, # kubelet (control plane -> nós de dados)
+    { from_port = 30000, to_port = 32767 }, # NodePort (LBs internos)
+  ]
+  validation {
+    condition     = length(var.data_ingress_ports) <= 20 && alltrue([for p in var.data_ingress_ports : p.from_port >= 1 && p.to_port <= 65535 && p.from_port <= p.to_port])
+    error_message = "data_ingress_ports: no máximo 20 entradas, com 1 <= from_port <= to_port <= 65535."
+  }
 }
 
 variable "health_units_cidrs" {

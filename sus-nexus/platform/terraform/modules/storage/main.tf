@@ -31,6 +31,10 @@ locals {
 # ------------------------------------------------------------------------------------------------
 # AWS S3
 # ------------------------------------------------------------------------------------------------
+data "aws_caller_identity" "current" {
+  count = local.is_s3 ? 1 : 0
+}
+
 resource "aws_s3_bucket" "this" {
   for_each            = local.s3_buckets
   bucket              = "${var.name_prefix}-${each.key}"
@@ -56,12 +60,14 @@ resource "aws_s3_bucket_ownership_controls" "this" {
   }
 }
 
+# Versionamento sempre habilitado no S3 (CKV_AWS_21; Object Lock também o exige). Para buckets declarados com
+# `versioning = false` as versões não-correntes são purgadas em 1 dia pelo ciclo de vida (regra purge-noncurrent),
+# preservando o comportamento "sem histórico" sem abrir mão da proteção contra sobrescrita acidental.
 resource "aws_s3_bucket_versioning" "this" {
   for_each = local.s3_buckets
   bucket   = aws_s3_bucket.this[each.key].id
   versioning_configuration {
-    # Object Lock exige versionamento
-    status = (each.value.versioning || each.value.object_lock) ? "Enabled" : "Suspended"
+    status = "Enabled"
   }
 }
 
@@ -90,8 +96,19 @@ resource "aws_s3_bucket_object_lock_configuration" "this" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  for_each = { for k, b in local.s3_buckets : k => b if b.expire_days > 0 || b.noncurrent_expire_days > 0 }
+  for_each = local.s3_buckets
   bucket   = aws_s3_bucket.this[each.key].id
+
+  # Uploads multipart abandonados são descartados em 7 dias (CKV_AWS_300). A ação é repetida nas demais regras
+  # (S3 aceita a mesma ação em regras sobrepostas) para que a verificação estática a enxergue em qualquer caminho.
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    filter {}
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
 
   dynamic "rule" {
     for_each = each.value.expire_days > 0 ? [1] : []
@@ -117,6 +134,32 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       noncurrent_version_expiration {
         noncurrent_days = each.value.noncurrent_expire_days
       }
+      abort_incomplete_multipart_upload {
+        days_after_initiation = 7
+      }
+    }
+  }
+
+  # Buckets "sem versionamento" (versioning = false): purga versões antigas em 1 dia e os delete markers
+  # órfãos (quando não há expiração por dias, que já os remove).
+  dynamic "rule" {
+    for_each = (!each.value.versioning && !each.value.object_lock && each.value.noncurrent_expire_days == 0) ? [1] : []
+    content {
+      id     = "purge-noncurrent"
+      status = "Enabled"
+      filter {}
+      noncurrent_version_expiration {
+        noncurrent_days = 1
+      }
+      dynamic "expiration" {
+        for_each = each.value.expire_days == 0 ? [1] : []
+        content {
+          expired_object_delete_marker = true
+        }
+      }
+      abort_incomplete_multipart_upload {
+        days_after_initiation = 7
+      }
     }
   }
   depends_on = [aws_s3_bucket_versioning.this]
@@ -138,6 +181,22 @@ resource "aws_s3_bucket_policy" "tls_only" {
     }]
   })
   depends_on = [aws_s3_bucket_public_access_block.this]
+}
+
+# Eventos para o EventBridge (CKV2_AWS_62): auditoria de acesso/alteração consumida pela trilha LGPD.
+resource "aws_s3_bucket_notification" "this" {
+  for_each    = local.s3_buckets
+  bucket      = aws_s3_bucket.this[each.key].id
+  eventbridge = true
+}
+
+# Server access logging (CKV_AWS_18): todos os buckets logam no bucket <prefixo>-access-logs, um prefixo por bucket.
+resource "aws_s3_bucket_logging" "this" {
+  for_each      = local.s3_buckets
+  bucket        = aws_s3_bucket.this[each.key].id
+  target_bucket = aws_s3_bucket.access_logs[0].id
+  target_prefix = "${each.key}/"
+  depends_on    = [aws_s3_bucket_policy.access_logs]
 }
 
 resource "aws_s3_bucket_replication_configuration" "dr" {
@@ -183,6 +242,119 @@ resource "aws_s3_bucket_replication_configuration" "dr" {
     }
   }
   depends_on = [aws_s3_bucket_versioning.this]
+}
+
+# ------------------------------------------------------------------------------------------------
+# AWS S3 — bucket de server access logs (destino do logging de todos os buckets acima)
+# ------------------------------------------------------------------------------------------------
+resource "aws_s3_bucket" "access_logs" {
+  #checkov:skip=CKV_AWS_18:Bucket destino do server access logging; logar nele mesmo gera laço (recomendação AWS).
+  #checkov:skip=CKV_AWS_144:Logs de acesso S3 ficam só no site primário; não fazem parte do escopo de RPO do DR.
+  count         = local.is_s3 ? 1 : 0
+  bucket        = "${var.name_prefix}-access-logs"
+  force_destroy = false
+  tags          = merge(local.tags, { Name = "${var.name_prefix}-access-logs" })
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  count                   = local.is_s3 ? 1 : 0
+  bucket                  = aws_s3_bucket.access_logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "access_logs" {
+  count  = local.is_s3 ? 1 : 0
+  bucket = aws_s3_bucket.access_logs[0].id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "access_logs" {
+  count  = local.is_s3 ? 1 : 0
+  bucket = aws_s3_bucket.access_logs[0].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
+  count  = local.is_s3 ? 1 : 0
+  bucket = aws_s3_bucket.access_logs[0].id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
+    }
+    bucket_key_enabled = var.kms_key_arn != null
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
+  count  = local.is_s3 ? 1 : 0
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    filter {}
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.access_logs_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+  depends_on = [aws_s3_bucket_versioning.access_logs]
+}
+
+resource "aws_s3_bucket_notification" "access_logs" {
+  count       = local.is_s3 ? 1 : 0
+  bucket      = aws_s3_bucket.access_logs[0].id
+  eventbridge = true
+}
+
+# TLS obrigatório + permissão para o serviço de logging do S3 gravar (necessária com BucketOwnerEnforced).
+resource "aws_s3_bucket_policy" "access_logs" {
+  count  = local.is_s3 ? 1 : 0
+  bucket = aws_s3_bucket.access_logs[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.access_logs[0].arn, "${aws_s3_bucket.access_logs[0].arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs[0].arn}/*"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current[0].account_id }
+          ArnLike      = { "aws:SourceArn" = [for b in aws_s3_bucket.this : b.arn] }
+        }
+      }
+    ]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.access_logs]
 }
 
 # ------------------------------------------------------------------------------------------------

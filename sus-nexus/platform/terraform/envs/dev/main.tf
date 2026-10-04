@@ -31,6 +31,66 @@ provider "minio" {
   minio_ssl      = true
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+  region     = data.aws_region.current.name
+  asg_slr    = "arn:aws:iam::${local.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+}
+
+# Key policy explícita (CKV2_AWS_64). Em key policy, Resource "*" significa "esta chave". Principais:
+# root da conta (delegação a políticas IAM, p.ex. role do EKS e de replicação S3), CloudWatch Logs
+# (log groups do EKS e dos flow logs cifrados) e a service-linked role do Auto Scaling (EBS cifrado dos node groups).
+resource "aws_kms_key" "platform" {
+  description             = "SUS Nexus dev — EKS secrets, EBS, S3, CloudWatch Logs"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableRootAndIamPolicies"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${local.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudWatchLogs"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${local.region}.amazonaws.com" }
+        Action    = ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource  = "*"
+        Condition = {
+          ArnLike = { "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${local.region}:${local.account_id}:log-group:*" }
+        }
+      },
+      {
+        Sid       = "AllowAutoScalingServiceLinkedRoleUse"
+        Effect    = "Allow"
+        Principal = { AWS = local.asg_slr }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowAutoScalingServiceLinkedRoleGrants"
+        Effect    = "Allow"
+        Principal = { AWS = local.asg_slr }
+        Action    = "kms:CreateGrant"
+        Resource  = "*"
+        Condition = { Bool = { "kms:GrantIsForAWSResource" = "true" } }
+      }
+    ]
+  })
+}
+
+resource "aws_kms_alias" "platform" {
+  name          = "alias/sus-nexus-dev"
+  target_key_id = aws_kms_key.platform.key_id
+}
+
 module "network" {
   source             = "../../modules/network"
   provider_kind      = "aws"
@@ -45,19 +105,22 @@ module "network" {
     mgmt = ["10.20.250.0/24", "10.20.251.0/24"]
   }
   enable_nat_gateway = true
+  kms_key_arn        = aws_kms_key.platform.arn
   health_units_cidrs = var.health_units_cidrs
 }
 
 module "cluster" {
-  source                   = "../../modules/cluster"
-  provider_kind            = "eks"
-  name                     = "sus-nexus-dev"
-  environment              = "dev"
-  kubernetes_version       = "1.30"
-  vpc_id                   = module.network.vpc_id
-  subnet_ids               = module.network.subnet_ids["app"]
-  control_plane_subnet_ids = module.network.subnet_ids["mgmt"]
-  api_allowed_cidrs        = var.api_allowed_cidrs
+  source                        = "../../modules/cluster"
+  provider_kind                 = "eks"
+  name                          = "sus-nexus-dev"
+  environment                   = "dev"
+  kubernetes_version            = "1.30"
+  vpc_id                        = module.network.vpc_id
+  subnet_ids                    = module.network.subnet_ids["app"]
+  control_plane_subnet_ids      = module.network.subnet_ids["mgmt"]
+  api_allowed_cidrs             = var.api_allowed_cidrs
+  kms_key_arn                   = aws_kms_key.platform.arn
+  additional_security_group_ids = [module.network.dmz_security_group_id]
   node_groups = {
     app = {
       instance_types = ["m6i.xlarge"]
@@ -82,6 +145,7 @@ module "storage" {
   provider_kind = "s3"
   name_prefix   = "sus-nexus-dev-${var.ibge_code}"
   environment   = "dev"
+  kms_key_arn   = aws_kms_key.platform.arn
   buckets = {
     raw-zone      = { versioning = true, noncurrent_expire_days = 15 }
     documents     = { versioning = true }

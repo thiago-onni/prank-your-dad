@@ -25,7 +25,8 @@ output "availability_zones" {
 }
 
 output "dmz_security_group_id" {
-  value = local.is_aws ? aws_security_group.dmz[0].id : null
+  description = "SG base da borda (AWS); null on-prem. Aplicado ao control plane pelo módulo cluster."
+  value       = local.is_aws ? aws_security_group.dmz[0].id : null
 }
 
 output "nat_public_ips" {

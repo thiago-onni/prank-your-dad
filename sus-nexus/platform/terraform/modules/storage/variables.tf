@@ -59,6 +59,12 @@ variable "dr_replication" {
   default = { enabled = false }
 }
 
+variable "access_logs_retention_days" {
+  description = "Retenção (dias) dos server access logs do S3 no bucket <name_prefix>-access-logs."
+  type        = number
+  default     = 400
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

@@ -9,3 +9,8 @@ output "bucket_arns" {
 output "audit_archive_bucket" {
   value = local.is_s3 ? try(aws_s3_bucket.this["audit-archive"].bucket, null) : try(minio_s3_bucket.this["audit-archive"].bucket, null)
 }
+
+output "access_logs_bucket" {
+  description = "Bucket de server access logs (somente S3)."
+  value       = local.is_s3 ? aws_s3_bucket.access_logs[0].bucket : null
+}

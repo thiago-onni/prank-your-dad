@@ -93,9 +93,25 @@ variable "node_groups" {
 }
 
 variable "kms_key_arn" {
-  description = "KMS para criptografia de secrets do etcd (EKS)."
+  description = "KMS para criptografia de secrets do etcd, EBS dos nós e logs do control plane. Obrigatório quando provider_kind = eks."
   type        = string
   default     = null
+}
+
+variable "cluster_log_retention_days" {
+  description = "Retenção (dias) do log group de auditoria do control plane EKS. Mínimo 365 (0 = nunca expira)."
+  type        = number
+  default     = 365
+  validation {
+    condition     = var.cluster_log_retention_days == 0 || var.cluster_log_retention_days >= 365
+    error_message = "cluster_log_retention_days deve ser 0 (sem expiração) ou >= 365."
+  }
+}
+
+variable "additional_security_group_ids" {
+  description = "Security groups adicionais aplicados às ENIs do control plane EKS (ex.: SG base da DMZ exportado pelo módulo network)."
+  type        = list(string)
+  default     = []
 }
 
 # ---- RKE2 ----

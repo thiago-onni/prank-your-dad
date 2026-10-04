@@ -53,10 +53,29 @@ resource "aws_iam_role_policy_attachment" "cluster" {
   policy_arn = each.value
 }
 
+# Permissões mínimas do control plane sobre a chave KMS (criptografia de secrets do etcd via grants).
+data "aws_iam_policy_document" "cluster_kms" {
+  count = local.is_eks ? 1 : 0
+  statement {
+    sid       = "EksSecretsEncryption"
+    actions   = ["kms:DescribeKey", "kms:CreateGrant", "kms:ListGrants", "kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey"]
+    resources = [var.kms_key_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "cluster_kms" {
+  count  = local.is_eks ? 1 : 0
+  name   = "kms-secrets-encryption"
+  role   = aws_iam_role.cluster[0].id
+  policy = data.aws_iam_policy_document.cluster_kms[0].json
+}
+
+# Logs de auditoria do control plane: cifrados com a chave KMS da plataforma e retidos >= 1 ano (LGPD/CIS).
 resource "aws_cloudwatch_log_group" "cluster" {
   count             = local.is_eks ? 1 : 0
   name              = "/aws/eks/${var.name}/cluster"
-  retention_in_days = 90
+  retention_in_days = var.cluster_log_retention_days
+  kms_key_id        = var.kms_key_arn
   tags              = local.tags
 }
 
@@ -68,6 +87,7 @@ resource "aws_eks_cluster" "this" {
 
   vpc_config {
     subnet_ids              = concat(var.subnet_ids, var.control_plane_subnet_ids)
+    security_group_ids      = var.additional_security_group_ids
     endpoint_private_access = true
     endpoint_public_access  = length(var.api_allowed_cidrs) > 0
     public_access_cidrs     = length(var.api_allowed_cidrs) > 0 ? var.api_allowed_cidrs : ["0.0.0.0/32"]
@@ -80,18 +100,23 @@ resource "aws_eks_cluster" "this" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
-  dynamic "encryption_config" {
-    for_each = var.kms_key_arn != null ? [1] : []
-    content {
-      resources = ["secrets"]
-      provider {
-        key_arn = var.kms_key_arn
-      }
+  # Criptografia de secrets do etcd é obrigatória (CKV_AWS_58); a chave vem do ambiente (envs/*).
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = var.kms_key_arn
     }
   }
 
   tags       = local.tags
-  depends_on = [aws_iam_role_policy_attachment.cluster, aws_cloudwatch_log_group.cluster]
+  depends_on = [aws_iam_role_policy_attachment.cluster, aws_iam_role_policy.cluster_kms, aws_cloudwatch_log_group.cluster]
+
+  lifecycle {
+    precondition {
+      condition     = var.kms_key_arn != null && var.kms_key_arn != ""
+      error_message = "kms_key_arn é obrigatório quando provider_kind = eks (criptografia de secrets e dos logs do control plane)."
+    }
+  }
 }
 
 # IRSA (OIDC) — usado por ESO/Velero/cert-manager com roles IAM

@@ -51,6 +51,13 @@ resource "aws_vpc" "this" {
   tags                 = merge(local.tags, { Name = var.name })
 }
 
+# Security group default da VPC sem nenhuma regra (CKV2_AWS_12): todo tráfego passa por SGs explícitos.
+resource "aws_default_security_group" "this" {
+  count  = local.is_aws ? 1 : 0
+  vpc_id = aws_vpc.this[0].id
+  tags   = merge(local.tags, { Name = "${var.name}-default-restricted" })
+}
+
 resource "aws_internet_gateway" "this" {
   count  = local.is_aws ? 1 : 0
   vpc_id = aws_vpc.this[0].id
@@ -115,7 +122,9 @@ resource "aws_route_table_association" "this" {
   route_table_id = each.value.public ? aws_route_table.public[0].id : aws_route_table.private[each.value.az].id
 }
 
-# NACL do segmento de dados: só aceita tráfego de app e mgmt (nunca da DMZ nem de fora)
+# NACL do segmento de dados: só aceita tráfego de app e mgmt (nunca da DMZ nem de fora), e somente nas
+# portas dos serviços de dados (var.data_ingress_ports). NACL é stateless: o retorno das conexões iniciadas
+# pelos nós de dados (NAT/internet, API server, app) entra pelas regras de portas efêmeras.
 resource "aws_network_acl" "data" {
   count      = local.is_aws ? 1 : 0
   vpc_id     = aws_vpc.this[0].id
@@ -123,37 +132,43 @@ resource "aws_network_acl" "data" {
   tags       = merge(local.tags, { Name = "${var.name}-nacl-data" })
 }
 
-resource "aws_network_acl_rule" "data_in_app" {
-  count          = local.is_aws ? length(var.subnets.app) : 0
-  network_acl_id = aws_network_acl.data[0].id
-  rule_number    = 100 + count.index
-  egress         = false
-  protocol       = "-1"
-  rule_action    = "allow"
-  cidr_block     = var.subnets.app[count.index]
+locals {
+  # (segmento origem × CIDR × porta) → regra. Numeração: app 100+, mgmt 300+, data 500+.
+  data_nacl_sources = { app = 100, mgmt = 300, data = 500 }
+  data_nacl_ingress = local.is_aws ? {
+    for r in flatten([
+      for seg, base in local.data_nacl_sources : [
+        for ci, cidr in local.segments[seg].cidrs : [
+          for pi, port in var.data_ingress_ports : {
+            key         = "${seg}-${ci}-${pi}"
+            rule_number = base + ci * length(var.data_ingress_ports) + pi
+            cidr        = cidr
+            protocol    = port.protocol
+            from_port   = port.from_port
+            to_port     = port.to_port
+          }
+        ]
+      ]
+    ]) : r.key => r
+  } : {}
 }
 
-resource "aws_network_acl_rule" "data_in_mgmt" {
-  count          = local.is_aws ? length(var.subnets.mgmt) : 0
+resource "aws_network_acl_rule" "data_in_service" {
+  for_each       = local.data_nacl_ingress
   network_acl_id = aws_network_acl.data[0].id
-  rule_number    = 200 + count.index
+  rule_number    = each.value.rule_number
   egress         = false
-  protocol       = "-1"
+  protocol       = each.value.protocol
   rule_action    = "allow"
-  cidr_block     = var.subnets.mgmt[count.index]
+  cidr_block     = each.value.cidr
+  from_port      = each.value.from_port
+  to_port        = each.value.to_port
 }
 
-resource "aws_network_acl_rule" "data_in_data" {
-  count          = local.is_aws ? length(var.subnets.data) : 0
-  network_acl_id = aws_network_acl.data[0].id
-  rule_number    = 300 + count.index
-  egress         = false
-  protocol       = "-1"
-  rule_action    = "allow"
-  cidr_block     = var.subnets.data[count.index]
-}
-
-resource "aws_network_acl_rule" "data_in_ephemeral" {
+# Retorno de conexões iniciadas pelos nós de dados (pull de imagens via NAT, API server, app).
+# A faixa efêmera é dividida para nunca aceitar 3389/RDP de origem irrestrita (CKV_AWS_231);
+# 22/SSH fica fora da faixa (acesso administrativo só via SSM/bastion na mgmt).
+resource "aws_network_acl_rule" "data_in_ephemeral_low" {
   count          = local.is_aws ? 1 : 0
   network_acl_id = aws_network_acl.data[0].id
   rule_number    = 900
@@ -162,6 +177,18 @@ resource "aws_network_acl_rule" "data_in_ephemeral" {
   rule_action    = "allow"
   cidr_block     = "0.0.0.0/0"
   from_port      = 1024
+  to_port        = 3388
+}
+
+resource "aws_network_acl_rule" "data_in_ephemeral_high" {
+  count          = local.is_aws ? 1 : 0
+  network_acl_id = aws_network_acl.data[0].id
+  rule_number    = 901
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 3390
   to_port        = 65535
 }
 
@@ -175,11 +202,12 @@ resource "aws_network_acl_rule" "data_out_all" {
   cidr_block     = "0.0.0.0/0"
 }
 
-# Flow logs (auditoria de rede, LGPD)
+# Flow logs (auditoria de rede, LGPD): cifrados com KMS e retidos >= 1 ano
 resource "aws_cloudwatch_log_group" "flow" {
   count             = local.is_aws ? 1 : 0
   name              = "/sus-nexus/${var.environment}/vpc-flow-logs"
   retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = var.kms_key_arn
   tags              = local.tags
 }
 
@@ -201,18 +229,24 @@ resource "aws_iam_role" "flow" {
   tags               = local.tags
 }
 
-resource "aws_iam_role_policy" "flow" {
+# Escrita restrita ao log group dos flow logs (CKV_AWS_290/355) — nada de Resource "*".
+data "aws_iam_policy_document" "flow" {
   count = local.is_aws ? 1 : 0
-  name  = "cloudwatch"
-  role  = aws_iam_role.flow[0].id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
-      Resource = "*"
-    }]
-  })
+  statement {
+    sid     = "FlowLogsToOwnLogGroup"
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
+    resources = [
+      aws_cloudwatch_log_group.flow[0].arn,
+      "${aws_cloudwatch_log_group.flow[0].arn}:*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "flow" {
+  count  = local.is_aws ? 1 : 0
+  name   = "cloudwatch"
+  role   = aws_iam_role.flow[0].id
+  policy = data.aws_iam_policy_document.flow[0].json
 }
 
 resource "aws_flow_log" "this" {
@@ -225,8 +259,12 @@ resource "aws_flow_log" "this" {
   tags                 = local.tags
 }
 
-# Security group base para a DMZ (APISIX / LB): HTTPS de qualquer origem + unidades de saúde
+# Security group base da borda (APISIX / LB): HTTPS de qualquer origem + unidades de saúde.
+# Exportado em `dmz_security_group_id`; o módulo cluster o aplica ao control plane (additional_security_group_ids)
+# e o chart do APISIX o referencia na annotation `aws-load-balancer-security-groups`.
+# Egress limitado a HTTPS/HTTP para fora e tráfego interno apenas dentro da VPC (CKV_AWS_382).
 resource "aws_security_group" "dmz" {
+  #checkov:skip=CKV2_AWS_5:Anexado ao EKS em modules/cluster (vpc_config.security_group_ids via additional_security_group_ids); o grafo do Checkov não segue referências entre módulos.
   count       = local.is_aws ? 1 : 0
   name        = "${var.name}-dmz"
   description = "Borda: APISIX/LB"
@@ -249,10 +287,25 @@ resource "aws_security_group" "dmz" {
     }
   }
   egress {
+    description = "HTTPS de saida (upstreams externos, OCSP/CRL, SSM)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    description = "HTTP de saida (redirects e CRL/OCSP sem TLS)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    description = "Trafego interno da VPC (upstreams nos segmentos app/data/mgmt)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.cidr]
   }
   tags = merge(local.tags, { Name = "${var.name}-dmz" })
 }
