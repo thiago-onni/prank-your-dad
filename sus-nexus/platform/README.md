@@ -88,11 +88,13 @@ Lakehouse (perfis `analytics`/`catalog`): Trino 8088, Connect lakehouse 8084, Op
    (`compose/keycloak/realm-sus-nexus.json`: client `connector-<id>`; rode `helm/scripts/sync-realm.sh`).
 2. Tópico de ingestão em `contracts/events/topics.yaml` (se novo) → `python3 helm/scripts/gen-kafka-topics.py`.
 3. Compose: copie um bloco do perfil `connectors` (ex.: `connector-lis`) em `compose/docker-compose.yml`
-   (build `../../connectors` com `CONNECTOR_MODULE`/`PORT`; portas 8093–8097, MLLP 2575–2577).
+   (build `../../connectors` com `CONNECTOR_MODULE`/`PORT`; portas 8093–8099, MLLP 2575–2577).
 4. Helm: em `helm/sus-nexus/Chart.yaml` adicione uma dependência com `alias: connector-<id>` (chart
    `sus-nexus-connector`) e o bloco `connector-<id>:` em `values.yaml` (`connector.id`, `sourceSystem`,
    `ingestTopic`, `edgeAgent`); ligue nos `values-<env>.yaml`. O `KafkaUser` + ACLs são gerados
    automaticamente (`templates/kafka-users.yaml`); adicione o alias à lista em `kafka-users.yaml`.
+   Leitura de tópicos extras (ex.: `sus.integration.command.v1` para reprocessamento) via
+   `connector.consumeTopics` (ver `connector-sia`).
 5. Argo: inclua `connector-<id>: { enabled: true }` no elemento `connectors` de
    `argocd/apps/20-sus-nexus-envs.yaml`.
 6. CI: adicione a linha na matriz `images` de `sus-nexus-ci.yml`/`sus-nexus-release.yml`

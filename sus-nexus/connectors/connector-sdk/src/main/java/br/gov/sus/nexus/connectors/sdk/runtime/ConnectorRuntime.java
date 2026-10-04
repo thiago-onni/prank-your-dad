@@ -9,6 +9,7 @@ import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
 import br.gov.sus.nexus.connectors.sdk.api.RetryDecision;
 import br.gov.sus.nexus.connectors.sdk.api.ValidationException;
 import br.gov.sus.nexus.connectors.sdk.api.ValidationReport;
+import br.gov.sus.nexus.connectors.sdk.core.CoreIntegrationMirror;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessage;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageLedger;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageStatus;
@@ -16,6 +17,7 @@ import br.gov.sus.nexus.connectors.sdk.mapping.MappingException;
 import br.gov.sus.nexus.connectors.sdk.metrics.ConnectorMetrics;
 import br.gov.sus.nexus.connectors.sdk.raw.RawMessageRef;
 import br.gov.sus.nexus.connectors.sdk.raw.RawMessageStore;
+import br.gov.sus.nexus.connectors.sdk.retry.DeadLetter;
 import br.gov.sus.nexus.connectors.sdk.retry.DeadLetterHandler;
 import br.gov.sus.nexus.connectors.sdk.retry.RetryPolicy;
 import br.gov.sus.nexus.connectors.sdk.util.Ids;
@@ -46,6 +48,11 @@ import org.jboss.logging.Logger;
  *
  * As rotas de fonte de cada conector (file, sql, timer...) entregam {@link RawMessage} em {@link
  * #INGEST}. Mensagens processadas são encaminhadas a {@link #PROCESSED} (ponto de extensão).
+ *
+ * <p>Reprocessamento: com o header {@link PipelineHeaders#REPROCESS_MESSAGE_ID} a mensagem do
+ * ledger é reaberta ({@code reprocessing}, mesma raw zone) em vez de criada — ver {@code
+ * sdk.reprocess}. Com {@code connector.core.mirror.pipeline-messages=true} o estado final de cada
+ * mensagem é espelhado no core ({@link CoreIntegrationMirror}).
  */
 @ApplicationScoped
 public class ConnectorRuntime extends RouteBuilder {
@@ -63,6 +70,7 @@ public class ConnectorRuntime extends RouteBuilder {
   private final ConnectorMetrics metrics;
   private final DeadLetterHandler deadLetters;
   private final RetryPolicy retryPolicy;
+  private final CoreIntegrationMirror mirror;
 
   @Inject
   public ConnectorRuntime(
@@ -71,13 +79,15 @@ public class ConnectorRuntime extends RouteBuilder {
       IntegrationMessageLedger ledger,
       ConnectorMetrics metrics,
       DeadLetterHandler deadLetters,
-      RetryPolicy retryPolicy) {
+      RetryPolicy retryPolicy,
+      CoreIntegrationMirror mirror) {
     this.connector = connector;
     this.rawStore = rawStore;
     this.ledger = ledger;
     this.metrics = metrics;
     this.deadLetters = deadLetters;
     this.retryPolicy = retryPolicy;
+    this.mirror = mirror;
   }
 
   @Override
@@ -158,28 +168,54 @@ public class ConnectorRuntime extends RouteBuilder {
     }
     exchange.getIn().setHeader(PipelineHeaders.STAGE, "receive");
     exchange.getIn().setHeader(PipelineHeaders.STARTED_AT, Instant.now());
-    String correlationId =
-        exchange.getIn().getHeader(PipelineHeaders.CORRELATION_ID, Ids.correlation(), String.class);
     String connectorId = connector.descriptor().connectorId();
-    IntegrationMessage message =
-        IntegrationMessage.received(
-            connectorId,
-            connector.descriptor().sourceSystem(),
-            raw.sourceRecordId(),
-            raw.sourceRecordVersion(),
-            raw.entityType(),
-            null,
-            null,
-            correlationId);
-    RawMessageRef ref = rawStore.store(connectorId, message.id(), raw);
-    message.rawRef(ref.uri(), ref.sha256());
-    ledger.save(message);
-    metrics.received(connectorId, raw.entityType());
+    IntegrationMessage message = reopen(exchange);
+    String correlationId;
+    if (message != null) {
+      correlationId = message.correlationId();
+    } else {
+      correlationId =
+          exchange
+              .getIn()
+              .getHeader(PipelineHeaders.CORRELATION_ID, Ids.correlation(), String.class);
+      message =
+          IntegrationMessage.received(
+              connectorId,
+              connector.descriptor().sourceSystem(),
+              raw.sourceRecordId(),
+              raw.sourceRecordVersion(),
+              raw.entityType(),
+              null,
+              null,
+              correlationId);
+      RawMessageRef ref = rawStore.store(connectorId, message.id(), raw);
+      message.rawRef(ref.uri(), ref.sha256());
+      ledger.save(message);
+      metrics.received(connectorId, raw.entityType());
+    }
     exchange.setProperty("SusIntegrationMessage", message);
     exchange.setProperty(PipelineHeaders.RAW_MESSAGE, raw);
     exchange.getIn().setHeader(PipelineHeaders.MESSAGE_ID, message.id());
     exchange.getIn().setHeader(PipelineHeaders.CORRELATION_ID, correlationId);
     exchange.getIn().setHeader(PipelineHeaders.ENTITY_TYPE, raw.entityType());
+  }
+
+  /** Reprocessamento: reabre a mensagem do ledger indicada no header (raw zone já gravada). */
+  private IntegrationMessage reopen(Exchange exchange) {
+    String id = exchange.getIn().getHeader(PipelineHeaders.REPROCESS_MESSAGE_ID, String.class);
+    if (id == null || id.isBlank()) return null;
+    IntegrationMessage message =
+        ledger
+            .findById(id)
+            .orElseThrow(
+                () ->
+                    ConnectorException.permanent(
+                        "receive", "mensagem a reprocessar ausente no ledger: " + id, null));
+    message.reopenForReprocessing();
+    ledger.save(message);
+    exchange.setProperty(CanonicalBatch.REPROCESS, Boolean.TRUE);
+    LOG.infof("reprocessando %s (%s)", message.id(), message.entityType());
+    return message;
   }
 
   private void transform(Exchange exchange) {
@@ -196,6 +232,9 @@ public class ConnectorRuntime extends RouteBuilder {
     advance(message, IntegrationMessageStatus.TRANSFORMED);
     Map<String, String> attrs = new HashMap<>(batch.attributes());
     attrs.put(CanonicalBatch.CORRELATION_ID, message.correlationId());
+    if (Boolean.TRUE.equals(exchange.getProperty(CanonicalBatch.REPROCESS))) {
+      attrs.put(CanonicalBatch.REPROCESS, "true");
+    }
     exchange
         .getIn()
         .setBody(
@@ -236,6 +275,7 @@ public class ConnectorRuntime extends RouteBuilder {
     metrics.processed(connectorId, message.entityType());
     if (started != null) metrics.latency(connectorId, Duration.between(started, Instant.now()));
     exchange.getIn().setHeader(PipelineHeaders.STAGE, "done");
+    if (mirror.pipelineMessages()) mirror.message(message, connector.descriptor().owner(), null);
   }
 
   private void toDeadLetter(Exchange exchange) {
@@ -252,7 +292,10 @@ public class ConnectorRuntime extends RouteBuilder {
     }
     FailedMessage failed =
         new FailedMessage(message.id(), stage, message.attempts(), error, isPermanent(error));
-    deadLetters.handle(message, failed, connector.descriptor().owner());
+    DeadLetter dl = deadLetters.handle(message, failed, connector.descriptor().owner());
+    if (mirror.pipelineMessages()) {
+      mirror.message(message, connector.descriptor().owner(), dl.reason());
+    }
   }
 
   private void advance(IntegrationMessage message, IntegrationMessageStatus next) {

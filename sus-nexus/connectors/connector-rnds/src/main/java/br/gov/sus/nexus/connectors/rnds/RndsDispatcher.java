@@ -4,6 +4,7 @@ import br.gov.sus.nexus.connectors.rnds.submission.RndsSubmission;
 import br.gov.sus.nexus.connectors.rnds.submission.RndsSubmissionStatus;
 import br.gov.sus.nexus.connectors.rnds.submission.RndsSubmissionStore;
 import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
+import br.gov.sus.nexus.connectors.sdk.core.CoreIntegrationMirror;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessage;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageLedger;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageStatus;
@@ -50,7 +51,7 @@ public class RndsDispatcher {
   private final RndsConnector connector;
   private final RndsSubmissionStore submissions;
   private final IntegrationMessageLedger ledger;
-  private final CoreMirror core;
+  private final CoreIntegrationMirror core;
   private final RndsMetrics metrics;
   private final ProducerTemplate producer;
   private final ObjectMapper mapper;
@@ -60,7 +61,7 @@ public class RndsDispatcher {
       RndsConnector connector,
       RndsSubmissionStore submissions,
       IntegrationMessageLedger ledger,
-      CoreMirror core,
+      CoreIntegrationMirror core,
       RndsMetrics metrics,
       ProducerTemplate producer,
       ObjectMapper mapper) {
@@ -112,7 +113,40 @@ public class RndsDispatcher {
       metrics.ignored(model, "duplicate");
       return Outcome.DUPLICATE;
     }
-    return runPipeline(eventId, model, envelopeJson, envelope);
+    return runPipeline(eventId, model, envelopeJson, envelope, null);
+  }
+
+  /**
+   * Reprocessamento (comando {@code sus.integration.reprocess.requested}, via {@link
+   * RndsReprocessor}): reenvia o evento de uma submissão {@code failed} reabrindo a mesma {@code
+   * integration_message} ({@code messageId}). Qualquer outro estado da submissão → {@link
+   * Outcome#DUPLICATE} (nada é reenviado).
+   */
+  public Outcome reprocess(String model, String envelopeJson, String messageId) {
+    JsonNode envelope;
+    try {
+      envelope = mapper.readTree(envelopeJson);
+    } catch (IOException e) {
+      metrics.ignored(model, "invalid_event");
+      return Outcome.INVALID_EVENT;
+    }
+    String eventId = envelope.path("event_id").asText(null);
+    if (eventId == null || eventId.isBlank()) {
+      metrics.ignored(model, "invalid_event");
+      return Outcome.INVALID_EVENT;
+    }
+    if (!connector.enabled(model)) {
+      metrics.ignored(model, "disabled");
+      return Outcome.IGNORED_DISABLED;
+    }
+    Optional<RndsSubmission> existing = submissions.findByEventId(eventId);
+    if (existing.isEmpty() || existing.get().status() != RndsSubmissionStatus.FAILED) {
+      metrics.ignored(model, "duplicate");
+      return Outcome.DUPLICATE;
+    }
+    submissions.save(existing.get().withStatus(RndsSubmissionStatus.PENDING, "reprocessamento"));
+    LOG.infof("reprocessando evento %s (modelo %s)", eventId, model);
+    return runPipeline(eventId, model, envelopeJson, envelope, messageId);
   }
 
   private boolean applicable(String model, JsonNode data) {
@@ -139,7 +173,8 @@ public class RndsDispatcher {
     return false;
   }
 
-  private Outcome runPipeline(String eventId, String model, String json, JsonNode envelope) {
+  private Outcome runPipeline(
+      String eventId, String model, String json, JsonNode envelope, String reprocessMessageId) {
     String correlation = envelope.path("trace").path("correlation_id").asText(null);
     if (correlation == null || correlation.isBlank()) correlation = Ids.correlation();
     RawMessage raw =
@@ -162,6 +197,9 @@ public class RndsDispatcher {
             ex -> {
               ex.getIn().setBody(raw);
               ex.getIn().setHeader(PipelineHeaders.CORRELATION_ID, correlationId);
+              if (reprocessMessageId != null) {
+                ex.getIn().setHeader(PipelineHeaders.REPROCESS_MESSAGE_ID, reprocessMessageId);
+              }
             });
     String messageId = result.getIn().getHeader(PipelineHeaders.MESSAGE_ID, String.class);
     Optional<IntegrationMessage> message =

@@ -91,6 +91,9 @@ connector-ris:
   connector:
     edgeAgent: true
     mllp: { allowedSourceCidrs: ["172.16.31.0/24"] }
+connector-sia:
+  enabled: true
+  replicaCount: 1   # pasta monitorada + marca d'água por arquivo: uma réplica (sem disputa de arquivos)
 
 cnpg:
   enabled: true

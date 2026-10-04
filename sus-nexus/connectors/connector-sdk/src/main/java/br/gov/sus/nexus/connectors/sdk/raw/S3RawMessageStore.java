@@ -13,6 +13,8 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -78,6 +80,26 @@ public class S3RawMessageStore implements RawMessageStore {
       return Optional.of(bytes.asByteArray());
     } catch (NoSuchKeyException e) {
       return Optional.empty();
+    }
+  }
+
+  @Override
+  public Map<String, String> describe(RawMessageRef ref) {
+    String withoutScheme = ref.uri().substring("s3://".length());
+    int slash = withoutScheme.indexOf('/');
+    try {
+      HeadObjectResponse head =
+          s3.headObject(
+              HeadObjectRequest.builder()
+                  .bucket(withoutScheme.substring(0, slash))
+                  .key(withoutScheme.substring(slash + 1))
+                  .build());
+      Map<String, String> out = new LinkedHashMap<>();
+      head.metadata().forEach((k, v) -> out.put(k.replace('-', '_'), v));
+      if (head.contentType() != null) out.put("content_type", head.contentType());
+      return out;
+    } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+      return Map.of();
     }
   }
 

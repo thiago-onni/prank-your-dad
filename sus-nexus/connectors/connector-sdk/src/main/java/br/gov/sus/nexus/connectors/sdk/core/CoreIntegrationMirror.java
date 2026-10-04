@@ -1,9 +1,10 @@
-package br.gov.sus.nexus.connectors.rnds;
+package br.gov.sus.nexus.connectors.sdk.core;
 
 import br.gov.sus.nexus.connectors.sdk.api.ConnectorDescriptor;
 import br.gov.sus.nexus.connectors.sdk.api.ErrorDetails;
 import br.gov.sus.nexus.connectors.sdk.api.HealthStatus;
 import br.gov.sus.nexus.connectors.sdk.api.ReconciliationReport;
+import br.gov.sus.nexus.connectors.sdk.config.ConnectorConfig;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessage;
 import br.gov.sus.nexus.connectors.sdk.ledger.IntegrationMessageStatus;
 import br.gov.sus.nexus.connectors.sdk.util.Pii;
@@ -16,26 +17,42 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 /**
- * Publica no core o resultado de cada envio (ledger espelho {@code POST
- * /api/v1/integration/messages}), o heartbeat do conector e a reconciliação. Melhor esforço: falha
- * no core não desfaz um envio já aceito pela RNDS (o ledger local continua sendo a fonte).
+ * Espelha no core (tag {@code integration} do OpenAPI) o estado de cada {@code integration_message}
+ * ({@code POST /api/v1/integration/messages}, sem payload), o heartbeat do conector e a
+ * reconciliação. Habilitado por {@code connector.core.mirror.enabled}; com {@code
+ * connector.core.mirror.pipeline-messages=true} o {@code ConnectorRuntime} espelha automaticamente
+ * cada mensagem ao terminar (publicada ou DLQ) — pré-requisito para o core oferecer o
+ * reprocessamento ({@code sus.integration.command.v1}).
+ *
+ * <p>Melhor esforço: falha no core é registrada (sem PII) e não desfaz o processamento local (o
+ * ledger do conector continua sendo a fonte).
  */
 @ApplicationScoped
-public class CoreMirror {
+public class CoreIntegrationMirror {
 
-  private static final Logger LOG = Logger.getLogger(CoreMirror.class);
+  private static final Logger LOG = Logger.getLogger(CoreIntegrationMirror.class);
 
   private final CoreIntegrationApi api;
-  private final RndsConfig config;
+  private final ConnectorConfig config;
 
   @Inject
-  public CoreMirror(@RestClient CoreIntegrationApi api, RndsConfig config) {
+  public CoreIntegrationMirror(@RestClient CoreIntegrationApi api, ConnectorConfig config) {
     this.api = api;
     this.config = config;
   }
 
+  /** Espelhamento habilitado ({@code connector.core.mirror.enabled}). */
+  public boolean enabled() {
+    return config.core().mirror().enabled();
+  }
+
+  /** O runtime deve espelhar cada mensagem ao fim do pipeline. */
+  public boolean pipelineMessages() {
+    return enabled() && config.core().mirror().pipelineMessages();
+  }
+
   public void message(IntegrationMessage m, String owner, String dlqReason) {
-    if (!config.mirrorToCore() || m == null) return;
+    if (!enabled() || m == null) return;
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("id", m.id());
     body.put("connector_id", m.connectorId());
@@ -72,7 +89,7 @@ public class CoreMirror {
   }
 
   public void heartbeat(ConnectorDescriptor d, HealthStatus health, Map<String, Object> metrics) {
-    if (!config.mirrorToCore()) return;
+    if (!enabled()) return;
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("connector_version", d.connectorVersion());
     body.put("source_system", d.sourceSystem());
@@ -92,7 +109,7 @@ public class CoreMirror {
   }
 
   public void reconciliation(ReconciliationReport report) {
-    if (!config.mirrorToCore()) return;
+    if (!enabled()) return;
     for (ReconciliationReport.Entry e : report.entries()) {
       Map<String, Object> body = new LinkedHashMap<>();
       body.put("connector_id", report.connectorId());

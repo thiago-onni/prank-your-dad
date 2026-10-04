@@ -55,6 +55,7 @@ exportarem telemetria.
 | connector-lis | http://localhost:8095 · MLLP `localhost:2575` | client credentials `connector-lis` |
 | connector-his (borda) | http://localhost:8096 · MLLP `localhost:2576` | client credentials `connector-his` |
 | connector-ris (borda) | http://localhost:8097 · MLLP `localhost:2577` | client credentials `connector-ris` |
+| connector-sia | http://localhost:8099 · entrada `/app/data/sia/{producao,retornos}` (volume `connector-sia-data`) → Kafka `sus.ingest.production.v1` | client credentials `connector-sia` |
 | web shell | http://localhost:3000 | usuários abaixo |
 | ai-service | http://localhost:8000 (`/health`, `/docs`) | client credentials |
 | PostgreSQL | localhost:5432 | `postgres`/`postgres`; app `sus_nexus`/`sus_nexus` |

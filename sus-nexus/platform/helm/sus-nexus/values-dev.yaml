@@ -69,6 +69,9 @@ connector-ris:
     edgeAgent: false
     mllp:
       allowedSourceCidrs: ["10.0.0.0/8"]
+# Produção SIA/SIH (arquivos → sus.ingest.production.v1); entrada no volume de dados do pod.
+connector-sia:
+  enabled: true
 
 cnpg:
   enabled: true

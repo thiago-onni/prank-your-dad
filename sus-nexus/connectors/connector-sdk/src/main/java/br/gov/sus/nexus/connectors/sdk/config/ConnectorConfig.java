@@ -64,6 +64,22 @@ public interface ConnectorConfig {
     @WithDefault("500")
     int batchSize();
 
+    /** Espelhamento no core (ledger, heartbeat, reconciliação) — {@code CoreIntegrationMirror}. */
+    Mirror mirror();
+
+    interface Mirror {
+      /** Liga as chamadas a {@code /api/v1/integration/*} (heartbeat, reconciliação, ledger). */
+      @WithDefault("false")
+      boolean enabled();
+
+      /**
+       * O {@code ConnectorRuntime} espelha cada mensagem ao terminar o pipeline (publicada ou DLQ).
+       * Conectores que espelham por conta própria (ex.: RNDS) deixam {@code false}.
+       */
+      @WithDefault("false")
+      boolean pipelineMessages();
+    }
+
     interface Auth {
       /** {@code static} (dev/test: token fixo) ou {@code oidc} (client credentials). */
       @WithDefault("static")

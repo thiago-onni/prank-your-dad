@@ -6,7 +6,8 @@
 ACLs por serviço (PLANO 4.2.3 / KAF-010). Princípio: cada serviço só escreve nos tópicos que produz e
 só lê os que consome; ninguém além do core/fhir lê tópicos de domínio; ingest só é lido pelo core.
 Os usuários de conector são gerados por alias de conector habilitado + lista `strimzi.extraConnectorUsers`
-(para agentes de borda que rodam fora do cluster).
+(para agentes de borda que rodam fora do cluster). `connector.consumeTopics` (opcional) concede leitura de tópicos
+extras (ex.: `sus.integration.command.v1` para o reprocessamento comandado pelo core).
 */}}
 {{- range $user := .Values.strimzi.users }}
 ---
@@ -41,7 +42,7 @@ spec:
   {{- end }}
 {{- end }}
 {{- /* Conectores: um KafkaUser por alias habilitado */}}
-{{- range $alias := list "connector-pec" "connector-agenda" "connector-sisreg" "connector-cnes" "connector-cadsus" "connector-his" "connector-esus-regulacao" "connector-lis" "connector-ris" }}
+{{- range $alias := list "connector-pec" "connector-agenda" "connector-sisreg" "connector-cnes" "connector-cadsus" "connector-his" "connector-esus-regulacao" "connector-lis" "connector-ris" "connector-sia" }}
 {{- $cv := index $root.Values $alias }}
 {{- if and $cv $cv.enabled }}
 {{- $id := $cv.connector.id }}
@@ -74,6 +75,11 @@ spec:
       - resource: { type: topic, name: "sus.dlq.v1", patternType: literal }
         operations: [Describe, Write]
         host: "*"
+      {{- range $cv.connector.consumeTopics }}
+      - resource: { type: topic, name: {{ . | quote }}, patternType: literal }
+        operations: [Describe, Read]
+        host: "*"
+      {{- end }}
       - resource: { type: group, name: {{ printf "connector-%s" $id | quote }}, patternType: prefix }
         operations: [Read, Describe]
         host: "*"

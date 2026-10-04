@@ -1,7 +1,5 @@
-package br.gov.sus.nexus.connectors.rnds;
+package br.gov.sus.nexus.connectors.sdk.core;
 
-import br.gov.sus.nexus.connectors.sdk.core.CoreApi;
-import br.gov.sus.nexus.connectors.sdk.core.CoreHeadersFactory;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
@@ -15,9 +13,9 @@ import org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 /**
- * Endpoints de operação de integração do core ({@code tags: integration} do OpenAPI) usados pelo
- * conector: ledger espelho, heartbeat e reconciliação. Mesmo {@code configKey} e cabeçalhos do
- * {@link CoreApi} do SDK.
+ * Endpoints de operação de integração do core ({@code tags: integration} do OpenAPI) usados pelos
+ * conectores: ledger espelho, heartbeat e reconciliação. Mesmo {@code configKey} e cabeçalhos do
+ * {@link CoreApi}. Use pela fachada {@link CoreIntegrationMirror} (melhor esforço, sem PII).
  */
 @Path("/api/v1/integration")
 @RegisterRestClient(configKey = "core")

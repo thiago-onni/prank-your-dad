@@ -58,10 +58,6 @@ public interface RndsConfig {
 
   Reconciliation reconciliation();
 
-  /** Espelha o ledger e o heartbeat no core ({@code /api/v1/integration/*}). */
-  @WithDefault("true")
-  boolean mirrorToCore();
-
   interface Auth {
     /** Método HTTP do endpoint de token ({@code GET} ou {@code POST}). */
     @WithDefault("GET")

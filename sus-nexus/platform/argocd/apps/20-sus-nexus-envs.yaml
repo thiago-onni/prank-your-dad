@@ -89,6 +89,7 @@ spec:
                     connector-esus-regulacao: { enabled: true }
                     connector-lis: { enabled: true }
                     connector-ris: { enabled: true }
+                    connector-sia: { enabled: true }
   template:
     metadata:
       name: "sus-nexus-{{ .env }}-{{ .component }}"
@@ -129,6 +130,7 @@ spec:
             connector-esus-regulacao: { enabled: false }
             connector-lis: { enabled: false }
             connector-ris: { enabled: false }
+            connector-sia: { enabled: false }
             cnpg: { enabled: false }
             strimzi: { enabled: false }
             kafkaConnect: { enabled: false }

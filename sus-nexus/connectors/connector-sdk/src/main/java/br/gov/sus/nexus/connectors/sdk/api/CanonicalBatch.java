@@ -32,8 +32,26 @@ public record CanonicalBatch(
   public static final String HOSPITAL_MOVEMENT = "hospital_movement";
   public static final String HOSPITAL_DISCHARGE = "hospital_discharge";
 
+  /**
+   * Registro de produção (BPA-C/BPA-I/APAC/AIH) publicado no tópico de ingestão {@code
+   * sus.ingest.production.v1} (data = {@code ProductionRecordRegistration}).
+   */
+  public static final String PRODUCTION_RECORD = "production_record";
+
+  /**
+   * Retorno do processamento oficial SIA/SIH (rejeição/glosa, aceite, pagamento) em {@code
+   * sus.ingest.production.v1} (data = {@code ProductionOutcomeRegistration}).
+   */
+  public static final String PRODUCTION_OUTCOME = "production_outcome";
+
   /** Atributo preenchido pelo pipeline com o correlation_id da integration_message. */
   public static final String CORRELATION_ID = "correlation_id";
+
+  /**
+   * Atributo preenchido pelo pipeline ({@code "true"}) quando o lote vem de um reprocessamento
+   * (KAF-012): publicadores em barramento marcam {@code replay=true} no envelope.
+   */
+  public static final String REPROCESS = "reprocess";
 
   public CanonicalBatch {
     records = List.copyOf(records);

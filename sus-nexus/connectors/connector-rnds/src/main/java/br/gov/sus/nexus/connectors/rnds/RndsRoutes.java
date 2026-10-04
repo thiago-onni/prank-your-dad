@@ -3,6 +3,7 @@ package br.gov.sus.nexus.connectors.rnds;
 import br.gov.sus.nexus.connectors.rnds.submission.RndsSubmissionStore;
 import br.gov.sus.nexus.connectors.sdk.api.Period;
 import br.gov.sus.nexus.connectors.sdk.api.ReconciliationReport;
+import br.gov.sus.nexus.connectors.sdk.core.CoreIntegrationMirror;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.time.Duration;
@@ -20,14 +21,14 @@ public class RndsRoutes extends RouteBuilder {
   private final RndsConfig config;
   private final RndsConnector connector;
   private final RndsSubmissionStore submissions;
-  private final CoreMirror core;
+  private final CoreIntegrationMirror core;
 
   @Inject
   public RndsRoutes(
       RndsConfig config,
       RndsConnector connector,
       RndsSubmissionStore submissions,
-      CoreMirror core) {
+      CoreIntegrationMirror core) {
     this.config = config;
     this.connector = connector;
     this.submissions = submissions;

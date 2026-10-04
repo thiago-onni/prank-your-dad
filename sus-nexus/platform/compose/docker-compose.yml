@@ -5,8 +5,8 @@
 #                  serviços pelo IDE/`quarkus dev`
 #   core           infra + serviços da aplicação (core-municipal, fhir-gateway, web-shell, connector-pec)
 #   ai             infra + ai-service + LiteLLM + Langfuse
-#   connectors     infra + core-municipal + conectores SISREG, e-SUS Regulação, LIS, HIS e RIS
-#                  (MLLP: LIS 2575, HIS 2576, RIS 2577)
+#   connectors     infra + core-municipal + conectores SISREG, e-SUS Regulação, LIS, HIS, RIS e SIA/SIH
+#                  (MLLP: LIS 2575, HIS 2576, RIS 2577; SIA: pasta de entrada no volume connector-sia-data)
 #   observability  OTel Collector, Prometheus, Grafana, Loki, Tempo, Metabase
 #   analytics      lakehouse (Fase 4): infra + Trino, Kafka Connect com Iceberg sink, Metabase
 #                  (ver sus-nexus/data/README.md)
@@ -765,6 +765,45 @@ services:
       start_period: 60s
     logging: *default-logging
 
+  # Produção SIA/SIH (perfil `connectors`): exportações de produção e retornos oficiais depositados em
+  # /app/data/sia/{producao,retornos} (volume connector-sia-data; em produção, SFTP montado) → Kafka
+  # sus.ingest.production.v1. Comandos de reprocessamento do core em sus.integration.command.v1.
+  connector-sia:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-sia
+        PORT: "8099"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-sia:${IMAGE_TAG:-local}
+    container_name: sus-connector-sia
+    depends_on:
+      <<: *connector-depends
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: [*connector-env, *kafka-env, *otel-env]
+      PORT: "8099"
+      CORE_CLIENT_ID: connector-sia
+      CORE_CLIENT_SECRET: ${CONNECTOR_SIA_OIDC_SECRET:-connector-sia-dev-secret}
+      SIA_PRODUCTION_DIR: /app/data/sia/producao
+      SIA_RETURNS_DIR: /app/data/sia/retornos
+      SIA_PROCESSED_REGISTRY: /app/data/sia/processed-files.json
+      SIA_CHARSET: ${SIA_CHARSET:-UTF-8}
+      KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+    ports:
+      - "${CONNECTOR_SIA_PORT:-8099}:8099"
+    volumes:
+      - connector-sia-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8099 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
   web-shell:
     profiles: ["core"]
     build:
@@ -1215,6 +1254,7 @@ volumes:
   connector-lis-data:
   connector-his-data:
   connector-ris-data:
+  connector-sia-data:
 
 networks:
   default:

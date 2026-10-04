@@ -54,6 +54,9 @@ connector-his:
 connector-ris:
   enabled: true
   connector: { edgeAgent: true }
+# Produção SIA/SIH: retornos oficiais com layout "A CONFIRMAR" — homologar com o faturamento municipal.
+connector-sia:
+  enabled: true
 
 cnpg:
   enabled: true

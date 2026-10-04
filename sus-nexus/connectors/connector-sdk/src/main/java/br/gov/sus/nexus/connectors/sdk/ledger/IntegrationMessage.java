@@ -132,6 +132,37 @@ public final class IntegrationMessage {
     }
   }
 
+  /**
+   * Reabre uma mensagem falha ({@code failed}/{@code dead_lettered}) para reprocessamento (comando
+   * {@code sus.integration.reprocess.requested}): estado {@code reprocessing} e contador de
+   * tentativas zerado (nova janela de retry). O último erro é mantido até a próxima falha.
+   */
+  public void reopenForReprocessing() {
+    if (status == IntegrationMessageStatus.REPROCESSING) {
+      this.attempts = 0;
+      return;
+    }
+    if (status != IntegrationMessageStatus.FAILED
+        && status != IntegrationMessageStatus.DEAD_LETTERED) {
+      throw new IllegalStateException(
+          "integration_message " + id + " não reprocessável no estado " + status);
+    }
+    transitionTo(IntegrationMessageStatus.REPROCESSING);
+    this.attempts = 0;
+  }
+
+  /** {@code failed} ou {@code dead_lettered}: elegível a reprocessamento. */
+  public boolean isFailed() {
+    return status == IntegrationMessageStatus.FAILED
+        || status == IntegrationMessageStatus.DEAD_LETTERED;
+  }
+
+  /** {@code published} ou {@code processed}. */
+  public boolean isPublished() {
+    return status == IntegrationMessageStatus.PUBLISHED
+        || status == IntegrationMessageStatus.PROCESSED;
+  }
+
   public void markAttempt() {
     this.attempts++;
   }

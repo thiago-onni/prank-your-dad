@@ -40,6 +40,9 @@ Kafka sus.hospital.discharge.v1 (action=completed)                         ─�
                   5xx/408/429/timeout → retry exponencial (connector.retry.*) → esgotou → DLQ
   → ledger espelho no core: POST /api/v1/integration/messages (status + dead_letter quando houver)
   → rnds_submission (event_id, modelo, sha256 do Bundle, status, protocolo, resumo do outcome, tentativas)
+Kafka sus.integration.command.v1 (sus.integration.reprocess.requested, connector_id=connector-rnds)
+  → ReprocessCommandHandler (SDK) → RndsReprocessor: só submissões failed → envelope relido da raw zone
+  → RndsDispatcher.reprocess (mesma integration_message reaberta) → mesmo fluxo acima
 Timer: heartbeat POST /api/v1/integration/connectors/connector-rnds/heartbeat (contagens 24 h por modelo)
 Timer: ReconciliationJob (enviados × aceitos por modelo/período) → POST /api/v1/integration/reconciliation
 ```
@@ -75,7 +78,8 @@ final/amended. As mensagens citam só nomes de regras, nunca valores.
 Um registro por `event_id` (`memory` ou `jdbc` — DDL `db/rnds_submission.sql`, criada se ausente).
 Estados: `pending` → `retrying` → `accepted` | `rejected` | `invalid` | `failed`. Evento repetido com
 qualquer estado ≠ `failed` é ignorado (`connector_rnds_events_ignored_total{reason="duplicate"}`);
-`failed` (DLQ por retry esgotado/erro antes do envio) pode ser reprocessado. Nunca guarda PII: hash
+`failed` (DLQ por retry esgotado/erro antes do envio) pode ser reprocessado — pelo próprio evento repetido ou
+pelo comando do core (ver [Reprocessamento](#reprocessamento-susintegrationcommandv1)). Nunca guarda PII: hash
 SHA-256 do Bundle, protocolo, HTTP status, resumo do `OperationOutcome` e o próprio outcome **mascarados**
 (`Pii.maskText`).
 
@@ -96,9 +100,10 @@ SHA-256 do Bundle, protocolo, HTTP status, resumo do `OperationOutcome` e o pró
 | `rnds.models.<m>.mapping` | `mappings/rnds-<m>-1.0.0.yaml` | Mapeamento versionado (classpath ou `file:`) |
 | `rnds.models.<m>.bundle-type` | do YAML | `document` ou `transaction` |
 | `rnds.fhir.base-url` / `.auth-mode` / `.token-url` / `.client-id` / `.client-secret` / `.scope` | `…/fhir/r4` / `oauth2` / Keycloak / `connector-rnds` / — / `system/*.read` | Leitura no fhir-gateway |
+| `RNDS_CONSUMER_GROUP` | `connector-rnds` | Grupo dos gatilhos e do comando de reprocessamento |
 | `rnds.submission-store.type` | `memory` | `jdbc` exige `DB_ACTIVE=true` + `quarkus.datasource.*` (PostgreSQL) |
 | `rnds.heartbeat.*` / `rnds.reconciliation.*` | 60 s / 1 h, janela `P1D` | Agendamentos |
-| `rnds.mirror-to-core` | `true` | Ledger espelho/heartbeat/reconciliação no core |
+| `connector.core.mirror.enabled` (`RNDS_MIRROR_TO_CORE`) | `true` | Ledger espelho/heartbeat/reconciliação no core (`CoreIntegrationMirror` do SDK; antes `rnds.mirror-to-core`) |
 | `connector.*` | ver `connectors/README.md` | raw zone, ledger, DLQ, retry, auth do core |
 
 Variáveis de ambiente correspondentes: `RNDS_AUTH_URL`, `RNDS_EHR_URL`, `RNDS_REQUESTER_CPF`,
@@ -106,6 +111,25 @@ Variáveis de ambiente correspondentes: `RNDS_AUTH_URL`, `RNDS_EHR_URL`, `RNDS_R
 `RNDS_TRUSTSTORE_PATH`, `RNDS_TRUSTSTORE_PASSWORD`, `RNDS_RESULTADO_EXAME_ENABLED`,
 `RNDS_SUMARIO_ALTA_ENABLED`, `RNDS_*_PATH`, `FHIR_GATEWAY_URL`, `FHIR_TOKEN_URL`, `FHIR_CLIENT_ID`,
 `FHIR_CLIENT_SECRET`, `KAFKA_BOOTSTRAP_SERVERS`, `RNDS_CONSUMER_GROUP`, `RNDS_SUBMISSION_STORE`, `DB_*`.
+
+## Reprocessamento (`sus.integration.command.v1`)
+
+O operador de integração pede o reprocessamento de uma mensagem na tela de integrações (`POST
+/api/v1/integration/messages/{id}/reprocess`); o core publica `sus.integration.reprocess.requested` (canal
+`rnds-integration-command`). O `ReprocessCommandHandler` do SDK valida o contrato, filtra `connector_id` e tenant e
+deduplica o comando; o `RndsReprocessor` decide pelo estado de `rnds_submission`:
+
+| Estado | Ação |
+|---|---|
+| `failed` | envelope original relido da raw zone (SHA-256 conferido com o ledger) → `RndsDispatcher.reprocess` reabre a **mesma** `integration_message` e reenvia (token, Bundle determinístico, retry/DLQ) → `accepted` ou `failed` de novo; ledger espelhado no core |
+| `accepted` | nada é reenviado (`already_done`; protocolo já registrado) |
+| `rejected` / `invalid` | não reprocessável — a correção na origem gera novo evento |
+| `pending` / `retrying` | em andamento — ignorado |
+
+`suppress_external_effects=true` (KAF-012) é respeitado no sentido de não duplicar efeitos: só é reenviado o que a
+RNDS **não** aceitou. Atenção: em `failed` por timeout a RNDS pode ter recebido o Bundle; o `Bundle.identifier`
+determinístico permite que ela recuse duplicidade (comportamento a confirmar na homologação). Métrica
+`connector_rnds_*` + `connector_reprocess_total{result}`.
 
 ## Habilitação de um modelo (passo a passo)
 
@@ -180,4 +204,6 @@ com **certificado de cliente obrigatório** (serviço de autenticação); keysto
 pré-validação negativa (sem CNS/CPF → DLQ sem chamada), token mTLS em cache e recusa sem certificado,
 201 com Location, 422 com OperationOutcome → DLQ sem retry, 503 → retry → sucesso, 503 persistente → DLQ,
 idempotência por `event_id`, modelo desabilitado, status não final, gatilho Kafka, reconciliação, heartbeat,
+reprocessamento por comando Kafka (`RndsReprocessTest`: failed → reenvio aceito na mesma mensagem, aceita/outro
+conector → nada reenviado, falha de novo → `failed`),
 PII mascarada (logs, ledger, DLQ, OperationOutcome armazenado), sumário de alta e Bundle `transaction`.

@@ -23,6 +23,7 @@
     <module>connector-his</module>
     <module>connector-ris</module>
     <module>connector-rnds</module>
+    <module>connector-sia</module>
   </modules>
 
   <properties>

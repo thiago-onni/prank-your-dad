@@ -1,0 +1,58 @@
+# Retorno do processamento oficial SIA/SIH → ProductionOutcomeRegistration
+# (data de sus.ingest.production.v1, event_type sus.ingest.production.outcome; mesma porta do
+# POST /api/v1/production/outcomes). LOOKUPS E FORMATOS "A CONFIRMAR" NA HOMOLOGAÇÃO (códigos de
+# situação, casas decimais, identificação do registro no retorno).
+# Alvo: exatamente um entre production_record_id, record_source e batch_id — o conector mantém o
+# mais específico (SiaRules.resolveOutcomeTarget). Valores com casas implícitas (layout
+# valor_casas_implicitas) são ajustados em código antes do mapeamento.
+mapping_set: sia-production-outcome
+version: "1.0.0"
+entity_type: production_outcome
+lookups:
+  situacao:
+    REJEITADO: rejected
+    REJEITADA: rejected
+    REJEICAO: rejected
+    RJ: rejected
+    GLOSADO: rejected
+    GLOSADA: rejected
+    GLOSA: rejected
+    GLOSA TOTAL: rejected
+    GL: rejected
+    BLOQUEADO: rejected
+    PAGO: paid
+    PAGA: paid
+    PG: paid
+    APROVADO PAGO: paid
+    GLOSA PARCIAL: paid
+    ACEITO: accepted
+    ACEITA: accepted
+    APROVADO: accepted
+    APROVADA: accepted
+    PROCESSADO: accepted
+    AP: accepted
+    AC: accepted
+    RECEBIDO: received
+    RECEBIDA: received
+    RC: received
+    TRANSMITIDO: transmitted
+    TRANSMITIDA: transmitted
+    ENVIADO: transmitted
+    TR: transmitted
+fields:
+  - { source: _source_system, target: source.system, transforms: [trim, upper], required: true }
+  - { target: source.connector, constant: connector-sia }
+  - { source: _source_record_id, target: source.source_record_id, required: true }
+  - { source: _source_record_version, target: source.source_record_version, transforms: [blank_to_null] }
+  - { source: situacao, target: outcome, transforms: [trim, unaccent, upper, { lookup: { table: situacao, strict: true } }], required: true }
+  - { source: id_registro_barramento, target: production_record_id, transforms: [trim, blank_to_null] }
+  - { source: sistema_origem_registro, target: record_source.system, transforms: [trim, upper, blank_to_null], depends_on: id_registro_origem }
+  - { source: id_registro_origem, target: record_source.source_record_id, transforms: [trim, blank_to_null] }
+  - { source: lote, target: batch_id, transforms: [trim, blank_to_null] }
+  - { source: data_processamento, target: processed_at, transforms: [{ date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd|yyyyMMdd", to: iso-datetime } }], required: true }
+  - { source: codigo_motivo, target: reason_code, transforms: [trim, blank_to_null, { substring: { start: 0, end: 32 } }] }
+  - { source: motivo, target: reason, transforms: [trim, blank_to_null, { substring: { start: 0, end: 500 } }] }
+  # pt-BR "1.234,56"; ponto decimal simples ("10.50") também aceito
+  - { source: valor_pago, target: paid_amount, transforms: [trim, blank_to_null, { regex: { pattern: "^(\\d+)\\.(\\d{1,2})$", replacement: "$1,$2" } }, to_decimal] }
+  - { source: quantidade_aprovada, target: approved_quantity, transforms: [digits, blank_to_null, to_integer] }
+  - { source: protocolo, target: protocol_number, transforms: [trim, blank_to_null, { substring: { start: 0, end: 64 } }] }

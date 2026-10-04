@@ -75,6 +75,35 @@ public class FileSystemRawMessageStore implements RawMessageStore {
     }
   }
 
+  @Override
+  public Map<String, String> describe(RawMessageRef ref) {
+    try {
+      Path raw = Path.of(java.net.URI.create(ref.uri()));
+      String name = raw.getFileName().toString();
+      Path meta =
+          raw.resolveSibling(
+              (name.endsWith(".raw") ? name.substring(0, name.length() - 4) : name) + ".meta.json");
+      if (!Files.exists(meta)) return Map.of();
+      Map<String, String> out = new LinkedHashMap<>();
+      com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(meta.toFile());
+      node.fields()
+          .forEachRemaining(
+              e -> {
+                if (e.getValue().isObject()) {
+                  e.getValue()
+                      .fields()
+                      .forEachRemaining(
+                          m -> out.put(e.getKey() + "." + m.getKey(), m.getValue().asText()));
+                } else if (!e.getValue().isNull()) {
+                  out.put(e.getKey(), e.getValue().asText());
+                }
+              });
+      return out;
+    } catch (IOException | IllegalArgumentException e) {
+      return Map.of();
+    }
+  }
+
   public Path baseDir() {
     return baseDir;
   }

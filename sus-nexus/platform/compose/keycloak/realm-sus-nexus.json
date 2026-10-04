@@ -1168,6 +1168,55 @@
         }
       ],
       "secret": "connector-esus-regulacao-dev-secret"
+    },
+    {
+      "id": "5f186bf1-8457-52c7-aeaf-7e282b42ced3",
+      "clientId": "connector-sia",
+      "name": "Conector SIA/SIH — produção e retornos (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "67dc3c00-3cca-5dfd-ac84-587c4356bf17",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-sia-dev-secret"
     }
   ],
   "users": [
@@ -1754,6 +1803,20 @@
       "username": "service-account-connector-esus-regulacao",
       "enabled": true,
       "serviceAccountClientId": "connector-esus-regulacao",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "53034376-8c42-59af-8f72-66d1c36e726f",
+      "username": "service-account-connector-sia",
+      "enabled": true,
+      "serviceAccountClientId": "connector-sia",
       "realmRoles": [
         "operador_integracao"
       ],

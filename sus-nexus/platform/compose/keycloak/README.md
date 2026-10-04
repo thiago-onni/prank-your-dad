@@ -11,7 +11,7 @@ do chart umbrella (`platform/helm/sus-nexus/templates/keycloak.yaml`) com overri
 | `web-shell` | confidential (BFF, Authorization Code + PKCE) | Next.js shell; secret `web-shell-dev-secret` |
 | `core-municipal` | resource server + service account | valida JWT; `aud=core-municipal` |
 | `fhir-gateway` | resource server + service account | escopos SMART (`patient/*.read`, `system/*.read`...) |
-| `connector-<nome>` (`pec`, `agenda`, `sisreg`, `cnes`, `cadsus`, `his`, `lis`, `files`) | client credentials | conectores; papel `operador_integracao` |
+| `connector-<nome>` (`pec`, `agenda`, `sisreg`, `cnes`, `cadsus`, `his`, `lis`, `files`, `ris`, `esus-regulacao`, `sia`) | client credentials | conectores; papel `operador_integracao` |
 | `ai-service` | client credentials + **token exchange** (`standard.token.exchange.enabled`) | agentes trocam o token do usuário por um token restrito (`agente_ia`) |
 | `fhir-partner-example` | client credentials | modelo para parceiros externos (SMART backend services) |
 

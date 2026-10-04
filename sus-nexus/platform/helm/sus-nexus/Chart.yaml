@@ -83,6 +83,11 @@ dependencies:
     repository: file://../charts/sus-nexus-connector
     alias: connector-ris
     condition: connector-ris.enabled
+  - name: sus-nexus-connector
+    version: 0.1.0
+    repository: file://../charts/sus-nexus-connector
+    alias: connector-sia
+    condition: connector-sia.enabled
   # --- Temporal (chart oficial) ---
   - name: temporal
     version: 0.52.0

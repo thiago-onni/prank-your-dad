@@ -255,6 +255,58 @@ connector-ris:
       port: 2577
       serviceType: ClusterIP       # LoadBalancer/NodePort para receber da rede dos hospitais/laboratórios
       allowedSourceCidrs: []       # OBRIGATÓRIO por ambiente: faixas autorizadas a enviar HL7 (MLLP)
+# Produção SIA/SIH: lê exportações de produção e retornos oficiais (arquivos) e publica no tópico de
+# ingestão sus.ingest.production.v1 (Kafka mTLS, KafkaUser connector-sia); consome sus.integration.command.v1
+# (reprocessamento). O core só é chamado para ledger espelho, heartbeat e reconciliação.
+connector-sia:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-sia
+  image: { repository: sus-nexus/connector-sia }
+  containerPort: 8099
+  service: { port: 8099 }
+  # /app/data: raw zone/DLQ locais, registro de arquivos e pastas de entrada (data/sia/producao, data/sia/retornos).
+  # Em hml/prod monte o SFTP/compartilhamento do faturamento em /app/data/sia via extraVolumes/extraVolumeMounts.
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 2Gi }]
+  extraVolumes:
+    - name: kafka-tls      # keystore do KafkaUser connector-sia + CA do cluster (materializado pelo External Secrets)
+      secret: { secretName: connector-sia-kafka-tls, optional: true }
+  extraVolumeMounts:
+    - { name: kafka-tls, mountPath: /app/secrets/kafka, readOnly: true }
+  config:
+    PORT: "8099"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8099)
+    QUARKUS_HTTP_PORT: "8099"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+    SIA_PRODUCTION_DIR: /app/data/sia/producao
+    SIA_RETURNS_DIR: /app/data/sia/retornos
+    SIA_PROCESSED_REGISTRY: /app/data/sia/processed-files.json
+    SIA_CONSUMER_GROUP: "connector-{{ .Values.connector.id }}"
+    KAFKA_SSL_KEYSTORE_LOCATION: /app/secrets/kafka/user.p12
+    KAFKA_SSL_TRUSTSTORE_LOCATION: /app/secrets/kafka/ca.p12
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+      - { secretKey: KAFKA_SSL_KEYSTORE_PASSWORD, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/kafka", property: keystore_password } }
+      - { secretKey: KAFKA_SSL_TRUSTSTORE_PASSWORD, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/kafka", property: truststore_password } }
+  connector:
+    id: sia
+    sourceSystem: SIA
+    ingestTopic: sus.ingest.production.v1
+    consumeTopics: [sus.integration.command.v1]   # comandos de reprocessamento do core (ACL de leitura)
+    tenantId: ibge_3143302
+    pollInterval: PT5M
+    reconciliationCron: "0 45 4 * * ?"
+    edgeAgent: false
 # ----------------------------------------------------------------------------------------------------
 # Plataforma de dados
 # ----------------------------------------------------------------------------------------------------

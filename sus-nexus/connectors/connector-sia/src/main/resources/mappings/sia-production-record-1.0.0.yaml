@@ -1,0 +1,73 @@
+# Exportação de produção do sistema de origem → ProductionRecordRegistration
+# (data de sus.ingest.production.v1, event_type sus.ingest.production.record; mesma porta do
+# POST /api/v1/production/records). Entrada: colunas canônicas de layouts/sia-layouts.yaml.
+# _source_system/_source_record_id/_source_record_version são preenchidos pelo conector.
+# citizen_ref (cit_ → CNS → CPF) é montado em código (SiaRules.citizenRef).
+# NUNCA editar uma versão já usada: crie sia-production-record-1.1.0.yaml e aponte sia.mapping.record.
+mapping_set: sia-production-record
+version: "1.0.0"
+entity_type: production_record
+lookups:
+  instrumento:
+    BPA-C: bpa_c
+    BPA C: bpa_c
+    BPAC: bpa_c
+    BPA_C: bpa_c
+    BPA CONSOLIDADO: bpa_c
+    CONSOLIDADO: bpa_c
+    BPA-I: bpa_i
+    BPA I: bpa_i
+    BPAI: bpa_i
+    BPA_I: bpa_i
+    BPA INDIVIDUALIZADO: bpa_i
+    INDIVIDUALIZADO: bpa_i
+    APAC: apac
+    AIH: aih
+  # caráter de atendimento (tabela SIA/SIH): 01 eletivo, 02 urgência, 03/04 acidente de trabalho
+  # (local/trajeto), 05/06 outros acidentes/lesões
+  carater:
+    "1": elective
+    "01": elective
+    ELETIVO: elective
+    ELETIVA: elective
+    "2": urgency
+    "02": urgency
+    URGENCIA: urgency
+    EMERGENCIA: urgency
+    URGENCIA/EMERGENCIA: urgency
+    "3": work_accident
+    "03": work_accident
+    "4": work_accident
+    "04": work_accident
+    ACIDENTE DE TRABALHO: work_accident
+    ACIDENTE NO LOCAL DE TRABALHO: work_accident
+    ACIDENTE NO TRAJETO PARA O TRABALHO: work_accident
+    "5": other
+    "05": other
+    "6": other
+    "06": other
+    OUTROS: other
+fields:
+  - { source: _source_system, target: source.system, transforms: [trim, upper], required: true }
+  - { target: source.connector, constant: connector-sia }
+  - { source: _source_record_id, target: source.source_record_id, required: true }
+  - { source: _source_record_version, target: source.source_record_version, transforms: [blank_to_null] }
+  - { source: cnes, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: instrumento, target: kind, transforms: [trim, unaccent, upper, { lookup: { table: instrumento, strict: true } }], required: true }
+  - { source: competencia, target: competence, transforms: [trim, { year_month: { from: "MM/yyyy|yyyyMM|yyyy-MM" } }], required: true }
+  - { source: cnes, target: cnes, transforms: [digits], required: true }
+  - { source: cns_profissional, target: professional_cns, transforms: [digits, blank_to_null] }
+  - { source: cbo, target: professional_cbo, transforms: [digits], required: true }
+  - { source: procedimento, target: procedure_code, transforms: [digits], required: true }
+  - { source: quantidade, target: quantity, transforms: [digits, blank_to_null, to_integer], required: true }
+  - { source: cid, target: cid_code, transforms: [trim, upper, { regex: { pattern: "[^A-Z0-9]", replacement: "" } }, blank_to_null] }
+  - { source: data_atendimento, target: attendance_date, transforms: [{ date: { from: "dd/MM/yyyy|yyyy-MM-dd|yyyyMMdd|dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|yyyy-MM-dd HH:mm:ss" } }], required: true }
+  - { source: carater_atendimento, target: character_of_care, transforms: [trim, unaccent, upper, blank_to_null, { lookup: { table: carater, strict: true } }] }
+  - { source: numero_apac, target: apac_number, transforms: [digits, blank_to_null] }
+  - { source: numero_aih, target: aih_number, transforms: [digits, blank_to_null] }
+  - { source: _source_system, target: encounter_ref.system, transforms: [trim, upper], depends_on: id_atendimento }
+  - { source: id_atendimento, target: encounter_ref.source_record_id, transforms: [trim, blank_to_null] }
+  - { source: _source_system, target: appointment_ref.system, transforms: [trim, upper], depends_on: id_agendamento }
+  - { source: id_agendamento, target: appointment_ref.source_record_id, transforms: [trim, blank_to_null] }
+  - { source: _source_system, target: hospital_episode_ref.system, transforms: [trim, upper], depends_on: id_internacao }
+  - { source: id_internacao, target: hospital_episode_ref.source_record_id, transforms: [trim, blank_to_null] }

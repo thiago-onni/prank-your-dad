@@ -44,6 +44,8 @@ scrape_configs:
         labels: { service: connector-his, connector_id: his }
       - targets: ["connector-ris:8097"]
         labels: { service: connector-ris, connector_id: ris }
+      - targets: ["connector-sia:8099"]
+        labels: { service: connector-sia, connector_id: sia }
 
   - job_name: ai-service
     metrics_path: /metrics
