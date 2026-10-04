@@ -234,9 +234,9 @@ async def test_create_task_body_matches_contract(
         priority="urgent",
         title="Resultado de exame crítico aguardando conduta",
         citizen_id=CITIZEN_ID,
-        assignee={"kind": "health_unit", "id": "2143456"},  # type: ignore[arg-type]
-        due_at="2026-10-02T13:00:00Z",  # type: ignore[arg-type]
-        origin={"kind": "agent", "id": "exam_critical_result", "version": "1.0.0"},  # type: ignore[arg-type]
+        assignee={"kind": "health_unit", "id": "2143456"},
+        due_at="2026-10-02T13:00:00Z",
+        origin={"kind": "agent", "id": "exam_critical_result", "version": "1.0.0"},
     )
     created = await core_client.create_task(
         task, token="tok-agent", tenant=TENANT, correlation_id="corr_abc"
