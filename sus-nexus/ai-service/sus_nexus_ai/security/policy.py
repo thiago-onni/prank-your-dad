@@ -57,6 +57,29 @@ class PolicyDecision(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
+class AgentProfile(BaseModel):
+    """Restrições adicionais por agente (espelho de ``agent_profiles`` em
+    ``policies/data/agent_tools.json``; paridade em ``tests/test_registry.py``).
+
+    * ``allowed_data_layers``: camadas de dado que as ferramentas do agente podem tocar;
+    * ``read_only``: só ferramentas ``kind=read``;
+    * ``invoker_roles``: papéis humanos que podem disparar o agente (``data.sus.agents.invoke``).
+    """
+
+    allowed_data_layers: list[str]
+    read_only: bool = False
+    invoker_roles: list[str] = Field(default_factory=list)
+
+
+AGENT_PROFILES: dict[str, AgentProfile] = {
+    "bi_situation_analyst": AgentProfile(
+        allowed_data_layers=["aggregated"],
+        read_only=True,
+        invoker_roles=["admin_municipal", "auditor", "gestor"],
+    ),
+}
+
+
 class PolicyClient(Protocol):
     async def decide(self, policy_input: PolicyInput) -> PolicyDecision: ...
 

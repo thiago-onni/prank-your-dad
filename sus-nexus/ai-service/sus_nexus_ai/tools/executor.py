@@ -22,12 +22,14 @@ from sus_nexus_ai.privacy.minimizer import mask_for_record
 from sus_nexus_ai.security.identity import IdentityProvider
 from sus_nexus_ai.security.kill_switch import KillSwitch, KillSwitchEngaged
 from sus_nexus_ai.security.policy import (
+    AGENT_PROFILES,
     AgentIdentity,
     PolicyClient,
     PolicyDecision,
     PolicyInput,
     PolicyUnavailable,
 )
+from sus_nexus_ai.tools.analytics import AggregatedAnalytics
 from sus_nexus_ai.tools.core_client import CoreClient
 from sus_nexus_ai.tools.registry import ToolContext, ToolNotRegistered, ToolRegistry, ToolSpec
 
@@ -87,12 +89,14 @@ class ToolExecutor:
         kill_switch: KillSwitch,
         identity: IdentityProvider,
         core: CoreClient,
+        analytics: AggregatedAnalytics | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy
         self.kill_switch = kill_switch
         self.identity = identity
         self.core = core
+        self.analytics = analytics
 
     @staticmethod
     def _mask(args: dict[str, Any]) -> dict[str, Any]:
@@ -119,6 +123,18 @@ class ToolExecutor:
             reason = f"kill_switch:{exc.scope}"
             record.decision = {"allow": False, "reasons": [reason]}
             raise self._deny(agent, spec.name, [reason], record) from exc
+
+        # Perfil do agente (ex.: BI só lê a camada agregada) — defesa em profundidade do OPA.
+        profile = AGENT_PROFILES.get(agent.id)
+        if profile is not None:
+            profile_reasons: list[str] = []
+            if spec.data_layer not in profile.allowed_data_layers:
+                profile_reasons.append(f"data_layer_not_allowed:{spec.data_layer}")
+            if profile.read_only and spec.kind != "read":
+                profile_reasons.append("agent_read_only")
+            if profile_reasons:
+                record.decision = {"allow": False, "reasons": profile_reasons}
+                raise self._deny(agent, spec.name, profile_reasons, record)
 
         policy_input = PolicyInput(
             agent=agent,
@@ -189,6 +205,7 @@ class ToolExecutor:
             core=self.core,
             correlation_id=correlation_id or new_id("corr_"),
             approved_by=approved_by,
+            analytics=self.analytics,
         )
         try:
             output = await spec.handler(ctx, parsed)

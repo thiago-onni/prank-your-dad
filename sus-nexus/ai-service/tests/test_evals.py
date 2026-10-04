@@ -18,7 +18,7 @@ async def test_eval_set_meets_threshold(agent_id: str) -> None:
     assert report.meets_threshold, (
         f"{agent_id}: {report.accuracy:.0%} < {report.threshold:.0%}; {failed}"
     )
-    assert all(r.run_status == "completed" for r in report.results)
+    assert all(r.run_status == r.expected.get("run_status", "completed") for r in report.results)
 
 
 def test_eval_cli_runs_and_reports(capsys: pytest.CaptureFixture[str]) -> None:

@@ -30,7 +30,7 @@ policies/
 │   ├── roles.json        catálogo de papéis + grupos (merge_roles, export_roles, ...)
 │   ├── purposes.json     finalidades por papel
 │   ├── domains.json      domínios → sensibilidade padrão, níveis, tipos de recurso, redações por papel
-│   ├── agent_tools.json  catálogo de ferramentas de agente (action_class, risk, owner)
+│   ├── agent_tools.json  catálogo de ferramentas de agente (action_class, risk, owner, kind, data_layer) + agent_profiles
 │   └── fhir.json         tipos FHIR suportados, mapa interação→permissão, elementos redigidos
 ├── examples/         inputs de exemplo (não são carregados como data)
 ├── bundle/build.sh   gera bundle.tar.gz com .manifest (roots: sus, data)
@@ -44,7 +44,7 @@ policies/
 
 ```bash
 cd sus-nexus/policies
-make test      # opa fmt --diff --fail + opa check --strict + opa test -v  (160 casos)
+make test      # opa fmt --diff --fail + opa check --strict + opa test -v  (173 casos)
 make check     # só formatação + verificação estrita
 make bundle    # bundle/bundle.tar.gz (revision = VERSION+git sha)
 make eval      # decisão para examples/aps_read_team.json
@@ -162,9 +162,13 @@ Ações especiais:
 }
 ```
 
-→ `{"allow": true, "action_class": "requires_approval", "requires_approval": true, "risk": "high", "reasons": ["granted"], "policy_version": "1.0.0"}`
+→ `{"allow": true, "action_class": "requires_approval", "requires_approval": true, "risk": "high", "reasons": ["granted"], "policy_version": "1.1.0"}`
 
 Regras: a ferramenta deve existir em `data/agent_tools.json` **e** em `agent.tools_granted`; `action_class=forbidden` sempre nega (`regulation.change_priority`, `regulation.decide`, `production.transmit`, `mpi.merge`, `mpi.unmerge`, `communication.send_clinical_content`, `identifier.reveal`, `db.direct_access`); kill switch global/por agente/por ferramenta/por tenant nega; o runner não pode pedir classe mais branda que a do catálogo (`auto` para ferramenta `requires_approval` → `requested_action_class_below_catalog`). Identidade (`agent.id`, `agent.version`, `tenant`) é obrigatória.
+
+**Perfis de agente** (`agent_profiles` em `data/agent_tools.json`): cada ferramenta tem `data_layer` (`operational` por padrão; `aggregated` para `bi.*`) e `kind`. Um agente com perfil só usa ferramentas das camadas em `allowed_data_layers` (`tool_data_layer_not_allowed_for_agent`) e, se `read_only`, só `kind=read` (`agent_is_read_only`). Hoje: `bi_situation_analyst` → `["aggregated"]`, somente leitura — o agente de BI nunca lê o core por cidadão nem escreve, mesmo que uma ferramenta seja concedida por engano. O ai-service espelha a regra no executor (`AGENT_PROFILES`, paridade em `ai-service/tests/test_registry.py`).
+
+**Invocação** (`data.sus.agents.invoke`): `{"agent": {"id"}, "subject": {"roles", "tenant"}, "tenant", "kill_switch"}` → `{"allow", "reasons", "policy_version"}`. Permitida se o agente tem perfil, algum papel do sujeito está em `invoker_roles` (BI: `gestor`, `auditor`, `admin_municipal`), o tenant do token é o tenant pedido e não há kill switch; motivos: `agent_without_invocation_profile`, `role_not_allowed_to_invoke`, `tenant_mismatch`, `kill_switch`.
 
 ## 3. FHIR — `data.sus.fhir`
 

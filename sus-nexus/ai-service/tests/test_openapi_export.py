@@ -28,6 +28,7 @@ def test_spec_shape_for_type_generation() -> None:
     }
     assert {
         "run_agent",
+        "run_bi_situation_analyst",
         "get_run",
         "list_runs",
         "approve_action",
@@ -40,8 +41,18 @@ def test_spec_shape_for_type_generation() -> None:
         "health",
     } <= operation_ids
     schemas = spec["components"]["schemas"]
-    for name in ("AgentRunRecord", "AgentAction", "AgentApproval", "RunRequest", "DecisionRequest"):
+    for name in (
+        "AgentRunRecord",
+        "AgentAction",
+        "AgentApproval",
+        "RunRequest",
+        "DecisionRequest",
+        "BiSituationInput",
+    ):
         assert name in schemas, name
+    # o agente de BI não aceita município na requisição (vem do token)
+    assert "tenant" not in schemas["BiSituationInput"]["properties"]
+    assert schemas["BiSituationInput"]["additionalProperties"] is False
     assert set(schemas["AgentAction"]["properties"]["action_class"]["enum"]) == {
         "auto",
         "requires_approval",

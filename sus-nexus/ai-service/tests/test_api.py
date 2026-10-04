@@ -17,6 +17,7 @@ def test_health_and_catalog(client: TestClient) -> None:
     health = client.get("/health").json()
     assert health["status"] == "ok"
     assert health["agents"] == [
+        "bi_situation_analyst",
         "exam_critical_result",
         "mpi_duplicate_suggestion",
         "post_discharge_followup",

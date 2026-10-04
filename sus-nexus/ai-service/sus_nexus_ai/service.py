@@ -10,6 +10,7 @@ from sus_nexus_ai.agents.catalog import build_catalog, build_fake_llm
 from sus_nexus_ai.common import get_logger, utcnow
 from sus_nexus_ai.config import Settings, get_settings
 from sus_nexus_ai.llm.client import LiteLLMClient, LLMClient
+from sus_nexus_ai.observability import configure_langfuse
 from sus_nexus_ai.persistence.repository import AgentRunRepository, create_db_engine
 from sus_nexus_ai.persistence.schemas import AgentApproval, AgentRunRecord, Trigger
 from sus_nexus_ai.security.identity import (
@@ -19,6 +20,11 @@ from sus_nexus_ai.security.identity import (
 )
 from sus_nexus_ai.security.kill_switch import KillSwitch
 from sus_nexus_ai.security.policy import AgentPolicyClient, LocalPolicyEvaluator, PolicyClient
+from sus_nexus_ai.tools.analytics import (
+    AggregatedAnalytics,
+    InMemoryAggregatedAnalytics,
+    TrinoAggregatedAnalytics,
+)
 from sus_nexus_ai.tools.core_client import CoreClient, HttpCoreClient, InMemoryCoreClient
 from sus_nexus_ai.tools.core_tools import build_default_registry
 from sus_nexus_ai.tools.executor import (
@@ -28,6 +34,7 @@ from sus_nexus_ai.tools.executor import (
     ToolExecutor,
 )
 from sus_nexus_ai.tools.registry import ToolRegistry
+from sus_nexus_ai.tools.trino_client import TrinoHttpClient
 
 log = get_logger(__name__)
 
@@ -55,6 +62,7 @@ class AIService:
         llm: LLMClient,
         repository: AgentRunRepository,
         catalog: dict[str, AgentDefinition[Any, Any]],
+        analytics: AggregatedAnalytics | None = None,
     ) -> None:
         self.settings = settings
         self.registry = registry
@@ -65,7 +73,8 @@ class AIService:
         self.llm = llm
         self.repository = repository
         self.catalog = catalog
-        self.executor = ToolExecutor(registry, policy, kill_switch, identity, core)
+        self.analytics = analytics
+        self.executor = ToolExecutor(registry, policy, kill_switch, identity, core, analytics)
         self.runner = AgentRunner(
             self.executor,
             llm,
@@ -187,7 +196,7 @@ class AIService:
         return run
 
     async def aclose(self) -> None:
-        for component in (self.policy, self.identity, self.core):
+        for component in (self.policy, self.identity, self.core, self.analytics):
             closer = getattr(component, "aclose", None)
             if closer is not None:
                 await closer()
@@ -218,6 +227,7 @@ def build_service(
     repository: AgentRunRepository | None = None,
     kill_switch: KillSwitch | None = None,
     registry: ToolRegistry | None = None,
+    analytics: AggregatedAnalytics | None = None,
 ) -> AIService:
     settings = settings or get_settings()
     kill_switch = kill_switch or KillSwitch(file_path=settings.kill_switch_file)
@@ -260,6 +270,22 @@ def build_service(
                 mock_response=settings.llm_mock_response,
             )
         )
+    if analytics is None:
+        analytics = (
+            InMemoryAggregatedAnalytics()
+            if settings.environment == "test"
+            else TrinoAggregatedAnalytics(
+                TrinoHttpClient(
+                    settings.trino_url,
+                    settings.trino_user,
+                    settings.trino_catalog,
+                    password=settings.trino_password,
+                    timeout_seconds=settings.trino_timeout_seconds,
+                ),
+                settings.trino_catalog,
+            )
+        )
+    configure_langfuse(settings)
     repository = repository or AgentRunRepository(create_db_engine(settings.database_url))
     return AIService(
         settings=settings,
@@ -271,4 +297,5 @@ def build_service(
         llm=llm,
         repository=repository,
         catalog=build_catalog(),
+        analytics=analytics,
     )

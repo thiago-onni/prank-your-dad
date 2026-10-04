@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from sus_nexus_ai import metrics
+from sus_nexus_ai.agents.bi_situation_analyst import AGENT_ID as BI_AGENT_ID
+from sus_nexus_ai.agents.bi_situation_analyst import BiSituationInput
 from sus_nexus_ai.api.auth import Principal, get_principal, require_settings_roles
 from sus_nexus_ai.persistence.schemas import AgentApproval, AgentRunRecord, Trigger
 from sus_nexus_ai.security.kill_switch import KillSwitchState
+from sus_nexus_ai.security.policy import AGENT_PROFILES
 from sus_nexus_ai.service import AIService, ApprovalError, UnknownAgent
 
 router = APIRouter()
+
+_TENANT_RE = re.compile(r"^ibge_\d{7}$")
 
 
 def _service(request: Request) -> AIService:
@@ -56,6 +62,7 @@ class ToolDescriptor(BaseModel):
     kind: str
     owner: str
     stub: bool
+    data_layer: str = "operational"
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
 
@@ -107,6 +114,42 @@ def list_tools(
     return [ToolDescriptor(**spec.describe()) for spec in _service(request).registry.list()]
 
 
+@router.post(
+    f"/agents/{BI_AGENT_ID}/run",
+    tags=["agents"],
+    response_model=AgentRunRecord,
+    summary="Run BI situation analyst",
+    responses={403: {"description": "papel sem permissão ou token sem município"}},
+)
+async def run_bi_situation_analyst(
+    body: BiSituationInput,
+    request: Request,
+    principal: Principal = Depends(get_principal),  # noqa: B008
+) -> AgentRunRecord:
+    """Análise de situação da competência (somente dados agregados; sem ações).
+
+    O município é sempre o do token (`municipality_id`); o corpo não aceita tenant nem campos
+    extras. Papéis: `gestor`, `auditor`, `admin_municipal` (espelho de `data.sus.agents.invoke`).
+    A saída (`output`) segue o `output_schema` do agente em `GET /agents`.
+    """
+    service = _service(request)
+    profile = AGENT_PROFILES[BI_AGENT_ID]
+    if not principal.has_any_role(profile.invoker_roles):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, f"papel necessário: {' ou '.join(profile.invoker_roles)}"
+        )
+    tenant = principal.tenant
+    if not tenant or not _TENANT_RE.fullmatch(tenant):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "token sem município (municipality_id)")
+    return await service.run_agent(
+        BI_AGENT_ID,
+        tenant=tenant,
+        trigger=Trigger(kind="user", ref=principal.subject),
+        input_data=body.model_dump(mode="json"),
+        on_behalf_of_token=principal.raw_token,
+    )
+
+
 @router.post("/agents/{agent_id}/run", tags=["agents"], response_model=AgentRunRecord)
 async def run_agent(
     agent_id: str,
@@ -115,6 +158,8 @@ async def run_agent(
     principal: Principal = Depends(get_principal),  # noqa: B008
 ) -> AgentRunRecord:
     service = _service(request)
+    if agent_id in AGENT_PROFILES:  # agentes com perfil só pela rota dedicada (tenant do token)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"use POST /agents/{agent_id}/run dedicada")
     _check_tenant(principal, body.tenant, service)
     trigger = body.trigger
     if trigger.kind == "user" and trigger.ref is None:

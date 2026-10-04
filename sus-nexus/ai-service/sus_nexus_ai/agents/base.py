@@ -22,7 +22,11 @@ from pydantic import BaseModel, ValidationError
 from sus_nexus_ai import metrics
 from sus_nexus_ai.common import get_logger, new_id, sha256_hex, utcnow
 from sus_nexus_ai.llm.client import LLMClient, LLMMessage
-from sus_nexus_ai.llm.structured import correction_message, parse_structured
+from sus_nexus_ai.llm.structured import (
+    correction_message,
+    parse_structured,
+    verification_correction_message,
+)
 from sus_nexus_ai.persistence.repository import AgentRunRepository
 from sus_nexus_ai.persistence.schemas import (
     AgentAction,
@@ -90,6 +94,10 @@ class ToolCaller:
 
 ContextBuilder = Callable[[ToolCaller, Any], Awaitable[dict[str, Any]]]
 ActionPlanner = Callable[[Any, dict[str, Any], Any], list[PlannedAction]]
+OutputCheck = Callable[[Any, dict[str, Any]], list[str]]
+"""Verificação pós-geração (``output, minimized_context`` → problemas). Lista vazia = aprovada.
+Problemas disparam o mesmo ciclo de correção do schema; esgotado, o run fica ``invalid_output``
+e a saída NÃO é persistida (ex.: número sem fonte, PII)."""
 
 
 @dataclass
@@ -105,6 +113,7 @@ class AgentDefinition(Generic[InT, OutT]):
     plan_actions: ActionPlanner
     rule_versions: dict[str, str] = field(default_factory=dict)
     prompts_dir: Path | None = None
+    output_check: OutputCheck | None = None
 
     def identity(self) -> AgentIdentity:
         return AgentIdentity(id=self.id, version=self.version, tools_granted=list(self.tools))
@@ -335,6 +344,33 @@ class AgentRunner:
                     "status": "invalid_output",
                     "output": None,
                 }
+            if definition.output_check is not None:
+                problems = definition.output_check(output, state.get("minimized_context", {}))
+                if problems:
+                    error = "; ".join(problems)[:1000]
+                    log.warning(
+                        "agent.output_check_failed",
+                        agent_id=agent.id,
+                        attempt=attempts,
+                        problems=len(problems),
+                    )
+                    if attempts <= self.max_output_retries:
+                        return {
+                            "validation_attempts": attempts,
+                            "validation_error": error,
+                            "messages": [
+                                *state["messages"],
+                                verification_correction_message(problems).to_dict(),
+                            ],
+                        }
+                    return {
+                        "validation_attempts": attempts,
+                        "validation_error": error,
+                        "validation_status": "invalid_output",
+                        "status": "invalid_output",
+                        "error": "output_check_failed",
+                        "output": None,
+                    }
             return {
                 "validation_attempts": attempts,
                 "validation_status": "valid",

@@ -111,7 +111,13 @@ class LiteLLMClient:
             "max_tokens": self.max_tokens,
             "timeout": self.timeout_seconds,
             "response_format": {"type": "json_object"},
-            "metadata": {"agent_id": agent_id},
+            # Langfuse (callback do LiteLLM, ver observability.py): agrupa as gerações por agente.
+            "metadata": {
+                "agent_id": agent_id,
+                "trace_name": agent_id,
+                "generation_name": f"{agent_id}.reason",
+                "tags": [agent_id],
+            },
         }
         if self.api_base:
             kwargs["api_base"] = self.api_base

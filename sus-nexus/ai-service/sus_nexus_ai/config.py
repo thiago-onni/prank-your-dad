@@ -9,14 +9,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AI_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="AI_", env_file=".env", extra="ignore", populate_by_name=True
+    )
 
     # --- serviço ---
     service_name: str = "ai-service"
@@ -32,6 +34,24 @@ class Settings(BaseSettings):
     opa_cache_ttl_seconds: float = 5.0
     policy_mode: Literal["opa", "local"] = "opa"
     """``opa``: consulta HTTP ao OPA; ``local``: avaliador em memória equivalente (dev/test)."""
+
+    # --- lakehouse (Trino) — somente camada agregada (agente de BI) ---
+    trino_url: str = Field(
+        default="http://trino:8080", validation_alias=AliasChoices("AI_TRINO_URL", "TRINO_URL")
+    )
+    trino_user: str = Field(
+        default="ai-bi-agent", validation_alias=AliasChoices("AI_TRINO_USER", "TRINO_USER")
+    )
+    """Usuário do grupo ``bi`` no Trino (``platform/compose/trino/groups.txt``)."""
+    trino_catalog: str = Field(
+        default="iceberg",
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        validation_alias=AliasChoices("AI_TRINO_CATALOG", "TRINO_CATALOG"),
+    )
+    trino_password: str | None = Field(
+        default=None, validation_alias=AliasChoices("AI_TRINO_PASSWORD", "TRINO_PASSWORD")
+    )
+    trino_timeout_seconds: float = 30.0
 
     # --- LLM ---
     llm_provider: Literal["litellm", "fake"] = "fake"

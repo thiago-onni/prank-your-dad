@@ -16,6 +16,7 @@
 | regulation.decide             | forbidden         | —                                      |
 | production.transmit           | forbidden         | —                                      |
 | mpi.merge                     | forbidden         | —                                      |
+| bi.* (ver ``bi_tools.py``)    | auto (leitura)    | Trino — só ``marts_aggregated``        |
 
 ``core.create_pending_issue`` chama ``POST …/issues`` com ``origin={kind:"agent", id, version}``.
 O core exige o papel ``agente_ia`` e cria a pendência já **aberta**: por isso a classe é
@@ -36,6 +37,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from sus_nexus_ai.tools.bi_tools import register_bi_tools
 from sus_nexus_ai.tools.core_client import (
     AgentOrigin,
     CareGapPage,
@@ -441,4 +443,5 @@ def build_default_registry() -> ToolRegistry:
                 kind="write",
             )
         )
+    register_bi_tools(reg)
     return reg

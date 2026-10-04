@@ -17,10 +17,13 @@ from sus_nexus_ai.security.policy import ActionClass
 
 if TYPE_CHECKING:
     from sus_nexus_ai.security.identity import AgentToken
+    from sus_nexus_ai.tools.analytics import AggregatedAnalytics
     from sus_nexus_ai.tools.core_client import CoreClient
 
 Risk = Literal["low", "medium", "high"]
 ToolKind = Literal["read", "write"]
+DataLayer = Literal["operational", "aggregated"]
+"""``operational``: API do core (dado por entidade/cidadão); ``aggregated``: lakehouse agregado."""
 
 
 @dataclass
@@ -33,6 +36,7 @@ class ToolContext:
     core: CoreClient
     correlation_id: str
     approved_by: str | None = None
+    analytics: AggregatedAnalytics | None = None
 
 
 ToolHandler = Callable[[ToolContext, Any], Awaitable[BaseModel]]
@@ -52,6 +56,7 @@ class ToolSpec:
     owner: str = "core-municipal"
     stub: bool = False
     tags: tuple[str, ...] = field(default_factory=tuple)
+    data_layer: DataLayer = "operational"
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -63,6 +68,7 @@ class ToolSpec:
             "kind": self.kind,
             "owner": self.owner,
             "stub": self.stub,
+            "data_layer": self.data_layer,
             "input_schema": self.input_model.model_json_schema(),
             "output_schema": self.output_model.model_json_schema(),
         }

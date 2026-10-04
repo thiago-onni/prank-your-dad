@@ -60,6 +60,21 @@ def correction_message(error: str, model: type[BaseModel]) -> LLMMessage:
     )
 
 
+def verification_correction_message(problems: list[str]) -> LLMMessage:
+    """Pedido de reparo após a verificação pós-geração (números sem fonte, PII, supressão)."""
+    listed = "\n".join(f"- {p}" for p in problems[:20])
+    return LLMMessage(
+        role="user",
+        content=(
+            "Sua resposta anterior foi REJEITADA pela verificação pós-geração:\n"
+            f"{listed}\n"
+            "Reescreva a resposta completa usando SOMENTE números que aparecem nos dados "
+            "fornecidos (mesmos valores; percentuais = proporção × 100), sem identificar pessoas "
+            "e sem atribuir valor a células suprimidas. Responda SOMENTE com o objeto JSON."
+        ),
+    )
+
+
 @dataclass
 class StructuredResult(Generic[T]):
     output: T

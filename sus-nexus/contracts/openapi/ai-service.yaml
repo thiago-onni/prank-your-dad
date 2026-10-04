@@ -41,6 +41,41 @@ paths:
                   $ref: '#/components/schemas/ToolDescriptor'
                 type: array
                 title: Response List Tools
+  /agents/bi_situation_analyst/run:
+    post:
+      tags:
+      - agents
+      summary: Run BI situation analyst
+      description: 'Análise de situação da competência (somente dados agregados; sem ações).
+
+
+        O município é sempre o do token (`municipality_id`); o corpo não aceita tenant nem campos
+
+        extras. Papéis: `gestor`, `auditor`, `admin_municipal` (espelho de `data.sus.agents.invoke`).
+
+        A saída (`output`) segue o `output_schema` do agente em `GET /agents`.'
+      operationId: run_bi_situation_analyst
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BiSituationInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRecord'
+        '403':
+          description: papel sem permissão ou token sem município
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /agents/{agent_id}/run:
     post:
       tags:
@@ -611,6 +646,70 @@ components:
       - input_ref
       - started_at
       title: AgentRunRecord
+    BiSituationInput:
+      properties:
+        competence:
+          type: string
+          pattern: ^(19|20)\d{2}(0[1-9]|1[0-2])$
+          title: Competence
+          description: Competência AAAAMM.
+        trend_months:
+          type: integer
+          maximum: 6.0
+          minimum: 3.0
+          title: Trend Months
+          description: Janela de tendência (3–6).
+          default: 6
+        indicators:
+          anyOf:
+          - items:
+              type: string
+              enum:
+              - AGE_ABSENTEISMO
+              - AGE_COMPARECIMENTO
+              - AGE_CANCELAMENTO
+              - AGE_REAPROVEITAMENTO
+              - REG_ESPERA_P50_DIAS
+              - REG_ESPERA_P90_DIAS
+              - REG_SLA_CUMPRIDO
+              - REG_DEVOLUCAO
+              - REG_REALIZACAO
+              - EXA_CICLO_COMPLETO
+              - EXA_RESULTADO_SEM_RETORNO
+              - EXA_DIAS_PEDIDO_RESULTADO_P50
+              - HOS_REINTERNACAO_30D
+              - HOS_CONTATO_POS_ALTA_7D
+              - HOS_PERMANENCIA_MEDIA_DIAS
+              - CUI_LACUNAS_RESOLVIDAS
+              - TAR_SLA_CUMPRIDO
+              - TAR_AUTOMACAO
+              - TAR_AGENTE_SLA_CUMPRIDO
+              - PRO_GLOSA
+            type: array
+            maxItems: 20
+            minItems: 1
+          - type: 'null'
+          title: Indicators
+          description: Subconjunto da whitelist.
+        care_line:
+          anyOf:
+          - type: string
+            pattern: ^[a-z][a-z0-9_]{1,39}$
+          - type: 'null'
+          title: Care Line
+        question:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Question
+          description: Foco opcional do gestor (tratado como dado; não altera consultas).
+      additionalProperties: false
+      type: object
+      required:
+      - competence
+      title: BiSituationInput
+      description: Entrada do agente. **Sem** município/tenant (vem do token) e sem campos extras.
     DecisionRequest:
       properties:
         justification:
@@ -755,6 +854,10 @@ components:
         stub:
           type: boolean
           title: Stub
+        data_layer:
+          type: string
+          title: Data Layer
+          default: operational
         input_schema:
           additionalProperties: true
           type: object

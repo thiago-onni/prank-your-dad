@@ -61,6 +61,19 @@ Toda chamada ao core leva `Authorization: Bearer <token do agente>`, `X-Tenant-I
 | `core.create_pending_issue` | **requires_approval** | medium | `POST /api/v1/regulation/requests/{id}/issues` — `{kind, description, origin:{kind:"agent",id,version}}` | `regulation` |
 | `communication.request_message` | requires_approval | medium | **stub** — o core não tem módulo de comunicação; `HttpCoreClient` responde 501 | — |
 | `regulation.change_priority`, `regulation.decide`, `production.transmit`, `mpi.merge` | forbidden | high | — | — |
+| `bi.get_indicator_series` | auto | low | **Trino** `marts_aggregated.agg_indicadores_mensais` (nível município; série) | — |
+| `bi.get_unit_indicators` | auto | low | **Trino** `agg_indicadores_mensais` (nível unidade) + `marts.dim_health_unit` | — |
+| `bi.get_territory_care_gaps` | auto | low | **Trino** `marts_aggregated.agg_care_gaps_monthly` (unidade × equipe × linha) | — |
+
+As ferramentas `bi.*` (`tools/bi_tools.py`, `data_layer="aggregated"`) não falam com o core: usam
+`tools/analytics.py` → `tools/trino_client.py` (API HTTP do Trino, `POST /v1/statement` + `nextUri`,
+headers `X-Trino-User/Catalog/Source/Trace-Token`). Só **templates SQL fixos** (`SQL_TEMPLATES`,
+conferidos por `check_sql_template`: apenas `marts_aggregated.*` e `marts.dim_health_unit`; nunca
+`marts_identified`, `fct_*`, silver/bronze, numerador/denominador) enviados como
+`EXECUTE IMMEDIATE '<template>' USING <parâmetros>`; parâmetros validados (whitelist de 20
+indicadores da seed, competência `AAAAMM`, tenant `ibge_<7>`, linha de cuidado `[a-z_]`); o tenant é
+sempre `ToolContext.tenant`. Nenhuma ferramenta aceita SQL, tabela, coluna ou município
+(`extra="forbid"`).
 
 `POST …/issues` exige o papel `agente_ia` e o core cria a pendência **já aberta**; por isso o ai-service
 só o chama depois de aprovação humana. Os kinds aceitos são `missing_document`, `missing_field`,
@@ -88,6 +101,7 @@ rebaixar. Contrato OPA: `POST {AI_OPA_URL}/v1/data/sus/agents/decision` com
 | `regulation_completeness` (2.0.0, prompt v2) | `sus.regulation.request.created\|updated` | `{request_id, citizen_id?}` | `missing_items[] {kind, description}`, `summary`, `duplicate_suspected`, `confidence` | `completeness_rules_v2` | um `core.create_pending_issue` (requires_approval) por `kind` faltante → ao aprovar, `POST …/issues` |
 | `exam_critical_result` (1.0.0) | `sus.exam.result.critical_flagged` | `{order_id, result_id?, requesting_cnes?}` | `urgency` (`urgent`/`tracked`/`none`), `rationale`, `create_task` | `exam_critical_rule_v1` | `core.create_task` (auto) `exam_result_followup`, prioridade `urgent`, para a unidade solicitante (`health_unit`) → equipe (`team`) → fila; **só se** nenhum `results[].followup_task_id` existir; título/descrição sem conteúdo clínico (EXA-008) |
 | `mpi_duplicate_suggestion` (2.0.0) | `sus.identity.merge.case_opened` | `{case_id}` | `verdict`, `justification`, `confidence`, `key_evidence` | `duplicate_heuristics_v1` | nenhuma (somente sugestão) |
+| `bi_situation_analyst` (1.0.0) | usuário (`POST /agents/bi_situation_analyst/run`) | `{competence, trend_months 3–6, indicators?, care_line?, question?}` — sem município | `summary`, `off_target[]`, `trends[]`, `inequalities[]` (maior × menor, `ratio`), `hypotheses[]` (`kind=hipotese`), `recommendations[]` (`kind=recomendacao_textual`), `data_limitations[]`, `sources[] {indicator_code, competence, scope, cnes/ine, value, suppressed}` | `bi_situation_rules_v1` + `bi_output_guardrails_v1` | **nenhuma** (somente leitura agregada) |
 | `post_discharge_followup` (2.0.0, prompt v2) | `sus.hospital.discharge.completed` | `{hospital_episode_id, event_id?, citizen_id?, care_lines?}` | `mode`, `summary`, `suggested_contact_script` (genérico), `attention_points[] {code, note}` — **informativa** | `post_discharge_attention_v2` (risco é do core) | nenhuma quando o core já criou a tarefa; `core.create_task` (auto) **só** como fallback (sem `followup.task_id` e não óbito) |
 
 ### `regulation_completeness` v2 — regra determinística pré-LLM
@@ -103,6 +117,28 @@ proíbe acrescentar kinds). `plan_actions` usa a regra, não a saída do LLM, pa
   (pendências `resolved` não bloqueiam);
 * status fora de `{requested, pending_documents, returned, under_review}` → nada a fazer;
 * `citizen_summary.open_regulation_requests >= 2` → `duplicate_suspected` (sinal, sem ação).
+
+### `bi_situation_analyst` v1 — sala de situação (PLANO S26, só agregados)
+
+* **Dados**: série municipal da janela (3–6 competências), valores por unidade e resolução de
+  lacunas por equipe (só se `CUI_LACUNAS_RESOLVIDAS` estiver no escopo). Numerador/denominador
+  nunca são lidos; célula suprimida (n < 5) chega `null` com `is_suppressed` e **nunca** vira zero,
+  não entra em tendência (≥ 3 pontos publicados, senão `indeterminado`) nem em comparação.
+* **Regra `bi_situation_rules_v1`** (determinística): fora da meta (`is_on_target=false`, com
+  `gap`/`gap_pp`), tendência (Δ primeiro→último publicado; estável se |Δ| < 1 p.p. ou < 5 % em
+  dias/horas; melhora/piora pela `direction`), desigualdade (maior × menor, razão; razão nula se o
+  menor publicado é 0). O LLM só redige comentários, hipóteses e recomendações.
+* **Guardrails pós-geração** (`AgentDefinition.output_check`, `agents/bi_guardrails.py`,
+  `privacy/output_guard.py`): todo número em texto livre precisa existir nas fontes do contexto
+  (com arredondamento e forma percentual; números da `question` não contam); achados estruturados
+  e `sources` têm de coincidir com a regra/fatos; célula suprimida com valor ou "suprimido = 0" é
+  rejeitada; CPF/CNS/telefone/e-mail/`[PESSOA_n]`/nomes de pessoa bloqueiam. Falha → mensagem de
+  reparo e nova tentativa (até `AI_LLM_MAX_OUTPUT_RETRIES`); persistindo, `invalid_output` e a saída
+  é descartada.
+* **Acesso**: rota dedicada; papéis `gestor`, `auditor`, `admin_municipal`
+  (`AGENT_PROFILES` = `agent_profiles` do OPA, `data.sus.agents.invoke`); município = `municipality_id`
+  do token (corpo com `tenant` → 422). O executor nega ao agente qualquer ferramenta fora da camada
+  `aggregated` ou de escrita (`data_layer_not_allowed:*`, `agent_read_only`), além do OPA.
 
 ### `post_discharge_followup` v2 — o core decide risco e tarefa
 
@@ -157,7 +193,8 @@ O estado também é enviado ao OPA em toda decisão.
 
 | rota | papel | descrição |
 |---|---|---|
-| `POST /agents/{agent_id}/run` | autenticado | `{tenant, trigger{kind,ref}, input}` → `AgentRunRecord` |
+| `POST /agents/{agent_id}/run` | autenticado | `{tenant, trigger{kind,ref}, input}` → `AgentRunRecord` (agentes com perfil → 403; use a rota dedicada) |
+| `POST /agents/bi_situation_analyst/run` | `gestor`/`auditor`/`admin_municipal` | `BiSituationInput` (sem tenant; município do token) → `AgentRunRecord` (`output` conforme `output_schema` em `GET /agents`) |
 | `GET /runs/{run_id}`, `GET /runs?agent_id&status` | autenticado | consulta |
 | `POST /runs/{run_id}/actions/{action_id}/approve\|reject` | `agent_approver`/`admin` | `{justification}` (≥ 10 caracteres); aprovador = `sub` do token; aprovar executa a ferramenta com a identidade do agente e registra `approved_by` |
 | `GET /approvals?status` | autenticado | fila de aprovações |
@@ -250,7 +287,8 @@ contra o OpenAPI do core (OpenAPI 3.1 → JSON Schema resolvendo `$ref` locais, 
 | `DATABASE_URL` | `sqlite+pysqlite:///:memory:` | `postgresql+psycopg://…` em prod |
 | `CHECKPOINTER` | `memory` | `postgres` (extra `postgres-checkpoint`) |
 | `KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_CONSUMER_GROUP`, `KAFKA_TOPICS` | `false`, …, `[discharge, regulation.request, exam.result, identity.merge]` | consumidor (extra `kafka`) |
-| `LANGFUSE_ENABLED`, `LANGFUSE_*`, `OTEL_ENABLED` | `false` | observabilidade (extra `observability`) |
+| `LANGFUSE_ENABLED`, `LANGFUSE_*`, `OTEL_ENABLED` | `false` | observabilidade (extra `observability`); com `LLM_PROVIDER=litellm` e chaves, registra o callback Langfuse do LiteLLM (`observability.py`) |
+| `TRINO_URL`, `TRINO_USER`, `TRINO_CATALOG`, `TRINO_PASSWORD` (também com prefixo `AI_`), `TRINO_TIMEOUT_SECONDS` | `http://trino:8080`, `ai-bi-agent` (grupo `bi`), `iceberg`, —, `30` | camada agregada do lakehouse (agente de BI); `ENVIRONMENT=test` usa `InMemoryAggregatedAnalytics` |
 
 ## Limitações conhecidas
 
@@ -262,7 +300,12 @@ contra o OpenAPI do core (OpenAPI 3.1 → JSON Schema resolvendo `$ref` locais, 
   criar a tarefa por outro caminho sem preencher esse campo, o agente pode propor uma segunda.
 * O minimizador cobre chaves conhecidas e padrões regex; nomes que apareçam **só** em texto livre
   (sem nenhuma chave de nome) não são detectados — não envie texto clínico livre ao LLM.
-* Langfuse/OpenTelemetry estão declarados como extras e desligados; a instrumentação ainda não
-  está ligada ao runner.
+* Langfuse é ligado só via callback do LiteLLM (gerações com `agent_id`/`trace_name`); spans do
+  grafo (OpenTelemetry) ainda não estão ligados ao runner.
+* Agente de BI: a verificação numérica aceita arredondamento compatível com as casas citadas
+  (inteiros têm tolerância ±0,5) e não associa número a unidade no texto livre; a detecção de nomes
+  é heurística (prenomes comuns, pronomes de tratamento, "paciente X"). A supressão é a primária
+  do dbt (sem supressão complementar). O papel de invocação é checado no ai-service (espelho de
+  `data.sus.agents.invoke`); a consulta ao OPA para invocação ainda não é feita em tempo de execução.
 * O OpenAPI exportado depende da versão do FastAPI/Pydantic instalada; regenere após atualizar
   dependências (`tests/test_openapi_export.py` avisa).
