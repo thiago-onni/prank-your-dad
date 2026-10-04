@@ -35,7 +35,7 @@ class ExamOrderMapperTest {
     assertThat(
             sr.getExtensionByUrl(FhirConstants.EXT_EXAM_ORDER_STATUS).getValue().primitiveValue())
         .isEqualTo("reported");
-    // resultados não são projetados (FHIR-3)
+    // resultados viram DiagnosticReport/Observation pelo ExamResultMapper, não no ServiceRequest
     assertThat(sr.hasSupportingInfo()).isFalse();
   }
 
@@ -70,6 +70,7 @@ class ExamOrderMapperTest {
             null,
             null,
             "prof_1",
+            null,
             null,
             null,
             null,

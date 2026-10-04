@@ -7,9 +7,11 @@ import java.util.List;
 import org.hl7.fhir.r4.model.CarePlan;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Condition;
+import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.Meta;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.ServiceRequest;
@@ -24,7 +26,9 @@ import org.hl7.fhir.r4.model.Task;
  *   <li>{@code Patient}: remove {@code telecom} e {@code address};
  *   <li>{@code Condition}: remove {@code code.text};
  *   <li>{@code ServiceRequest} e {@code Encounter}: removem {@code reasonCode};
- *   <li>{@code Task} e {@code CarePlan}: removem {@code description}.
+ *   <li>{@code Task} e {@code CarePlan}: removem {@code description};
+ *   <li>{@code Observation}: remove {@code valueString} e {@code note};
+ *   <li>{@code DiagnosticReport}: remove {@code conclusion} e {@code presentedForm}.
  * </ul>
  *
  * <p>Recursos com {@code meta.security} {@code highly_restricted} (CodeSystem municipal {@code
@@ -103,6 +107,26 @@ public class ScopeRedactionPolicy implements RedactionPolicy {
         if (plan.hasDescription()) {
           plan.setDescription(null);
           removed.add("description");
+        }
+      }
+      case Observation obs -> {
+        if (obs.hasValueStringType()) {
+          obs.setValue(null);
+          removed.add("valueString");
+        }
+        if (obs.hasNote()) {
+          obs.setNote(null);
+          removed.add("note");
+        }
+      }
+      case DiagnosticReport report -> {
+        if (report.hasConclusion()) {
+          report.setConclusion(null);
+          removed.add("conclusion");
+        }
+        if (report.hasPresentedForm()) {
+          report.setPresentedForm(null);
+          removed.add("presentedForm");
         }
       }
       default -> {

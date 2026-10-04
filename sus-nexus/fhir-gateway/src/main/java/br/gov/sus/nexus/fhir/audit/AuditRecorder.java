@@ -66,7 +66,8 @@ public class AuditRecorder {
             .resource(resource.fhirType())
             .map(c -> indexer.index(resource, c))
             .orElse(List.of());
-    tx.execute(
+    // transação própria: a auditoria sobrevive ao rollback de um Bundle transaction
+    tx.executeIsolated(
         tenantId,
         c -> {
           repository.insert(c, stored, index);

@@ -1,0 +1,18 @@
+{
+  "id": "gap_01J0000000000000000000GAP1",
+  "citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4",
+  "care_plan_id": "cp_01J0000000000000000000CPL1",
+  "care_line": "hipertensao",
+  "gap_kind": "exam_overdue",
+  "status": "open",
+  "expected_by": "2026-10-05T12:00:00-03:00",
+  "days_overdue": 12,
+  "protocol_id": "prot_has",
+  "protocol_version": "2.1",
+  "health_unit_cnes": "2112345",
+  "team_ine": "0000123456",
+  "microarea": "07",
+  "task_id": "task_01J0000000000000000000TSK1",
+  "detected_at": "2026-10-06T03:00:00-03:00",
+  "contact_valid": true
+}

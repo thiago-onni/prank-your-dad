@@ -52,6 +52,12 @@ public record Identity(
     return any;
   }
 
+  /** Permissão concedida por escopo que nomeia o tipo (não pelo curinga {@code *}). */
+  public boolean grantsExplicitly(String type, Permission permission) {
+    return scopes.stream()
+        .anyMatch(s -> type.equals(s.resourceType()) && s.permissions().contains(permission));
+  }
+
   public boolean hasSystemScope(String type, Permission permission) {
     return scopes.stream().anyMatch(s -> s.isSystemContext() && s.grants(type, permission));
   }

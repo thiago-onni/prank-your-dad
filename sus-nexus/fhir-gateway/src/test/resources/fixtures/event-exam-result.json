@@ -1,0 +1,22 @@
+{
+  "event_id": "evt_01J0000000000000000000EXR1",
+  "event_type": "sus.exam.result.available",
+  "event_version": "1.0",
+  "occurred_at": "2026-09-29T12:00:00-03:00",
+  "tenant": {"municipality_id": "ibge_3143302"},
+  "subject": {"municipal_citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4"},
+  "source": {"system": "LAB", "connector": "connector-lis", "source_record_id": "LAB-RES-9911", "cnes": "2112345"},
+  "data": {
+    "action": "available",
+    "exam_order_id": "exo_01J0000000000000000000EXK1",
+    "exam_result_id": "exr_01J0000000000000000000EXK1",
+    "result_status": "preliminary",
+    "critical": false,
+    "reported_at": "2026-09-29T12:00:00-03:00",
+    "performer_cnes": "2112345",
+    "has_document": false
+  },
+  "privacy": {"classification": "restricted", "purpose": ["care_coordination"]},
+  "trace": {"correlation_id": "corr_kafka_exr", "schema_version": "1.0.0"},
+  "replay": false
+}

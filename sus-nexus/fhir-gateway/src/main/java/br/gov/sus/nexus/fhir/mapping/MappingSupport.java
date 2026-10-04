@@ -16,27 +16,31 @@ import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r4.model.Type;
 
 /** Utilitários comuns aos mapeadores canônico → FHIR (FHIR-2). */
-final class MappingSupport {
+public final class MappingSupport {
 
   private MappingSupport() {}
 
   /** Prefixos de ULID do core → tipo FHIR projetado correspondente. */
   private static final Map<String, String> PREFIX_TYPES =
-      Map.of(
-          "cit", "Patient",
-          "apt", "Appointment",
-          "reg", "ServiceRequest",
-          "exo", "ServiceRequest",
-          "enc", "Encounter",
-          "task", "Task",
-          "hu", "Organization");
+      Map.ofEntries(
+          Map.entry("cit", "Patient"),
+          Map.entry("apt", "Appointment"),
+          Map.entry("reg", "ServiceRequest"),
+          Map.entry("exo", "ServiceRequest"),
+          Map.entry("enc", "Encounter"),
+          Map.entry("task", "Task"),
+          Map.entry("hu", "Organization"),
+          Map.entry("hep", "Encounter"),
+          Map.entry("cp", "CarePlan"),
+          Map.entry("exr", "DiagnosticReport"),
+          Map.entry("gap", "Task"));
 
   static Reference patientRef(String citizenId) {
     return new Reference("Patient/" + CanonicalIds.toFhirId(citizenId));
   }
 
   /** Referência lógica a uma Organization pelo CNES (resolvida pelo {@code ProjectionService}). */
-  static Reference organizationByCnes(String cnes) {
+  public static Reference organizationByCnes(String cnes) {
     return new Reference()
         .setType("Organization")
         .setIdentifier(new Identifier().setSystem(FhirConstants.SYSTEM_CNES).setValue(cnes))

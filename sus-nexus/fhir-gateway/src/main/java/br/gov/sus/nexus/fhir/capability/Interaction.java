@@ -7,7 +7,10 @@ public enum Interaction {
   SEARCH_TYPE("search-type"),
   CREATE("create"),
   UPDATE("update"),
-  HISTORY_INSTANCE("history-instance");
+  PATCH("patch"),
+  DELETE("delete"),
+  HISTORY_INSTANCE("history-instance"),
+  HISTORY_TYPE("history-type");
 
   private final String code;
 
@@ -21,15 +24,16 @@ public enum Interaction {
   }
 
   public boolean isWrite() {
-    return this == CREATE || this == UPDATE;
+    return this == CREATE || this == UPDATE || this == PATCH || this == DELETE;
   }
 
   /** Código de ação do AuditEvent (C, R, U, D, E). */
   public String auditAction() {
     return switch (this) {
       case CREATE -> "C";
-      case UPDATE -> "U";
-      case READ, VREAD, HISTORY_INSTANCE -> "R";
+      case UPDATE, PATCH -> "U";
+      case DELETE -> "D";
+      case READ, VREAD, HISTORY_INSTANCE, HISTORY_TYPE -> "R";
       case SEARCH_TYPE -> "E";
     };
   }

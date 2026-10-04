@@ -7,8 +7,9 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Canônico {@code ExamOrder} de {@code contracts/openapi/core-municipal.yaml}. Resultados ({@code
- * results}) são ignorados nesta etapa: {@code DiagnosticReport}/{@code Observation} são FHIR-3.
+ * Canônico {@code ExamOrder} de {@code contracts/openapi/core-municipal.yaml}. {@code results[]}
+ * ({@link CanonicalExamResult}) alimenta {@code DiagnosticReport}/{@code Observation}/{@code
+ * DocumentReference} via {@code ExamResultMapper} (FHIR-3).
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -33,6 +34,7 @@ public record CanonicalExamOrder(
     Instant reportedAt,
     String careLine,
     List<String> issues,
+    List<CanonicalExamResult> results,
     String sourceSystem,
     String sourceRecordId,
     Integer version) {}

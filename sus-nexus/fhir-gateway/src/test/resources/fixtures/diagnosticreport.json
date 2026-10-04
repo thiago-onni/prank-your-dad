@@ -1,0 +1,14 @@
+{
+  "resourceType": "DiagnosticReport",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusDiagnosticReport"]},
+  "status": "final",
+  "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "LAB"}]}],
+  "code": {"coding": [{"system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS", "code": "0202010503"}], "text": "Hemograma completo"},
+  "subject": {"reference": "Patient/PAT1"},
+  "basedOn": [{"reference": "ServiceRequest/SR1"}],
+  "effectiveDateTime": "2026-09-28T07:30:00-03:00",
+  "issued": "2026-09-29T12:00:00-03:00",
+  "performer": [{"reference": "Organization/ORG1"}],
+  "result": [{"reference": "Observation/OBS1"}],
+  "conclusion": "Hemograma dentro da normalidade"
+}

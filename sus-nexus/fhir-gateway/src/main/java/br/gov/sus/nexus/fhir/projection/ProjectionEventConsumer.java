@@ -50,4 +50,36 @@ public class ProjectionEventConsumer {
   public void apsEncounter(String payload) {
     handler.handle(ProjectionEventHandler.TOPIC_APS_ENCOUNTER, payload);
   }
+
+  // ---- FHIR-3 ---------------------------------------------------------------------------------
+
+  @Incoming("exam-result")
+  @Blocking
+  public void examResult(String payload) {
+    handler.handle(ProjectionEventHandler.TOPIC_EXAM_RESULT, payload);
+  }
+
+  @Incoming("hospital-adt")
+  @Blocking
+  public void hospitalAdt(String payload) {
+    handler.handle(ProjectionEventHandler.TOPIC_HOSPITAL_ADT, payload);
+  }
+
+  @Incoming("hospital-discharge")
+  @Blocking
+  public void hospitalDischarge(String payload) {
+    handler.handle(ProjectionEventHandler.TOPIC_HOSPITAL_DISCHARGE, payload);
+  }
+
+  @Incoming("careplan")
+  @Blocking
+  public void carePlan(String payload) {
+    handler.handle(ProjectionEventHandler.TOPIC_CAREPLAN, payload);
+  }
+
+  @Incoming("caregap")
+  @Blocking
+  public void careGap(String payload) {
+    handler.handle(ProjectionEventHandler.TOPIC_CAREGAP, payload);
+  }
 }

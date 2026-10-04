@@ -1,0 +1,12 @@
+{
+  "resourceType": "DocumentReference",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusDocumentReference"]},
+  "status": "current",
+  "type": {"coding": [{"system": "http://loinc.org", "code": "11502-2"}]},
+  "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "LAB"}]}],
+  "subject": {"reference": "Patient/PAT1"},
+  "date": "2026-09-29T12:00:00-03:00",
+  "author": [{"reference": "Organization/ORG1"}],
+  "content": [{"attachment": {"contentType": "application/pdf", "url": "http://localhost:8081/fhir/r4/Binary/BIN1", "title": "Laudo"}}],
+  "context": {"related": [{"reference": "ServiceRequest/SR1"}]}
+}

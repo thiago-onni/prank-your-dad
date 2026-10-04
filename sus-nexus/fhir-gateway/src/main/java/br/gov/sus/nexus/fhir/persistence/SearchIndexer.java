@@ -17,6 +17,7 @@ import org.hl7.fhir.r4.model.HumanName;
 import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.Period;
 import org.hl7.fhir.r4.model.PrimitiveType;
+import org.hl7.fhir.r4.model.Quantity;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.StringType;
@@ -43,6 +44,7 @@ public class SearchIndexer {
           case STRING -> indexString(def.name(), value, entries);
           case DATE -> indexDate(def.name(), value, entries);
           case REFERENCE -> indexReference(def.name(), value, entries);
+          case QUANTITY -> indexQuantity(def.name(), value, entries);
         }
       }
     }
@@ -118,6 +120,13 @@ public class SearchIndexer {
     } else if (value instanceof BaseDateTimeType dt && dt.hasValue()) {
       FhirDates.parse(dt.getValueAsString())
           .ifPresent(r -> out.add(new IndexEntry.Date(param, r.low(), r.high())));
+    }
+  }
+
+  private static void indexQuantity(String param, Base value, List<IndexEntry> out) {
+    if (value instanceof Quantity q && q.hasValue()) {
+      String code = q.hasCode() ? q.getCode() : q.getUnit();
+      out.add(new IndexEntry.Quantity(param, q.getSystem(), code, q.getValue()));
     }
   }
 

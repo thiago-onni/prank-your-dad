@@ -1,11 +1,12 @@
 package br.gov.sus.nexus.fhir.capability;
 
-/** Tipos de parâmetro de busca suportados (subconjunto de FHIR search-param-type). */
+/** Tipos de parâmetro de busca implementados (subconjunto de search-param-type). */
 public enum SearchParamType {
   TOKEN("token"),
   STRING("string"),
   DATE("date"),
-  REFERENCE("reference");
+  REFERENCE("reference"),
+  QUANTITY("quantity");
 
   private final String code;
 

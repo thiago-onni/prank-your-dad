@@ -15,9 +15,15 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface FhirRoute {
 
-  /** Interações implementadas pela rota (vazio para operações). */
+  /** Interações de tipo/instância implementadas pela rota (vazio para operações). */
   Interaction[] value() default {};
 
-  /** Nome da operação ({@code validate}) quando a rota é uma operação. */
+  /** Nome da operação ({@code validate}, {@code everything}) quando a rota é uma operação. */
   String operation() default "";
+
+  /**
+   * Interações de sistema ({@code transaction}, {@code batch}, {@code history-system}) quando a
+   * rota é de nível de sistema.
+   */
+  String[] system() default {};
 }

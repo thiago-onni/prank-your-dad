@@ -128,6 +128,9 @@ public final class SearchSqlBuilder {
         case REFERENCE ->
             sql.append(
                 exists("fhir_idx_reference", filter, tenantId, referenceClause(filter), params));
+        case QUANTITY ->
+            sql.append(
+                exists("fhir_idx_quantity", filter, tenantId, quantityClause(filter), params));
       }
     }
   }
@@ -242,6 +245,73 @@ public final class SearchSqlBuilder {
       } else {
         throw FhirException.invalid("Referência inválida para " + f.def().name());
       }
+    }
+    return c;
+  }
+
+  /**
+   * {@code value-quantity=[prefix]number[|system|code]}: prefixos eq/ne/gt/lt/ge/le; {@code eq}
+   * (padrão) usa a precisão implícita do número informado (ex.: {@code 5.4} casa 5.35..5.45).
+   */
+  private static Clause quantityClause(SearchFilter f) {
+    rejectModifier(f, "");
+    Clause c = new Clause();
+    for (String raw : f.values()) {
+      String v = raw.trim();
+      String prefix = "eq";
+      if (v.length() > 2 && v.substring(0, 2).matches("eq|ne|gt|lt|ge|le|sa|eb|ap")) {
+        prefix = v.substring(0, 2);
+        v = v.substring(2);
+      }
+      String[] parts = v.split("\\|", -1);
+      java.math.BigDecimal number;
+      try {
+        number = new java.math.BigDecimal(parts[0].trim());
+      } catch (NumberFormatException e) {
+        throw FhirException.invalid("Quantidade inválida para " + f.def().name() + ": " + raw);
+      }
+      java.math.BigDecimal half =
+          java.math.BigDecimal.ONE
+              .movePointLeft(Math.max(number.scale(), 0))
+              .divide(java.math.BigDecimal.valueOf(2));
+      java.math.BigDecimal low = number.subtract(half);
+      java.math.BigDecimal high = number.add(half);
+      StringBuilder unit = new StringBuilder();
+      List<Object> unitParams = new ArrayList<>();
+      if (parts.length == 3) {
+        if (!parts[1].isBlank()) {
+          unit.append(" AND t.system = ?");
+          unitParams.add(parts[1]);
+        }
+        if (!parts[2].isBlank()) {
+          unit.append(" AND t.code = ?");
+          unitParams.add(parts[2]);
+        }
+      } else if (parts.length == 2 && !parts[1].isBlank()) {
+        unit.append(" AND t.code = ?");
+        unitParams.add(parts[1]);
+      } else if (parts.length > 3) {
+        throw FhirException.invalid("Quantidade inválida para " + f.def().name() + ": " + raw);
+      }
+      String cmp =
+          switch (prefix) {
+            case "eq", "ap" -> "(t.value >= ? AND t.value < ?)";
+            case "ne" -> "NOT (t.value >= ? AND t.value < ?)";
+            case "gt", "sa" -> "t.value > ?";
+            case "lt", "eb" -> "t.value < ?";
+            case "ge" -> "t.value >= ?";
+            case "le" -> "t.value <= ?";
+            default -> throw FhirException.invalid("Prefixo inválido para " + f.def().name());
+          };
+      List<Object> values = new ArrayList<>();
+      if (prefix.equals("eq") || prefix.equals("ap") || prefix.equals("ne")) {
+        values.add(low);
+        values.add(high);
+      } else {
+        values.add(number);
+      }
+      values.addAll(unitParams);
+      c.add("(" + cmp + unit + ")", values.toArray());
     }
     return c;
   }

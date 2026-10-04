@@ -16,9 +16,14 @@ public record MapperSettings(
     String taskProfile,
     String conditionProfile,
     String carePlanProfile,
+    String observationProfile,
+    String diagnosticReportProfile,
+    String documentReferenceProfile,
     String sigtapSystem,
     String loincSystem,
-    String localSystem) {
+    String localSystem,
+    String ucumSystem,
+    String fhirBaseUrl) {
 
   /** Valores padrão (mesmos de {@code application.properties}) para testes unitários. */
   public static MapperSettings defaults() {
@@ -31,9 +36,14 @@ public record MapperSettings(
         municipal + "/SUSNexusTask",
         base + "/BRCoreCondition",
         municipal + "/SUSNexusCarePlan",
+        municipal + "/SUSNexusObservation",
+        municipal + "/SUSNexusDiagnosticReport",
+        municipal + "/SUSNexusDocumentReference",
         "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS",
         "http://loinc.org",
-        "http://sus-nexus.gov.br/fhir/CodeSystem/local-procedure");
+        "http://sus-nexus.gov.br/fhir/CodeSystem/local-procedure",
+        "http://unitsofmeasure.org",
+        "http://localhost:8081/fhir/r4");
   }
 
   /** Produtor CDI a partir de {@link FhirGatewayConfig}. */
@@ -53,9 +63,14 @@ public record MapperSettings(
           p.task(),
           p.condition(),
           p.carePlan(),
+          p.observation(),
+          p.diagnosticReport(),
+          p.documentReference(),
           t.sigtapSystem(),
           t.loincSystem(),
-          t.localSystem());
+          t.localSystem(),
+          t.ucumSystem(),
+          config.baseUrl());
     }
   }
 }

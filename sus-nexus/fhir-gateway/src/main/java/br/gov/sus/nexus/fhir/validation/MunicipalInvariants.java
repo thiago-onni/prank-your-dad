@@ -213,7 +213,78 @@ public class MunicipalInvariants {
               "category.exists() or title.exists() or description.exists()",
               "CarePlan deve ter category, title ou description",
               "CarePlan",
-              IssueSeverity.WARNING));
+              IssueSeverity.WARNING),
+          // ---- FHIR-3 ----
+          new MunicipalInvariant(
+              "sus-obs-1",
+              "Observation",
+              patientRef("subject"),
+              "Observation.subject deve referenciar um Patient",
+              "Observation.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-obs-2",
+              "Observation",
+              "code.coding.where(system.exists() and code.exists()).exists()",
+              "Observation.code deve ter coding com system e code (LOINC/SIGTAP/local)",
+              "Observation.code",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-dr-1",
+              "DiagnosticReport",
+              patientRef("subject"),
+              "DiagnosticReport.subject deve referenciar um Patient",
+              "DiagnosticReport.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-dr-2",
+              "DiagnosticReport",
+              "code.coding.where(system.exists() and code.exists()).exists()",
+              "DiagnosticReport.code deve ter coding com system e code (SIGTAP/LOINC/local)",
+              "DiagnosticReport.code",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-dr-3",
+              "DiagnosticReport",
+              "presentedForm.all(data.empty())",
+              "DiagnosticReport.presentedForm não admite conteúdo inline; use Binary (url)",
+              "DiagnosticReport.presentedForm",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-doc-1",
+              "DocumentReference",
+              "content.attachment.all(data.empty())",
+              "DocumentReference não admite conteúdo inline (attachment.data); use Binary (url)",
+              "DocumentReference.content.attachment",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-doc-2",
+              "DocumentReference",
+              patientRef("subject"),
+              "DocumentReference.subject deve referenciar um Patient",
+              "DocumentReference.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-doc-3",
+              "DocumentReference",
+              "type.coding.where(system.exists() and code.exists()).exists()",
+              "DocumentReference.type deve ter coding com system e code (LOINC)",
+              "DocumentReference.type",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-bin-1",
+              "Binary",
+              "contentType.exists()",
+              "Binary.contentType obrigatório",
+              "Binary.contentType",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-bin-2",
+              "Binary",
+              patientRef("securityContext"),
+              "Binary.securityContext deve referenciar o Patient (compartimento de acesso)",
+              "Binary.securityContext",
+              IssueSeverity.ERROR));
 
   public List<MunicipalInvariant> forType(String resourceType) {
     return invariants.stream()

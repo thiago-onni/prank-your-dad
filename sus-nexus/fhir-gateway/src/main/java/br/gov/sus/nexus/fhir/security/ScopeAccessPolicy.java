@@ -32,6 +32,11 @@ public class ScopeAccessPolicy implements AccessPolicy {
     if (!identity.grants(type, required)) {
       return Decision.deny("scope-missing:" + type + "." + required.letter());
     }
+    // DocumentReference/Binary: escopo explícito do tipo (nunca apenas o curinga)
+    if (CapabilityRegistry.EXPLICIT_SCOPE_TYPES.contains(type)
+        && !identity.grantsExplicitly(type, required)) {
+      return Decision.deny("scope-explicit-required:" + type + "." + required.letter());
+    }
     if (identity.onlyPatientContext(type, required)) {
       if (identity.patientId().isEmpty()) {
         return Decision.deny("patient-context-without-patient");
@@ -58,9 +63,10 @@ public class ScopeAccessPolicy implements AccessPolicy {
   public static Permission permissionFor(Interaction interaction) {
     return switch (interaction) {
       case READ, VREAD, HISTORY_INSTANCE -> Permission.READ;
-      case SEARCH_TYPE -> Permission.SEARCH;
+      case SEARCH_TYPE, HISTORY_TYPE -> Permission.SEARCH;
       case CREATE -> Permission.CREATE;
-      case UPDATE -> Permission.UPDATE;
+      case UPDATE, PATCH -> Permission.UPDATE;
+      case DELETE -> Permission.DELETE;
     };
   }
 }

@@ -116,6 +116,78 @@ public final class FhirConstants {
       SUS_NEXUS_BASE + "/StructureDefinition/correlation-id";
   public static final String EXT_EVENT_ID = SUS_NEXUS_BASE + "/StructureDefinition/event-id";
 
+  // FHIR-3: identificadores, CodeSystems e extensões de resultados, hospital e cuidado
+  public static final String SYSTEM_MUNICIPAL_EXAM_RESULT_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-exam-result-id";
+  public static final String SYSTEM_MUNICIPAL_HOSPITAL_EPISODE_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-hospital-episode-id";
+  public static final String SYSTEM_MUNICIPAL_CARE_PLAN_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-care-plan-id";
+  public static final String SYSTEM_MUNICIPAL_CARE_GAP_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-care-gap-id";
+  public static final String SYSTEM_AIH = "http://www.saude.gov.br/fhir/r4/NamingSystem/aih";
+  public static final String CS_CARE_LINE = SUS_NEXUS_BASE + "/CodeSystem/care-line";
+  public static final String CS_CARE_GAP_KIND = SUS_NEXUS_BASE + "/CodeSystem/care-gap-kind";
+  public static final String CS_CARE_PLAN_ITEM_KIND =
+      SUS_NEXUS_BASE + "/CodeSystem/care-plan-item-kind";
+  public static final String CS_V2_0074 = "http://terminology.hl7.org/CodeSystem/v2-0074";
+  public static final String CS_V3_OBSERVATION_INTERPRETATION =
+      "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation";
+  public static final String CS_OBSERVATION_CATEGORY =
+      "http://terminology.hl7.org/CodeSystem/observation-category";
+  public static final String CS_DISCHARGE_DISPOSITION =
+      "http://terminology.hl7.org/CodeSystem/discharge-disposition";
+  public static final String CS_ADMIT_SOURCE = "http://terminology.hl7.org/CodeSystem/admit-source";
+  public static final String CS_LOINC = "http://loinc.org";
+  public static final String LOINC_LAB_REPORT = "11502-2";
+  public static final String LOINC_IMAGING_REPORT = "18748-4";
+  public static final String EXT_EXAM_RESULT_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/exam-result-status";
+  public static final String EXT_EXAM_RESULT_CRITICAL =
+      SUS_NEXUS_BASE + "/StructureDefinition/exam-result-critical";
+  public static final String EXT_DOCUMENT_REF =
+      SUS_NEXUS_BASE + "/StructureDefinition/document-ref";
+  public static final String EXT_DOCUMENT_SHA256 =
+      SUS_NEXUS_BASE + "/StructureDefinition/document-sha256";
+  public static final String EXT_HOSPITAL_EPISODE_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/hospital-episode-status";
+  public static final String EXT_HOSPITAL_WARD = SUS_NEXUS_BASE + "/StructureDefinition/ward";
+  public static final String EXT_HOSPITAL_BED = SUS_NEXUS_BASE + "/StructureDefinition/bed";
+  public static final String EXT_RISK_LEVEL = SUS_NEXUS_BASE + "/StructureDefinition/risk-level";
+  public static final String EXT_READMISSION_30D =
+      SUS_NEXUS_BASE + "/StructureDefinition/readmission-within-30d";
+  public static final String EXT_LENGTH_OF_STAY =
+      SUS_NEXUS_BASE + "/StructureDefinition/length-of-stay-days";
+  public static final String EXT_PREVIOUS_EPISODE =
+      SUS_NEXUS_BASE + "/StructureDefinition/previous-episode";
+  public static final String EXT_ADMISSION_SOURCE =
+      SUS_NEXUS_BASE + "/StructureDefinition/admission-source";
+  public static final String EXT_PROTOCOL_ID = SUS_NEXUS_BASE + "/StructureDefinition/protocol-id";
+  public static final String EXT_PROTOCOL_VERSION =
+      SUS_NEXUS_BASE + "/StructureDefinition/protocol-version";
+  public static final String EXT_CARE_PLAN_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/care-plan-status";
+  public static final String EXT_CARE_PLAN_ITEM_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/care-plan-item-status";
+  public static final String EXT_CARE_PLAN_ITEM_ID =
+      SUS_NEXUS_BASE + "/StructureDefinition/care-plan-item-id";
+  public static final String EXT_ITEM_OVERDUE =
+      SUS_NEXUS_BASE + "/StructureDefinition/item-overdue";
+  public static final String EXT_OPEN_GAPS = SUS_NEXUS_BASE + "/StructureDefinition/open-gaps";
+  public static final String EXT_DAYS_OVERDUE =
+      SUS_NEXUS_BASE + "/StructureDefinition/days-overdue";
+  public static final String EXT_GAP_RESOLUTION =
+      SUS_NEXUS_BASE + "/StructureDefinition/gap-resolution";
+  public static final String EXT_CONTACT_VALID =
+      SUS_NEXUS_BASE + "/StructureDefinition/contact-valid";
+  public static final String EXT_IDENTITY_RESOLUTION =
+      SUS_NEXUS_BASE + "/StructureDefinition/identity-resolution";
+  public static final String CS_MUNICIPAL_TAG = SUS_NEXUS_BASE + "/CodeSystem/resource-tag";
+  public static final String TAG_PENDING_IDENTITY = "pending-identity";
+  public static final String TAG_DIRECT_WRITE = "direct-write";
+  public static final String TASK_TYPE_CARE_GAP = "care_gap";
+  public static final String MEDIA_TYPE_JSON_PATCH = "application/json-patch+json";
+
   // Terminologia HL7 usada em AuditEvent/Provenance
   public static final String CS_AUDIT_EVENT_TYPE =
       "http://terminology.hl7.org/CodeSystem/audit-event-type";

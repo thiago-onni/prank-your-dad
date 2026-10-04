@@ -1,0 +1,40 @@
+{
+  "id": "exo_01J0000000000000000000EXO3",
+  "citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4",
+  "status": "reported",
+  "requested_at": "2026-09-25T08:00:00-03:00",
+  "exam_code": "0202010503",
+  "code_system": "SIGTAP",
+  "exam_description": "Hemograma completo",
+  "category": "laboratory",
+  "priority": "routine",
+  "requesting_cnes": "2112345",
+  "performer_cnes": "2112345",
+  "performed_at": "2026-09-28T07:30:00-03:00",
+  "reported_at": "2026-09-29T12:00:00-03:00",
+  "care_line": "hipertensao",
+  "results": [
+    {
+      "id": "exr_01J0000000000000000000EXR3",
+      "reported_at": "2026-09-29T12:00:00-03:00",
+      "status": "final",
+      "critical": false,
+      "performer_cnes": "2112345",
+      "has_document": true,
+      "observations_count": 2,
+      "source_system": "LAB",
+      "source_record_id": "LAB-RES-9911",
+      "document_ref": "s3://lab-origem/laudos/9911.pdf",
+      "document_content_type": "application/pdf",
+      "document_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "observations": [
+        {"code": "718-7", "code_system": "LOINC", "value": 13.5, "unit": "g/dL", "abnormal": false},
+        {"code": "6690-2", "code_system": "LOINC", "value": 15.2, "unit": "10*3/uL", "abnormal": true},
+        {"code": "LOC-OBS", "code_system": "LOCAL", "value_text_masked": "Reagente ***", "abnormal": true}
+      ]
+    }
+  ],
+  "source_system": "LAB",
+  "source_record_id": "LAB-ORD-7788",
+  "version": 6
+}

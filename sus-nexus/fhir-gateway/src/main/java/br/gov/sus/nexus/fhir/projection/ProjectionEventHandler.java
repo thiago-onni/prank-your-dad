@@ -1,20 +1,30 @@
 package br.gov.sus.nexus.fhir.projection;
 
 import br.gov.sus.nexus.fhir.audit.ProvenanceFactory.ProjectionSource;
+import br.gov.sus.nexus.fhir.mapping.CanonicalCareGap;
 import br.gov.sus.nexus.fhir.mapping.CanonicalEncounter;
+import br.gov.sus.nexus.fhir.mapping.CanonicalExamOrder;
+import br.gov.sus.nexus.fhir.mapping.CanonicalExamResult;
 import br.gov.sus.nexus.fhir.mapping.ProjectionService;
 import br.gov.sus.nexus.fhir.mapping.ProjectionService.ProjectionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 /**
  * Trata um envelope de evento: valida, verifica o inbox, busca o canônico completo no core (exceto
- * atendimento APS, projetado a partir do próprio evento) e projeta com {@code Provenance}.
+ * atendimento APS e lacuna de cuidado, projetados a partir do próprio evento) e projeta com {@code
+ * Provenance}.
+ *
+ * <p>FHIR-3: {@code sus.exam.result.v1} (busca o pedido com {@code results[]}; se o core não
+ * devolver o resultado, usa os metadados do evento), {@code sus.hospital.adt.v1} e {@code
+ * sus.hospital.discharge.v1} (busca o episódio), {@code sus.careplan.v1} (busca o plano) e {@code
+ * sus.caregap.v1} (payload do evento + {@code subject.municipal_citizen_id}).
  */
 @ApplicationScoped
 public class ProjectionEventHandler {
@@ -27,6 +37,11 @@ public class ProjectionEventHandler {
   public static final String TOPIC_REGULATION_STATUS = "sus.regulation.status.v1";
   public static final String TOPIC_EXAM_ORDER = "sus.exam.order.v1";
   public static final String TOPIC_APS_ENCOUNTER = "sus.aps.encounter.v1";
+  public static final String TOPIC_EXAM_RESULT = "sus.exam.result.v1";
+  public static final String TOPIC_HOSPITAL_ADT = "sus.hospital.adt.v1";
+  public static final String TOPIC_HOSPITAL_DISCHARGE = "sus.hospital.discharge.v1";
+  public static final String TOPIC_CAREPLAN = "sus.careplan.v1";
+  public static final String TOPIC_CAREGAP = "sus.caregap.v1";
 
   @Inject ObjectMapper json;
   @Inject ProjectionService projections;
@@ -132,8 +147,96 @@ public class ProjectionEventHandler {
                 env.privacy() == null ? null : env.privacy().classification());
         yield Optional.of(projections.projectEncounter(tenant, enriched, source));
       }
+      case TOPIC_EXAM_RESULT -> {
+        String orderId = require(env, "exam_order_id");
+        String resultId = require(env, "exam_result_id");
+        CanonicalExamOrder order = core.examOrder(orderId, tenant, correlation);
+        CanonicalExamResult result =
+            Optional.ofNullable(order.results()).orElse(List.of()).stream()
+                .filter(r -> resultId.equals(r.id()))
+                .findFirst()
+                .orElseGet(() -> resultFromEvent(env, resultId));
+        yield Optional.of(projections.projectExamResult(tenant, order, result, source).report());
+      }
+      case TOPIC_HOSPITAL_ADT, TOPIC_HOSPITAL_DISCHARGE -> {
+        String id = require(env, "hospital_episode_id");
+        yield Optional.of(
+            projections.projectHospitalEpisode(
+                tenant, core.hospitalEpisode(id, tenant, correlation), source));
+      }
+      case TOPIC_CAREPLAN -> {
+        String id = require(env, "care_plan_id");
+        yield Optional.of(
+            projections.projectCarePlan(tenant, core.carePlan(id, tenant, correlation), source));
+      }
+      case TOPIC_CAREGAP -> {
+        String id = require(env, "care_gap_id");
+        if (env.subject() == null || env.subject().municipalCitizenId() == null) {
+          throw new ProjectionException("Evento de lacuna sem subject.municipal_citizen_id");
+        }
+        CanonicalCareGap data;
+        try {
+          data = json.treeToValue(env.data(), CanonicalCareGap.class);
+        } catch (IOException e) {
+          throw new ProjectionException("data de lacuna de cuidado inválido", e);
+        }
+        String status =
+            data.status() != null
+                ? data.status()
+                : "resolved".equals(env.dataText("action")) ? "resolved" : "open";
+        CanonicalCareGap gap =
+            new CanonicalCareGap(
+                id,
+                env.subject().municipalCitizenId(),
+                data.carePlanId(),
+                data.careLine(),
+                data.gapKind(),
+                status,
+                data.expectedBy(),
+                data.daysOverdue(),
+                data.protocolId(),
+                data.protocolVersion(),
+                data.healthUnitCnes() != null
+                    ? data.healthUnitCnes()
+                    : env.source() == null ? null : env.source().cnes(),
+                data.teamIne(),
+                data.microarea(),
+                data.taskId(),
+                data.detectedAt(),
+                data.resolvedAt(),
+                data.resolution(),
+                data.contactValid());
+        yield Optional.of(projections.projectCareGap(tenant, gap, source));
+      }
       default -> throw new ProjectionException("Tópico sem projeção: " + topic);
     };
+  }
+
+  /** Resultado mínimo a partir dos metadados do evento (sem observações nem documento). */
+  private static CanonicalExamResult resultFromEvent(EventEnvelope env, String resultId) {
+    String status = env.dataText("result_status");
+    if (status == null) {
+      throw new ProjectionException("Evento de resultado sem data.result_status");
+    }
+    String reported = env.dataText("reported_at");
+    String critical = env.dataText("critical");
+    String hasDocument = env.dataText("has_document");
+    return new CanonicalExamResult(
+        resultId,
+        reported == null ? env.occurredAt() : java.time.Instant.parse(reported),
+        status,
+        critical == null ? null : Boolean.valueOf(critical),
+        env.dataText("performer_cnes"),
+        hasDocument == null ? null : Boolean.valueOf(hasDocument),
+        null,
+        null,
+        env.source() == null ? null : env.source().system(),
+        env.source() == null ? null : env.source().sourceRecordId(),
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   private static String require(EventEnvelope env, String field) {

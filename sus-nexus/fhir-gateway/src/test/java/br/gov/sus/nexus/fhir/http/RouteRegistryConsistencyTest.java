@@ -31,6 +31,7 @@ class RouteRegistryConsistencyTest {
   void everyRouteIsRegisteredAndEveryRegisteredInteractionHasARoute() {
     Set<Interaction> routed = EnumSet.noneOf(Interaction.class);
     Set<String> routedOperations = new HashSet<>();
+    Set<String> routedSystem = new HashSet<>();
     for (Method m : FhirResourceEndpoint.class.getDeclaredMethods()) {
       boolean http =
           m.isAnnotationPresent(GET.class)
@@ -52,7 +53,9 @@ class RouteRegistryConsistencyTest {
       if (!route.operation().isEmpty()) {
         routedOperations.add(route.operation());
       }
-      assertThat(route.value().length > 0 || !route.operation().isEmpty())
+      routedSystem.addAll(java.util.List.of(route.system()));
+      assertThat(
+              route.value().length > 0 || !route.operation().isEmpty() || route.system().length > 0)
           .as("rota sem interação/operação: " + m.getName())
           .isTrue();
     }
@@ -62,8 +65,13 @@ class RouteRegistryConsistencyTest {
       registered.addAll(cap.interactions());
     }
     assertThat(routed).containsExactlyInAnyOrderElementsOf(registered);
-    assertThat(routedOperations)
-        .containsExactlyInAnyOrderElementsOf(CapabilityRegistry.SYSTEM_OPERATIONS);
+    Set<String> registeredOperations = new HashSet<>(CapabilityRegistry.SYSTEM_OPERATIONS);
+    for (ResourceCapability cap : registry.all()) {
+      registeredOperations.addAll(cap.operations());
+    }
+    assertThat(routedOperations).containsExactlyInAnyOrderElementsOf(registeredOperations);
+    assertThat(routedSystem)
+        .containsExactlyInAnyOrderElementsOf(CapabilityRegistry.SYSTEM_INTERACTIONS);
     // nenhuma interação do enum fica sem rota nem sem registro
     assertThat(routed).containsExactlyInAnyOrderElementsOf(EnumSet.allOf(Interaction.class));
   }

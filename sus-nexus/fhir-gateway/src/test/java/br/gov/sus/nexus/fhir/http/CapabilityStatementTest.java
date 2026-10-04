@@ -59,8 +59,11 @@ class CapabilityStatementTest {
 
       Set<String> params =
           res.getSearchParam().stream().map(p -> p.getName()).collect(Collectors.toSet());
-      Set<String> expectedParams = new java.util.HashSet<>(cap.searchParams().keySet());
+      // parâmetros só são anunciados para tipos com search-type (Binary registra "patient"
+      // apenas para o compartimento)
+      Set<String> expectedParams = new java.util.HashSet<>();
       if (cap.supports(Interaction.SEARCH_TYPE)) {
+        expectedParams.addAll(cap.searchParams().keySet());
         expectedParams.addAll(registry.commonParams().stream().map(SearchParamDef::name).toList());
       }
       assertThat(params).as(res.getType()).isEqualTo(expectedParams);
@@ -69,7 +72,27 @@ class CapabilityStatementTest {
           .as(res.getType() + " searchInclude")
           .containsExactlyElementsOf(
               cap.includes().stream().map(i -> res.getType() + ":" + i).toList());
+      assertThat(res.getOperation().stream().map(o -> o.getName()).toList())
+          .as(res.getType() + " operation")
+          .containsExactlyElementsOf(cap.operations());
     }
+    assertThat(
+            cs.getRestFirstRep().getInteraction().stream().map(i -> i.getCode().toCode()).toList())
+        .containsExactlyInAnyOrderElementsOf(CapabilityRegistry.SYSTEM_INTERACTIONS);
+    // FHIR-3: novos tipos e _include anunciados
+    assertThat(announced)
+        .contains("Observation", "DiagnosticReport", "DocumentReference", "Binary");
+    CapabilityStatementRestResourceComponent dr =
+        resources.stream().filter(r -> r.getType().equals("DiagnosticReport")).findFirst().get();
+    assertThat(dr.getSearchInclude().stream().map(i -> i.getValue()).toList())
+        .contains("DiagnosticReport:result", "DiagnosticReport:based-on");
+    CapabilityStatementRestResourceComponent patient =
+        resources.stream().filter(r -> r.getType().equals("Patient")).findFirst().get();
+    assertThat(patient.getOperation().get(0).getName()).isEqualTo("everything");
+    CapabilityStatementRestResourceComponent binary =
+        resources.stream().filter(r -> r.getType().equals("Binary")).findFirst().get();
+    assertThat(binary.getInteraction().stream().map(i -> i.getCode().toCode()).toList())
+        .containsExactlyInAnyOrder("read", "create");
     assertThat(cs.getRestFirstRep().getOperation().stream().map(o -> o.getName()).toList())
         .containsExactlyElementsOf(CapabilityRegistry.SYSTEM_OPERATIONS);
   }
@@ -77,7 +100,7 @@ class CapabilityStatementTest {
   @Test
   void unregisteredTypeAndInteractionAreRejected() {
     clinician()
-        .get(FHIR + "/Observation/123")
+        .get(FHIR + "/Medication/123")
         .then()
         .statusCode(404)
         .body("issue[0].code", org.hamcrest.Matchers.equalTo("not-supported"));

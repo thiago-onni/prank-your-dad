@@ -49,6 +49,10 @@ public class ProjectionService {
   @Inject RegulationRequestMapper regulationRequestMapper;
   @Inject ExamOrderMapper examOrderMapper;
   @Inject EncounterMapper encounterMapper;
+  @Inject ExamResultMapper examResultMapper;
+  @Inject HospitalEpisodeMapper hospitalEpisodeMapper;
+  @Inject CarePlanMapper carePlanMapper;
+  @Inject CareGapMapper careGapMapper;
   @Inject ValidationService validation;
   @Inject CapabilityRegistry registry;
   @Inject TenantTransaction tx;
@@ -101,6 +105,62 @@ public class ProjectionService {
   public ProjectionResult projectEncounter(
       String tenantId, CanonicalEncounter encounter, ProjectionSource source) {
     return projectResolved(tenantId, encounterMapper.map(encounter), source);
+  }
+
+  // ---- FHIR-3 ---------------------------------------------------------------------------------
+
+  /**
+   * Projeção de um resultado de exame: Observations (uma por item), DiagnosticReport (com {@code
+   * result} apontando para elas) e DocumentReference quando há documento. Cada recurso é
+   * idempotente por conteúdo e recebe sua própria Provenance.
+   */
+  public record ExamResultProjection(
+      ProjectionResult report,
+      List<ProjectionResult> observations,
+      Optional<ProjectionResult> document) {
+
+    /** Todos os resultados na ordem de gravação (Observations, DiagnosticReport, Document). */
+    public List<ProjectionResult> all() {
+      List<ProjectionResult> list = new java.util.ArrayList<>(observations);
+      list.add(report);
+      document.ifPresent(list::add);
+      return list;
+    }
+
+    public boolean changed() {
+      return all().stream().anyMatch(ProjectionResult::changed);
+    }
+  }
+
+  public ExamResultProjection projectExamResult(
+      String tenantId,
+      CanonicalExamOrder order,
+      CanonicalExamResult result,
+      ProjectionSource source) {
+    ExamResultMapper.Mapped mapped = examResultMapper.map(order, result);
+    List<ProjectionResult> observations = new java.util.ArrayList<>();
+    for (var obs : mapped.observations()) {
+      observations.add(projectResolved(tenantId, obs, source));
+    }
+    ProjectionResult report = projectResolved(tenantId, mapped.report(), source);
+    Optional<ProjectionResult> document =
+        mapped.document().map(doc -> projectResolved(tenantId, doc, source));
+    return new ExamResultProjection(report, observations, document);
+  }
+
+  public ProjectionResult projectHospitalEpisode(
+      String tenantId, CanonicalHospitalEpisode episode, ProjectionSource source) {
+    return projectResolved(tenantId, hospitalEpisodeMapper.map(episode), source);
+  }
+
+  public ProjectionResult projectCarePlan(
+      String tenantId, CanonicalCarePlan plan, ProjectionSource source) {
+    return projectResolved(tenantId, carePlanMapper.map(plan), source);
+  }
+
+  public ProjectionResult projectCareGap(
+      String tenantId, CanonicalCareGap gap, ProjectionSource source) {
+    return projectResolved(tenantId, careGapMapper.map(gap), source);
   }
 
   private ProjectionResult projectResolved(

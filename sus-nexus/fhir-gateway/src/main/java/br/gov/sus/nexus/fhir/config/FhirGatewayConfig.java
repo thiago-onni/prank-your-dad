@@ -21,6 +21,10 @@ public interface FhirGatewayConfig {
 
   Core core();
 
+  Binary binary();
+
+  Everything everything();
+
   /** URL base pública usada em AuditEvent.source e em referências absolutas. */
   @WithName("base-url")
   String baseUrl();
@@ -96,6 +100,15 @@ public interface FhirGatewayConfig {
     @WithName("care-plan")
     String carePlan();
 
+    /** FHIR-3: perfis municipais de resultados/documentos. */
+    String observation();
+
+    @WithName("diagnostic-report")
+    String diagnosticReport();
+
+    @WithName("document-reference")
+    String documentReference();
+
     @WithName("require-profile")
     @WithDefault("true")
     boolean requireProfile();
@@ -116,6 +129,69 @@ public interface FhirGatewayConfig {
     @WithName("local-system")
     @WithDefault("http://sus-nexus.gov.br/fhir/CodeSystem/local-procedure")
     String localSystem();
+
+    /** CodeSystem de unidades de medida dos resultados (UCUM). */
+    @WithName("ucum-system")
+    @WithDefault("http://unitsofmeasure.org")
+    String ucumSystem();
+  }
+
+  /** Armazenamento de conteúdo de {@code Binary} (object storage; nunca inline no banco). */
+  interface Binary {
+    /** {@code file} (desenvolvimento/teste) ou {@code s3}. */
+    @WithDefault("file")
+    String storage();
+
+    /** Diretório base do armazenamento em arquivo. */
+    @WithName("file-dir")
+    @WithDefault("target/fhir-binary")
+    String fileDir();
+
+    /** Tamanho máximo aceito em {@code POST Binary} (bytes decodificados). */
+    @WithName("max-bytes")
+    @WithDefault("20971520")
+    long maxBytes();
+
+    S3 s3();
+
+    /** Parâmetros do S3 (AWS SDK v2). */
+    interface S3 {
+      @WithDefault("sus-nexus-fhir-binary")
+      String bucket();
+
+      @WithDefault("sa-east-1")
+      String region();
+
+      /** Endpoint alternativo (MinIO etc.); vazio = AWS. */
+      Optional<String> endpoint();
+
+      @WithName("path-style")
+      @WithDefault("true")
+      boolean pathStyle();
+
+      /** Credenciais estáticas opcionais; ausentes = cadeia padrão do SDK. */
+      @WithName("access-key")
+      Optional<String> accessKey();
+
+      @WithName("secret-key")
+      Optional<String> secretKey();
+    }
+  }
+
+  /** Limites de {@code Patient/$everything}. */
+  interface Everything {
+    @WithName("default-count")
+    @WithDefault("50")
+    int defaultCount();
+
+    @WithName("max-count")
+    @WithDefault("200")
+    int maxCount();
+
+    /** Número máximo de páginas que um cursor pode percorrer (0 = sem limite). */
+    @WithName("max-pages")
+    @WithDefault("100")
+    int maxPages();
   }
 
   /** Acesso ao core municipal pelo consumidor de projeção (client-credentials). */

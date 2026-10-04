@@ -25,7 +25,11 @@ public class AuditEventFactory {
 
   @Inject FhirGatewayConfig config;
 
-  /** Dados da interação auditada. */
+  /**
+   * Dados da interação auditada. {@code operation} (ex.: {@code everything}, {@code transaction},
+   * {@code batch}) substitui o subtipo da interação quando presente; {@code touched} lista
+   * referências adicionais ({@code Tipo/id[/_history/v]}) — uma entidade por recurso tocado.
+   */
   public record AuditInput(
       Identity identity,
       Interaction interaction,
@@ -36,7 +40,36 @@ public class AuditEventFactory {
       String correlationId,
       String query,
       boolean success,
-      String denyReason) {}
+      String denyReason,
+      String operation,
+      java.util.List<String> touched) {
+
+    public AuditInput(
+        Identity identity,
+        Interaction interaction,
+        String resourceType,
+        String resourceId,
+        Integer versionId,
+        String purposeOfUse,
+        String correlationId,
+        String query,
+        boolean success,
+        String denyReason) {
+      this(
+          identity,
+          interaction,
+          resourceType,
+          resourceId,
+          versionId,
+          purposeOfUse,
+          correlationId,
+          query,
+          success,
+          denyReason,
+          null,
+          java.util.List.of());
+    }
+  }
 
   public AuditEvent build(AuditInput in) {
     AuditEvent event = new AuditEvent();
@@ -45,11 +78,19 @@ public class AuditEventFactory {
             .setSystem(FhirConstants.CS_AUDIT_EVENT_TYPE)
             .setCode("rest")
             .setDisplay("RESTful Operation"));
-    event.addSubtype(
-        new Coding()
-            .setSystem(FhirConstants.CS_RESTFUL_INTERACTION)
-            .setCode(in.interaction().code()));
-    event.setAction(AuditEventAction.fromCode(in.interaction().auditAction()));
+    if (in.operation() != null) {
+      event.addSubtype(
+          new Coding().setSystem(FhirConstants.CS_RESTFUL_INTERACTION).setCode(in.operation()));
+      event.setAction(
+          AuditEventAction.fromCode(
+              in.interaction() == null ? "E" : in.interaction().auditAction()));
+    } else {
+      event.addSubtype(
+          new Coding()
+              .setSystem(FhirConstants.CS_RESTFUL_INTERACTION)
+              .setCode(in.interaction().code()));
+      event.setAction(AuditEventAction.fromCode(in.interaction().auditAction()));
+    }
     event.setRecorded(new Date());
     event.setOutcome(in.success() ? AuditEventOutcome._0 : AuditEventOutcome._4);
     if (!in.success() && in.denyReason() != null) {
@@ -117,6 +158,22 @@ public class AuditEventFactory {
       if (in.query() != null) {
         entity.setQuery(in.query().getBytes(java.nio.charset.StandardCharsets.UTF_8));
       }
+    }
+    for (String ref : in.touched()) {
+      AuditEventEntityComponent entity = event.addEntity();
+      entity.setWhat(new Reference(ref));
+      int slash = ref.indexOf('/');
+      if (slash > 0) {
+        entity.setType(
+            new Coding()
+                .setSystem("http://hl7.org/fhir/resource-types")
+                .setCode(ref.substring(0, slash)));
+      }
+      entity.setRole(
+          new Coding()
+              .setSystem(FhirConstants.CS_OBJECT_ROLE)
+              .setCode("4")
+              .setDisplay("Domain Resource"));
     }
     return event;
   }
