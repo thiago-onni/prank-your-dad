@@ -33,6 +33,89 @@ public final class FhirConstants {
   public static final String EXT_MOTHERS_NAME =
       "http://hl7.org/fhir/StructureDefinition/patient-mothersMaidenName";
 
+  // FHIR-2: identificadores municipais de recursos projetados
+  public static final String SYSTEM_MUNICIPAL_APPOINTMENT_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-appointment-id";
+  public static final String SYSTEM_MUNICIPAL_TASK_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-task-id";
+  public static final String SYSTEM_MUNICIPAL_REGULATION_REQUEST_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-regulation-request-id";
+  public static final String SYSTEM_MUNICIPAL_EXAM_ORDER_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-exam-order-id";
+  public static final String SYSTEM_MUNICIPAL_ENCOUNTER_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-encounter-id";
+  public static final String SYSTEM_MUNICIPAL_PROFESSIONAL_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-professional-id";
+  public static final String SYSTEM_MUNICIPAL_USER_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-user-id";
+  public static final String SYSTEM_MUNICIPAL_TEAM_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-team-id";
+  public static final String SYSTEM_MUNICIPAL_QUEUE_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/municipal-queue-id";
+  public static final String SYSTEM_SOURCE_RECORD_ID =
+      SUS_NEXUS_BASE + "/NamingSystem/source-record-id";
+  public static final String SYSTEM_SUBJECT = SUS_NEXUS_BASE + "/NamingSystem/subject";
+
+  // FHIR-2: CodeSystems municipais
+  public static final String CS_TASK_TYPE = "https://sus-nexus.gov.br/fhir/CodeSystem/task-type";
+  public static final String CS_TASK_BUSINESS_STATUS =
+      SUS_NEXUS_BASE + "/CodeSystem/task-business-status";
+  public static final String CS_REGULATION_KIND = SUS_NEXUS_BASE + "/CodeSystem/regulation-kind";
+  public static final String CS_EXAM_CATEGORY = SUS_NEXUS_BASE + "/CodeSystem/exam-category";
+  public static final String CS_ENCOUNTER_CLASS = SUS_NEXUS_BASE + "/CodeSystem/encounter-class";
+  public static final String CS_SENSITIVITY = SUS_NEXUS_BASE + "/CodeSystem/sensitivity";
+  public static final String CS_ORIGIN_KIND = SUS_NEXUS_BASE + "/CodeSystem/origin-kind";
+  public static final String CS_SNOMED = "http://snomed.info/sct";
+  public static final String CS_ICD10 = "http://hl7.org/fhir/sid/icd-10";
+  public static final String CS_ICPC2 = "http://hl7.org/fhir/sid/icpc-2";
+  public static final String CS_V3_ACT_CODE = "http://terminology.hl7.org/CodeSystem/v3-ActCode";
+  public static final String CS_V3_CONFIDENTIALITY =
+      "http://terminology.hl7.org/CodeSystem/v3-Confidentiality";
+
+  // FHIR-2: extensões municipais
+  public static final String EXT_APPOINTMENT_KIND =
+      SUS_NEXUS_BASE + "/StructureDefinition/appointment-kind";
+  public static final String EXT_APPOINTMENT_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/appointment-status";
+  public static final String EXT_CARE_LINE = SUS_NEXUS_BASE + "/StructureDefinition/care-line";
+  public static final String EXT_TASK_STATUS = SUS_NEXUS_BASE + "/StructureDefinition/task-status";
+  public static final String EXT_TASK_PRIORITY =
+      SUS_NEXUS_BASE + "/StructureDefinition/task-priority";
+  public static final String EXT_TASK_OUTCOME =
+      SUS_NEXUS_BASE + "/StructureDefinition/task-outcome";
+  public static final String EXT_TASK_OVERDUE =
+      SUS_NEXUS_BASE + "/StructureDefinition/task-overdue";
+  public static final String EXT_SLA_POLICY_ID =
+      SUS_NEXUS_BASE + "/StructureDefinition/sla-policy-id";
+  public static final String EXT_SLA_BREACHED_AT =
+      SUS_NEXUS_BASE + "/StructureDefinition/sla-breached-at";
+  public static final String EXT_SLA_DUE_AT = SUS_NEXUS_BASE + "/StructureDefinition/sla-due-at";
+  public static final String EXT_REGULATION_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/regulation-status";
+  public static final String EXT_REGULATION_AUTHORIZED =
+      SUS_NEXUS_BASE + "/StructureDefinition/regulation-authorized";
+  public static final String EXT_REGULATION_PRIORITY =
+      SUS_NEXUS_BASE + "/StructureDefinition/regulation-priority";
+  public static final String EXT_WAITING_DAYS =
+      SUS_NEXUS_BASE + "/StructureDefinition/waiting-days";
+  public static final String EXT_JUSTIFICATION_PRESENT =
+      SUS_NEXUS_BASE + "/StructureDefinition/justification-present";
+  public static final String EXT_SCHEDULED_APPOINTMENT =
+      SUS_NEXUS_BASE + "/StructureDefinition/scheduled-appointment";
+  public static final String EXT_EXAM_ORDER_STATUS =
+      SUS_NEXUS_BASE + "/StructureDefinition/exam-order-status";
+  public static final String EXT_EXAM_ISSUE = SUS_NEXUS_BASE + "/StructureDefinition/exam-issue";
+  public static final String EXT_TEAM_INE = SUS_NEXUS_BASE + "/StructureDefinition/team-ine";
+  public static final String EXT_PROFESSIONAL_CBO =
+      SUS_NEXUS_BASE + "/StructureDefinition/professional-cbo";
+  public static final String EXT_REFERRALS_COUNT =
+      SUS_NEXUS_BASE + "/StructureDefinition/referrals-count";
+  public static final String EXT_EXAM_ORDERS_COUNT =
+      SUS_NEXUS_BASE + "/StructureDefinition/exam-orders-count";
+  public static final String EXT_CORRELATION_ID =
+      SUS_NEXUS_BASE + "/StructureDefinition/correlation-id";
+  public static final String EXT_EVENT_ID = SUS_NEXUS_BASE + "/StructureDefinition/event-id";
+
   // Terminologia HL7 usada em AuditEvent/Provenance
   public static final String CS_AUDIT_EVENT_TYPE =
       "http://terminology.hl7.org/CodeSystem/audit-event-type";

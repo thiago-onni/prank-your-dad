@@ -1,8 +1,10 @@
 package br.gov.sus.nexus.fhir.capability;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -14,12 +16,14 @@ public final class ResourceCapability {
   private final Set<Interaction> interactions;
   private final Map<String, SearchParamDef> searchParams;
   private final String profile;
+  private final List<String> includes;
 
   private ResourceCapability(Builder b) {
     this.type = b.type;
     this.interactions = Collections.unmodifiableSet(EnumSet.copyOf(b.interactions));
     this.searchParams = Collections.unmodifiableMap(new LinkedHashMap<>(b.searchParams));
     this.profile = b.profile;
+    this.includes = List.copyOf(b.includes);
   }
 
   public static Builder of(String type) {
@@ -47,6 +51,15 @@ public final class ResourceCapability {
     return interactions.contains(interaction);
   }
 
+  /** Parâmetros de referência aceitos em {@code _include} (nomes, ex.: {@code patient}). */
+  public List<String> includes() {
+    return includes;
+  }
+
+  public boolean supportsInclude(String paramName) {
+    return includes.contains(paramName);
+  }
+
   public Optional<SearchParamDef> searchParam(String name) {
     return Optional.ofNullable(searchParams.get(name));
   }
@@ -57,6 +70,7 @@ public final class ResourceCapability {
     private final EnumSet<Interaction> interactions = EnumSet.noneOf(Interaction.class);
     private final Map<String, SearchParamDef> searchParams = new LinkedHashMap<>();
     private String profile;
+    private final List<String> includes = new ArrayList<>();
 
     private Builder(String type) {
       this.type = type;
@@ -86,6 +100,17 @@ public final class ResourceCapability {
 
     public Builder profile(String canonical) {
       this.profile = canonical;
+      return this;
+    }
+
+    /** Habilita {@code _include=Tipo:param} para um parâmetro de referência já registrado. */
+    public Builder include(String paramName) {
+      SearchParamDef def = searchParams.get(paramName);
+      if (def == null || def.type() != SearchParamType.REFERENCE) {
+        throw new IllegalStateException(
+            "_include exige parâmetro de referência registrado: " + type + ":" + paramName);
+      }
+      includes.add(paramName);
       return this;
     }
 

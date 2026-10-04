@@ -44,6 +44,39 @@ public final class FhirTestSupport {
     }
   }
 
+  /** Identidade no contexto {@code patient/} vinculada ao Patient informado. */
+  public static RequestSpecification patientContext(String patientId) {
+    return as("patient-app", "patient/*.read", TENANT_A)
+        .header(FhirConstants.HEADER_TEST_PATIENT, patientId);
+  }
+
+  /** Id FHIR aleatório (ULID-like) para referências em fixtures. */
+  public static String randomId() {
+    return br.gov.sus.nexus.fhir.interaction.IdGenerator.ulid();
+  }
+
+  /** Fixture clínica com o Patient de referência substituído. */
+  public static String clinicalJson(String fixtureName, String patientId) {
+    return fixture(fixtureName).replace("Patient/PAT1", "Patient/" + patientId);
+  }
+
+  /** Aguarda até a condição ser verdadeira (ou falha após o tempo limite). */
+  public static void await(java.util.function.BooleanSupplier condition, long timeoutMillis) {
+    long deadline = System.currentTimeMillis() + timeoutMillis;
+    while (System.currentTimeMillis() < deadline) {
+      if (condition.getAsBoolean()) {
+        return;
+      }
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException(e);
+      }
+    }
+    throw new AssertionError("Condição não satisfeita em " + timeoutMillis + " ms");
+  }
+
   /** CNS sintético único (15 dígitos). */
   public static String randomCns() {
     return "7" + String.format("%014d", ThreadLocalRandom.current().nextLong(100_000_000_000_000L));

@@ -97,6 +97,7 @@ public class ValidationPipeline implements FhirValidator {
       boolean known =
           canonical.equals(expected)
               || canonical.startsWith(config.profiles().baseUrl())
+              || canonical.startsWith(config.profiles().municipalBaseUrl())
               || profileValidator.knowsProfile(canonical);
       if (!known) {
         issues.add(

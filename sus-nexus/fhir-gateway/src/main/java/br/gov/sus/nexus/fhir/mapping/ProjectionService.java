@@ -19,26 +19,36 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import org.hl7.fhir.r4.model.Base;
 import org.hl7.fhir.r4.model.CanonicalType;
 import org.hl7.fhir.r4.model.DomainResource;
 import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.Property;
 import org.hl7.fhir.r4.model.Provenance;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 
 /**
- * Projeção canônico → FHIR com {@code Provenance}. Nesta entrega é acionada pelo endpoint interno
- * {@code /internal/projections}; em produção, pelo consumidor Kafka de {@code
- * sus.identity.citizen.v1} (que busca o detalhe no core). Idempotente: conteúdo idêntico não gera
- * nova versão.
+ * Projeção canônico → FHIR com {@code Provenance}. Acionada pelo endpoint interno {@code
+ * /internal/projections} e pelo consumidor Kafka ({@code projection/}). Idempotente: conteúdo
+ * idêntico não gera nova versão. Referências lógicas por CNES ({@code Organization}/{@code
+ * Location} com {@code identifier} CNES) são resolvidas para referências diretas quando o alvo já
+ * foi projetado no tenant.
  */
 @ApplicationScoped
 public class ProjectionService {
 
   @Inject CitizenToPatientMapper patientMapper;
   @Inject HealthUnitToOrganizationMapper organizationMapper;
+  @Inject AppointmentMapper appointmentMapper;
+  @Inject TaskMapper taskMapper;
+  @Inject RegulationRequestMapper regulationRequestMapper;
+  @Inject ExamOrderMapper examOrderMapper;
+  @Inject EncounterMapper encounterMapper;
   @Inject ValidationService validation;
   @Inject CapabilityRegistry registry;
   @Inject TenantTransaction tx;
@@ -68,26 +78,97 @@ public class ProjectionService {
     return upsert(tenantId, organizationMapper.map(unit), source);
   }
 
+  public ProjectionResult projectAppointment(
+      String tenantId, CanonicalAppointment appointment, ProjectionSource source) {
+    return projectResolved(tenantId, appointmentMapper.map(appointment), source);
+  }
+
+  public ProjectionResult projectTask(
+      String tenantId, CanonicalTask task, ProjectionSource source) {
+    return projectResolved(tenantId, taskMapper.map(task), source);
+  }
+
+  public ProjectionResult projectRegulationRequest(
+      String tenantId, CanonicalRegulationRequest request, ProjectionSource source) {
+    return projectResolved(tenantId, regulationRequestMapper.map(request), source);
+  }
+
+  public ProjectionResult projectExamOrder(
+      String tenantId, CanonicalExamOrder order, ProjectionSource source) {
+    return projectResolved(tenantId, examOrderMapper.map(order), source);
+  }
+
+  public ProjectionResult projectEncounter(
+      String tenantId, CanonicalEncounter encounter, ProjectionSource source) {
+    return projectResolved(tenantId, encounterMapper.map(encounter), source);
+  }
+
+  private ProjectionResult projectResolved(
+      String tenantId, DomainResource resource, ProjectionSource source) {
+    resolveCnesReferences(tenantId, resource);
+    return upsert(tenantId, resource, source);
+  }
+
   private void resolveManagingOrganization(String tenantId, Patient patient) {
     Reference ref = patient.getManagingOrganization();
     if (ref == null || !ref.hasIdentifier() || ref.hasReference()) {
       return;
     }
-    var def = registry.searchParam("Organization", "identifier").orElseThrow();
+    findByCnes(tenantId, "Organization", ref.getIdentifier().getValue())
+        .ifPresent(id -> ref.setReference("Organization/" + id));
+  }
+
+  /**
+   * Percorre todas as {@link Reference} do recurso; as lógicas com identifier CNES e tipo declarado
+   * ({@code Organization}/{@code Location}) ganham referência direta quando o alvo existe no
+   * tenant.
+   */
+  void resolveCnesReferences(String tenantId, Base root) {
+    Map<String, Optional<String>> cache = new HashMap<>();
+    walk(
+        root,
+        ref -> {
+          if (ref.hasReference()
+              || !ref.hasIdentifier()
+              || !FhirConstants.SYSTEM_CNES.equals(ref.getIdentifier().getSystem())
+              || !ref.hasType()) {
+            return;
+          }
+          String type = ref.getType();
+          if (!"Organization".equals(type) && !"Location".equals(type)) {
+            return;
+          }
+          String cnes = ref.getIdentifier().getValue();
+          cache
+              .computeIfAbsent(type + "|" + cnes, k -> findByCnes(tenantId, type, cnes))
+              .ifPresent(id -> ref.setReference(type + "/" + id));
+        });
+  }
+
+  private static void walk(Base base, java.util.function.Consumer<Reference> visitor) {
+    if (base instanceof Reference ref) {
+      visitor.accept(ref);
+      return;
+    }
+    for (Property p : base.children()) {
+      for (Base child : p.getValues()) {
+        if (child != null && !child.isPrimitive()) {
+          walk(child, visitor);
+        }
+      }
+    }
+  }
+
+  private Optional<String> findByCnes(String tenantId, String type, String cnes) {
+    var def = registry.searchParam(type, "identifier").orElseThrow();
     SearchQuery q =
         new SearchQuery(
-            "Organization",
-            List.of(
-                new SearchFilter(
-                    def,
-                    "",
-                    List.of(FhirConstants.SYSTEM_CNES + "|" + ref.getIdentifier().getValue()))),
+            type,
+            List.of(new SearchFilter(def, "", List.of(FhirConstants.SYSTEM_CNES + "|" + cnes))),
             null,
             1);
     List<StoredResource> found = tx.execute(tenantId, c -> repository.search(c, q, tenantId));
-    if (!found.isEmpty()) {
-      ref.setReference("Organization/" + found.get(0).id());
-    }
+    return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0).id());
   }
 
   private ProjectionResult upsert(

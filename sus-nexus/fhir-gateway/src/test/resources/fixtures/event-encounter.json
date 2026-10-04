@@ -1,0 +1,26 @@
+{
+  "event_id": "evt_01J0000000000000000000EVT2",
+  "event_type": "sus.aps.encounter.created",
+  "event_version": "1.0",
+  "occurred_at": "2026-10-01T09:30:00-03:00",
+  "published_at": "2026-10-01T09:30:03-03:00",
+  "tenant": {"municipality_id": "ibge_3143302"},
+  "subject": {"municipal_citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4"},
+  "source": {"system": "ESUS_APS_PEC", "connector": "connector-pec", "source_record_id": "PEC-ATD-000778", "cnes": "2112345"},
+  "data": {
+    "action": "created",
+    "encounter_id": "enc_01J0000000000000000000ENC2",
+    "encounter_class": "aps_home_visit",
+    "status": "finished",
+    "health_unit_cnes": "2112345",
+    "team_ine": "0000123456",
+    "professional_cbo": "322205",
+    "professional_id": "prof_01J0000000000000000000PRF2",
+    "start": "2026-10-01T09:00:00-03:00",
+    "end": "2026-10-01T09:30:00-03:00",
+    "care_lines": ["idoso"]
+  },
+  "privacy": {"classification": "highly_restricted", "purpose": ["care_coordination"]},
+  "trace": {"correlation_id": "corr_kafka_2", "schema_version": "1.0.0"},
+  "replay": false
+}

@@ -1,0 +1,18 @@
+{
+  "id": "task_01J0000000000000000000TSK1",
+  "task_type": "regulation_pending_document",
+  "status": "escalated",
+  "priority": "high",
+  "title": "Documento pendente na regulação",
+  "description": "Anexar laudo do exame de imagem à solicitação",
+  "citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4",
+  "assignee": {"kind": "health_unit", "id": "2112345"},
+  "due_at": "2026-10-12T18:00:00-03:00",
+  "sla_policy_id": "sla_reg_docs_48h",
+  "overdue": false,
+  "origin": {"kind": "workflow", "id": "reg_01J0000000000000000000REG1", "version": "1.2"},
+  "reason": "Regulador solicitou documento",
+  "created_at": "2026-10-05T08:00:00-03:00",
+  "updated_at": "2026-10-06T08:00:00-03:00",
+  "version": 3
+}

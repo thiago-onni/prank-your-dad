@@ -21,9 +21,26 @@ import org.hl7.fhir.r4.model.Reference;
 @ApplicationScoped
 public class ProvenanceFactory {
 
-  /** Origem de uma projeção. */
+  /**
+   * Origem de uma projeção.
+   *
+   * @param sourceSystem sistema de origem (ex.: {@code core-municipal}, {@code SISREG})
+   * @param sourceRecordId id do registro de origem (vai para {@code entity.what.identifier})
+   * @param occurredAt quando o fato ocorreu na origem ({@code occurred})
+   * @param correlationId correlação (extensão)
+   * @param eventId id do evento Kafka que motivou a projeção, se houver (extensão)
+   */
   public record ProjectionSource(
-      String sourceSystem, String sourceRecordId, Instant occurredAt, String correlationId) {}
+      String sourceSystem,
+      String sourceRecordId,
+      Instant occurredAt,
+      String correlationId,
+      String eventId) {
+    public ProjectionSource(
+        String sourceSystem, String sourceRecordId, Instant occurredAt, String correlationId) {
+      this(sourceSystem, sourceRecordId, occurredAt, correlationId, null);
+    }
+  }
 
   public Provenance forProjection(
       String targetType, String targetId, int version, ProjectionSource source) {
@@ -49,7 +66,13 @@ public class ProvenanceFactory {
                 new Coding()
                     .setSystem(FhirConstants.CS_PROVENANCE_PARTICIPANT_TYPE)
                     .setCode("assembler")));
-    author.setWho(new Reference().setDisplay("sus-nexus-fhir-gateway"));
+    author.setWho(
+        new Reference()
+            .setIdentifier(
+                new Identifier()
+                    .setSystem(FhirConstants.SYSTEM_SUBJECT)
+                    .setValue("sus-nexus-fhir-gateway"))
+            .setDisplay("sus-nexus-fhir-gateway"));
     author.setOnBehalfOf(
         new Reference()
             .setDisplay(source.sourceSystem() == null ? "core-municipal" : source.sourceSystem()));
@@ -66,8 +89,12 @@ public class ProvenanceFactory {
             .setDisplay(source.sourceSystem() == null ? "core-municipal" : source.sourceSystem()));
     if (source.correlationId() != null) {
       prov.addExtension(
-          FhirConstants.SUS_NEXUS_BASE + "/StructureDefinition/correlation-id",
+          FhirConstants.EXT_CORRELATION_ID,
           new org.hl7.fhir.r4.model.StringType(source.correlationId()));
+    }
+    if (source.eventId() != null) {
+      prov.addExtension(
+          FhirConstants.EXT_EVENT_ID, new org.hl7.fhir.r4.model.StringType(source.eventId()));
     }
     return prov;
   }

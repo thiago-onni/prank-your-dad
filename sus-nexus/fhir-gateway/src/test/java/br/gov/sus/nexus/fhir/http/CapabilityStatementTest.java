@@ -65,6 +65,10 @@ class CapabilityStatementTest {
       }
       assertThat(params).as(res.getType()).isEqualTo(expectedParams);
       cap.profile().ifPresent(p -> assertThat(res.getProfile()).isEqualTo(p));
+      assertThat(res.getSearchInclude().stream().map(i -> i.getValue()).toList())
+          .as(res.getType() + " searchInclude")
+          .containsExactlyElementsOf(
+              cap.includes().stream().map(i -> res.getType() + ":" + i).toList());
     }
     assertThat(cs.getRestFirstRep().getOperation().stream().map(o -> o.getName()).toList())
         .containsExactlyElementsOf(CapabilityRegistry.SYSTEM_OPERATIONS);

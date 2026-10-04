@@ -7,6 +7,7 @@ import br.gov.sus.nexus.fhir.capability.Interaction;
 import br.gov.sus.nexus.fhir.capability.ResourceCapability;
 import br.gov.sus.nexus.fhir.codec.FhirCodec;
 import br.gov.sus.nexus.fhir.persistence.FhirResourceRepository;
+import br.gov.sus.nexus.fhir.persistence.FhirResourceRepository.SearchHit;
 import br.gov.sus.nexus.fhir.persistence.IndexEntry;
 import br.gov.sus.nexus.fhir.persistence.SearchIndexer;
 import br.gov.sus.nexus.fhir.persistence.SearchQuery;
@@ -17,6 +18,7 @@ import br.gov.sus.nexus.fhir.security.AccessPolicy;
 import br.gov.sus.nexus.fhir.security.AccessPolicy.AccessRequest;
 import br.gov.sus.nexus.fhir.security.AccessPolicy.Decision;
 import br.gov.sus.nexus.fhir.security.Identity;
+import br.gov.sus.nexus.fhir.security.PatientCompartment;
 import br.gov.sus.nexus.fhir.security.Permission;
 import br.gov.sus.nexus.fhir.security.RedactionPolicy;
 import br.gov.sus.nexus.fhir.security.RequestContext;
@@ -27,9 +29,11 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
@@ -60,6 +64,7 @@ public class FhirInteractionService {
   @Inject AuditRecorder audit;
   @Inject SearchRequestParser searchParser;
   @Inject SearchCursor cursor;
+  @Inject PatientCompartment compartment;
 
   // ---- read / vread / history
   // --------------------------------------------------------------------
@@ -73,11 +78,13 @@ public class FhirInteractionService {
     if (stored.deleted()) {
       throw FhirException.gone(type, id);
     }
+    Resource loaded = codec.parse(stored.content());
+    enforceReadRestrictions(Interaction.READ, type, id, loaded);
     if (etagMatches(ifNoneMatch, stored.versionId())) {
       recordAudit(Interaction.READ, type, id, stored.versionId(), null, true, null);
       return InteractionResult.notModified(stored.etag());
     }
-    Resource resource = redact(codec.parse(stored.content()));
+    Resource resource = redact(loaded);
     recordAudit(Interaction.READ, type, id, stored.versionId(), null, true, null);
     return new InteractionResult(200, resource, stored.etag(), stored.lastUpdated(), null);
   }
@@ -97,7 +104,9 @@ public class FhirInteractionService {
     if (stored.deleted()) {
       throw FhirException.gone(type, id);
     }
-    Resource resource = redact(codec.parse(stored.content()));
+    Resource loaded = codec.parse(stored.content());
+    enforceReadRestrictions(Interaction.VREAD, type, id, loaded);
+    Resource resource = redact(loaded);
     recordAudit(Interaction.VREAD, type, id, vid, null, true, null);
     return new InteractionResult(200, resource, stored.etag(), stored.lastUpdated(), null);
   }
@@ -108,6 +117,12 @@ public class FhirInteractionService {
     List<StoredResource> versions = tx.execute(tenant(), c -> repository.history(c, type, id));
     if (versions.isEmpty()) {
       throw FhirException.notFound(type, id);
+    }
+    // o pertencimento ao compartimento é decidido pela versão corrente
+    StoredResource current = versions.get(0);
+    if (!current.deleted()) {
+      enforceReadRestrictions(
+          Interaction.HISTORY_INSTANCE, type, id, codec.parse(current.content()));
     }
     Bundle bundle = new Bundle();
     bundle.setType(BundleType.HISTORY);
@@ -127,7 +142,10 @@ public class FhirInteractionService {
           .setEtag(v.etag())
           .setLastModified(Date.from(v.lastUpdated()));
       if (!v.deleted()) {
-        entry.setResource(redact(codec.parse(v.content())));
+        Resource version = codec.parse(v.content());
+        if (!redaction.withhold(context.identity(), version)) {
+          entry.setResource(redact(version));
+        }
       }
     }
     recordAudit(Interaction.HISTORY_INSTANCE, type, id, null, null, true, null);
@@ -144,26 +162,49 @@ public class FhirInteractionService {
     SearchRequestParser.Parsed parsed = searchParser.parse(type, rawParams);
     SearchQuery query = applyPatientCompartment(type, parsed.query());
 
-    List<StoredResource> rows = tx.execute(tenant(), c -> repository.search(c, query, tenant()));
+    List<SearchHit> rows = tx.execute(tenant(), c -> repository.searchHits(c, query, tenant()));
     boolean hasNext = rows.size() > query.count();
-    List<StoredResource> page = hasNext ? rows.subList(0, query.count()) : rows;
+    List<SearchHit> page = hasNext ? rows.subList(0, query.count()) : rows;
 
     Bundle bundle = new Bundle();
     bundle.setType(BundleType.SEARCHSET);
     bundle.setTimestamp(new Date());
     bundle.addLink().setRelation("self").setUrl(selfUrl);
+    if (parsed.totalAccurate()) {
+      long total = tx.execute(tenant(), c -> repository.count(c, query, tenant()));
+      bundle.setTotal((int) Math.min(total, Integer.MAX_VALUE));
+    }
     if (hasNext) {
+      SearchHit last = page.get(page.size() - 1);
       String next =
           cursor.encode(
               new SearchCursor.Payload(
-                  type, parsed.params(), page.get(page.size() - 1).id(), query.count()));
+                  type,
+                  parsed.params(),
+                  last.resource().id(),
+                  query.count(),
+                  query.sort() == null || last.sortKey() == null
+                      ? null
+                      : last.sortKey().toString()));
       bundle.addLink().setRelation("next").setUrl(baseUrl + "/" + type + "?_cursor=" + next);
     }
-    for (StoredResource r : page) {
+    Set<String> present = new LinkedHashSet<>();
+    List<String> pageIds = new ArrayList<>();
+    for (SearchHit hit : page) {
+      StoredResource r = hit.resource();
+      Resource resource = codec.parse(r.content());
+      if (redaction.withhold(context.identity(), resource)) {
+        continue;
+      }
+      pageIds.add(r.id());
+      present.add(type + "/" + r.id());
       BundleEntryComponent entry = bundle.addEntry();
       entry.setFullUrl(baseUrl + "/" + type + "/" + r.id());
-      entry.setResource(redact(codec.parse(r.content())));
+      entry.setResource(redact(resource));
       entry.getSearch().setMode(SearchEntryMode.MATCH);
+    }
+    for (SearchRequestParser.Include include : parsed.includes()) {
+      addIncludes(bundle, baseUrl, include, pageIds, present);
     }
     String queryText =
         parsed.params().entrySet().stream()
@@ -173,16 +214,106 @@ public class FhirInteractionService {
     return InteractionResult.ok(bundle);
   }
 
-  /** No contexto {@code patient/}, a busca de Patient fica restrita ao próprio paciente. */
+  /**
+   * {@code _include}: alvos vêm do índice de referências da página; cada alvo passa pela política
+   * de acesso de leitura (negados são omitidos silenciosamente), pela retenção e pela redação.
+   */
+  private void addIncludes(
+      Bundle bundle,
+      String baseUrl,
+      SearchRequestParser.Include include,
+      List<String> pageIds,
+      Set<String> present) {
+    List<IndexEntry.Ref> targets =
+        tx.execute(tenant(), c -> repository.referenceTargets(c, pageIds, include.param().name()));
+    for (IndexEntry.Ref ref : targets) {
+      String targetType = ref.targetType();
+      if (targetType == null || !include.param().targets().contains(targetType)) {
+        continue;
+      }
+      if (include.targetType() != null && !include.targetType().equals(targetType)) {
+        continue;
+      }
+      String key = targetType + "/" + ref.targetId();
+      if (!present.add(key)) {
+        continue;
+      }
+      if (!registry.supports(targetType, Interaction.READ)) {
+        continue;
+      }
+      Decision decision =
+          accessPolicy.evaluate(
+              new AccessRequest(
+                  context.identity(),
+                  Interaction.READ,
+                  targetType,
+                  ref.targetId(),
+                  context.purposeOfUse()));
+      if (!decision.allowed()) {
+        continue;
+      }
+      Optional<StoredResource> stored =
+          tx.execute(tenant(), c -> repository.findCurrent(c, targetType, ref.targetId()));
+      if (stored.isEmpty() || stored.get().deleted()) {
+        continue;
+      }
+      Resource resource = codec.parse(stored.get().content());
+      if (redaction.withhold(context.identity(), resource)
+          || !allowedInPatientContext(targetType, resource)) {
+        continue;
+      }
+      BundleEntryComponent entry = bundle.addEntry();
+      entry.setFullUrl(baseUrl + "/" + key);
+      entry.setResource(redact(resource));
+      entry.getSearch().setMode(SearchEntryMode.INCLUDE);
+    }
+  }
+
+  /**
+   * No contexto {@code patient/}, a busca fica restrita ao compartimento do paciente: {@code
+   * Patient} por {@code _id}; os demais tipos pelo parâmetro {@code patient} registrado.
+   */
   private SearchQuery applyPatientCompartment(String type, SearchQuery query) {
     Identity identity = context.identity();
-    if (!"Patient".equals(type) || !identity.onlyPatientContext(type, Permission.SEARCH)) {
+    if (!identity.onlyPatientContext(type, Permission.SEARCH)) {
       return query;
     }
     String patientId = identity.patientId().orElseThrow();
     List<SearchFilter> filters = new ArrayList<>(query.filters());
-    filters.add(new SearchFilter(CapabilityRegistry.PARAM_ID, "", List.of(patientId)));
-    return new SearchQuery(type, filters, query.afterId(), query.count());
+    if ("Patient".equals(type)) {
+      filters.add(new SearchFilter(CapabilityRegistry.PARAM_ID, "", List.of(patientId)));
+    } else {
+      var def =
+          registry
+              .searchParam(type, CapabilityRegistry.PATIENT_PARAM)
+              .orElseThrow(
+                  () -> FhirException.forbidden("Tipo sem compartimento de paciente: " + type));
+      filters.add(new SearchFilter(def, "", List.of("Patient/" + patientId)));
+    }
+    return query.withFilters(filters);
+  }
+
+  /** Leituras por id: pertencimento ao compartimento (contexto patient/) e retenção total. */
+  private void enforceReadRestrictions(
+      Interaction interaction, String type, String id, Resource resource) {
+    Identity identity = context.identity();
+    if (!allowedInPatientContext(type, resource)) {
+      recordAudit(interaction, type, id, null, null, false, "patient-context-other-patient");
+      throw FhirException.forbidden("Acesso negado: patient-context-other-patient");
+    }
+    if (redaction.withhold(identity, resource)) {
+      recordAudit(interaction, type, id, null, null, false, "highly-restricted");
+      throw FhirException.forbidden(
+          "Acesso negado: recurso highly_restricted exige escopo de leitura completo");
+    }
+  }
+
+  private boolean allowedInPatientContext(String type, Resource resource) {
+    Identity identity = context.identity();
+    if (!identity.onlyPatientContext(type, Permission.READ)) {
+      return true;
+    }
+    return identity.patientId().map(pid -> compartment.belongsTo(resource, pid)).orElse(false);
   }
 
   // ---- create / update

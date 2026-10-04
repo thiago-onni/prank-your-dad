@@ -39,6 +39,27 @@ public class CapabilityRegistry {
   /** Operações de sistema implementadas (nome sem {@code $}). */
   public static final List<String> SYSTEM_OPERATIONS = List.of("validate");
 
+  /** Nome do parâmetro de referência ao paciente usado pelo compartimento {@code patient/}. */
+  public static final String PATIENT_PARAM = "patient";
+
+  /** Tipos projetados do core (alvos de Provenance/AuditEvent). */
+  private static final String[] PROJECTED_TYPES = {
+    "Patient",
+    "Organization",
+    "Location",
+    "Practitioner",
+    "PractitionerRole",
+    "Encounter",
+    "Appointment",
+    "ServiceRequest",
+    "Task",
+    "Condition",
+    "CarePlan"
+  };
+
+  private static final String PATIENT_ACTOR =
+      "Appointment.participant.actor.where(reference.startsWith('Patient/'))";
+
   @Inject FhirGatewayConfig config;
 
   private final Map<String, ResourceCapability> resources = new LinkedHashMap<>();
@@ -108,15 +129,188 @@ public class CapabilityRegistry {
             .param(SearchParamDef.token("role", "PractitionerRole.code", "Papel (CBO)"))
             .build());
 
+    // ---- FHIR-2: recursos clínicos/operacionais projetados do core ------------------------
+    register(
+        ResourceCapability.of("Encounter")
+            .readWrite()
+            .profile(profiles.encounter())
+            .param(
+                SearchParamDef.reference(
+                    "patient", "Encounter.subject", "Paciente (Encounter.subject)", "Patient"))
+            .param(SearchParamDef.date("date", "Encounter.period", "Período do atendimento"))
+            .param(SearchParamDef.token("status", "Encounter.status", "Situação"))
+            .param(SearchParamDef.token("class", "Encounter.class", "Classe (AMB/EMER/IMP/HH)"))
+            .param(
+                SearchParamDef.reference(
+                    "service-provider",
+                    "Encounter.serviceProvider",
+                    "Unidade prestadora",
+                    "Organization"))
+            .include("patient")
+            .build());
+
+    register(
+        ResourceCapability.of("Appointment")
+            .readWrite()
+            .profile(profiles.appointment())
+            .param(
+                SearchParamDef.reference(
+                    "patient",
+                    PATIENT_ACTOR,
+                    "Paciente participante (Appointment.participant.actor)",
+                    "Patient"))
+            .param(SearchParamDef.date("date", "Appointment.start", "Início do agendamento"))
+            .param(SearchParamDef.token("status", "Appointment.status", "Situação"))
+            .param(
+                SearchParamDef.token(
+                    "service-type", "Appointment.serviceType", "Serviço (SIGTAP ou local)"))
+            .param(
+                SearchParamDef.reference(
+                    "location",
+                    "Appointment.participant.actor.where(reference.startsWith('Location/'))",
+                    "Local participante",
+                    "Location"))
+            .param(
+                SearchParamDef.reference(
+                    "actor",
+                    "Appointment.participant.actor",
+                    "Qualquer participante",
+                    "Patient",
+                    "Practitioner",
+                    "PractitionerRole",
+                    "Location",
+                    "Organization"))
+            .include("patient")
+            .build());
+
+    register(
+        ResourceCapability.of("ServiceRequest")
+            .readWrite()
+            .profile(profiles.serviceRequest())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "ServiceRequest.subject", "Sujeito (Patient)", "Patient"))
+            .param(
+                SearchParamDef.reference(
+                    "patient", "ServiceRequest.subject", "Paciente", "Patient"))
+            .param(SearchParamDef.token("status", "ServiceRequest.status", "Situação"))
+            .param(
+                SearchParamDef.token(
+                    "code", "ServiceRequest.code", "Procedimento (SIGTAP/LOINC/local)"))
+            .param(SearchParamDef.date("authored", "ServiceRequest.authoredOn", "Data do pedido"))
+            .param(
+                SearchParamDef.reference(
+                    "requester",
+                    "ServiceRequest.requester",
+                    "Solicitante",
+                    "Organization",
+                    "PractitionerRole",
+                    "Practitioner"))
+            .param(
+                SearchParamDef.reference(
+                    "performer",
+                    "ServiceRequest.performer",
+                    "Executante/prestador",
+                    "Organization",
+                    "PractitionerRole",
+                    "Practitioner"))
+            .param(
+                SearchParamDef.token(
+                    "category",
+                    "ServiceRequest.category",
+                    "Categoria (tipo de regulação, laboratory/imaging)"))
+            .param(SearchParamDef.token("priority", "ServiceRequest.priority", "Prioridade"))
+            .include("patient")
+            .build());
+
+    register(
+        ResourceCapability.of("Task")
+            .readWrite()
+            .profile(profiles.task())
+            .param(SearchParamDef.reference("for", "Task.for", "Beneficiário (Patient)", "Patient"))
+            .param(SearchParamDef.reference("patient", "Task.for", "Paciente", "Patient"))
+            .param(SearchParamDef.token("status", "Task.status", "Situação"))
+            .param(SearchParamDef.token("code", "Task.code", "Tipo de tarefa (task-type)"))
+            .param(
+                SearchParamDef.reference(
+                    "owner",
+                    "Task.owner",
+                    "Responsável",
+                    "PractitionerRole",
+                    "CareTeam",
+                    "Organization"))
+            .param(SearchParamDef.date("authored-on", "Task.authoredOn", "Data de criação"))
+            .param(
+                SearchParamDef.token(
+                    "business-status", "Task.businessStatus", "Status de negócio (canônico)"))
+            .param(SearchParamDef.token("priority", "Task.priority", "Prioridade"))
+            .param(
+                SearchParamDef.reference(
+                    "based-on",
+                    "Task.basedOn",
+                    "Origem da tarefa",
+                    "ServiceRequest",
+                    "Appointment",
+                    "Encounter",
+                    "Patient",
+                    "Task"))
+            .include("patient")
+            .include("based-on")
+            .build());
+
+    register(
+        ResourceCapability.of("Condition")
+            .readWrite()
+            .profile(profiles.condition())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "Condition.subject", "Sujeito (Patient)", "Patient"))
+            .param(SearchParamDef.reference("patient", "Condition.subject", "Paciente", "Patient"))
+            .param(SearchParamDef.token("code", "Condition.code", "Condição (CID-10/CIAP-2)"))
+            .param(
+                SearchParamDef.token(
+                    "clinical-status", "Condition.clinicalStatus", "Status clínico"))
+            .param(SearchParamDef.token("category", "Condition.category", "Categoria"))
+            .param(SearchParamDef.date("onset-date", "Condition.onset", "Início (dateTime/Period)"))
+            .build());
+
+    register(
+        ResourceCapability.of("CarePlan")
+            .readWrite()
+            .profile(profiles.carePlan())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "CarePlan.subject", "Sujeito (Patient)", "Patient"))
+            .param(SearchParamDef.reference("patient", "CarePlan.subject", "Paciente", "Patient"))
+            .param(SearchParamDef.token("status", "CarePlan.status", "Situação"))
+            .param(
+                SearchParamDef.token("category", "CarePlan.category", "Categoria/linha de cuidado"))
+            .param(SearchParamDef.date("date", "CarePlan.period", "Período do plano"))
+            .build());
+
     // Recursos de auditoria/proveniência: somente leitura (gerados pelo próprio gateway)
     register(
         ResourceCapability.of("AuditEvent")
             .interactions(Interaction.READ, Interaction.SEARCH_TYPE)
             .param(
                 SearchParamDef.reference(
-                    "entity", "AuditEvent.entity.what", "Recurso afetado", "Patient"))
+                    "entity", "AuditEvent.entity.what", "Recurso afetado", PROJECTED_TYPES))
             .param(SearchParamDef.date("date", "AuditEvent.recorded", "Data de registro"))
             .param(SearchParamDef.token("action", "AuditEvent.action", "Ação (C/R/U/D/E)"))
+            .param(
+                SearchParamDef.reference(
+                    "agent",
+                    "AuditEvent.agent.who",
+                    "Agente (identificador do sujeito)",
+                    "Practitioner",
+                    "PractitionerRole",
+                    "Device"))
+            .param(
+                SearchParamDef.reference(
+                    "patient",
+                    "AuditEvent.entity.what.where(reference.startsWith('Patient/'))",
+                    "Paciente afetado",
+                    "Patient"))
             .build());
 
     register(
@@ -124,7 +318,17 @@ public class CapabilityRegistry {
             .interactions(Interaction.READ, Interaction.SEARCH_TYPE)
             .param(
                 SearchParamDef.reference(
-                    "target", "Provenance.target", "Recurso derivado", "Patient", "Organization"))
+                    "target", "Provenance.target", "Recurso derivado", PROJECTED_TYPES))
+            .param(SearchParamDef.date("recorded", "Provenance.recorded", "Data de registro"))
+            .param(
+                SearchParamDef.reference(
+                    "agent",
+                    "Provenance.agent.who",
+                    "Agente (identificador)",
+                    "Practitioner",
+                    "PractitionerRole",
+                    "Organization",
+                    "Device"))
             .build());
   }
 

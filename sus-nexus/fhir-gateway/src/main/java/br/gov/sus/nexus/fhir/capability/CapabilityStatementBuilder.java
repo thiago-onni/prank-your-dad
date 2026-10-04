@@ -56,7 +56,10 @@ public class CapabilityStatementBuilder {
     rest.setMode(RestfulCapabilityMode.SERVER);
     rest.setDocumentation(
         "Autenticação OIDC (Keycloak) com escopos SMART-like (patient/*.read, user/*.read,"
-            + " user/*.write, system/*.read, system/*.write). Tenant pelo claim municipality_id.");
+            + " user/*.write, system/*.read, system/*.write). Tenant pelo claim municipality_id."
+            + " Busca: _count, _cursor, _sort (parâmetros de data e _lastUpdated, prefixo '-' para"
+            + " ordem decrescente), _total=accurate e _include conforme searchInclude de cada"
+            + " tipo.");
     rest.getSecurity()
         .setCors(false)
         .addService(
@@ -87,6 +90,9 @@ public class CapabilityStatementBuilder {
         }
         for (SearchParamDef p : cap.searchParams().values()) {
           addParam(res, p);
+        }
+        for (String inc : cap.includes()) {
+          res.addSearchInclude(cap.type() + ":" + inc);
         }
       }
     }

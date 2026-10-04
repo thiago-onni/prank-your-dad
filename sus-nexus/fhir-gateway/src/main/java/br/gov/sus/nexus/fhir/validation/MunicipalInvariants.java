@@ -16,6 +16,11 @@ public class MunicipalInvariants {
   private static final String IDENTIFIER_SYSTEMS =
       "('" + FhirConstants.SYSTEM_CNS + "' | '" + FhirConstants.SYSTEM_CPF + "')";
 
+  /** Expressão: o elemento de referência existe e aponta para {@code Patient/…}. */
+  private static String patientRef(String element) {
+    return element + ".exists() and " + element + ".reference.startsWith('Patient/')";
+  }
+
   private final List<MunicipalInvariant> invariants =
       List.of(
           new MunicipalInvariant(
@@ -109,7 +114,106 @@ public class MunicipalInvariants {
               "practitioner.exists() and organization.exists()",
               "PractitionerRole deve referenciar practitioner e organization",
               "PractitionerRole",
-              IssueSeverity.ERROR));
+              IssueSeverity.ERROR),
+          // ---- FHIR-2 ----
+          new MunicipalInvariant(
+              "sus-enc-1",
+              "Encounter",
+              patientRef("subject"),
+              "Encounter.subject deve referenciar um Patient",
+              "Encounter.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-enc-2",
+              "Encounter",
+              "class.code.exists() and class.system.exists()",
+              "Encounter.class deve ter system e code (v3-ActCode: AMB/EMER/IMP/HH)",
+              "Encounter.class",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-enc-3",
+              "Encounter",
+              "status in ('planned' | 'cancelled') or period.start.exists()",
+              "Encounter iniciado deve ter period.start",
+              "Encounter.period",
+              IssueSeverity.WARNING),
+          new MunicipalInvariant(
+              "sus-app-1",
+              "Appointment",
+              "participant.actor.where(reference.startsWith('Patient/')).exists()",
+              "Appointment deve ter um participant Patient",
+              "Appointment.participant",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-app-2",
+              "Appointment",
+              "status in ('proposed' | 'cancelled' | 'waitlist') or start.exists()",
+              "Appointment agendado deve ter start",
+              "Appointment.start",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-sr-1",
+              "ServiceRequest",
+              patientRef("subject"),
+              "ServiceRequest.subject deve referenciar um Patient",
+              "ServiceRequest.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-sr-2",
+              "ServiceRequest",
+              "code.coding.where(system.exists() and code.exists()).exists()",
+              "ServiceRequest.code deve ter coding com system e code (SIGTAP/LOINC/local)",
+              "ServiceRequest.code",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-sr-3",
+              "ServiceRequest",
+              "authoredOn.exists()",
+              "ServiceRequest sem authoredOn",
+              "ServiceRequest.authoredOn",
+              IssueSeverity.WARNING),
+          new MunicipalInvariant(
+              "sus-task-1",
+              "Task",
+              patientRef("for"),
+              "Task.for deve referenciar um Patient",
+              "Task.for",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-task-2",
+              "Task",
+              "code.coding.where(system.exists() and code.exists()).exists()",
+              "Task.code deve ter coding com system e code (task-type)",
+              "Task.code",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-cond-1",
+              "Condition",
+              patientRef("subject"),
+              "Condition.subject deve referenciar um Patient",
+              "Condition.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-cond-2",
+              "Condition",
+              "code.coding.where(system.exists() and code.exists()).exists()",
+              "Condition.code deve ter coding com system e code (CID-10/CIAP-2)",
+              "Condition.code",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-cp-1",
+              "CarePlan",
+              patientRef("subject"),
+              "CarePlan.subject deve referenciar um Patient",
+              "CarePlan.subject",
+              IssueSeverity.ERROR),
+          new MunicipalInvariant(
+              "sus-cp-2",
+              "CarePlan",
+              "category.exists() or title.exists() or description.exists()",
+              "CarePlan deve ter category, title ou description",
+              "CarePlan",
+              IssueSeverity.WARNING));
 
   public List<MunicipalInvariant> forType(String resourceType) {
     return invariants.stream()

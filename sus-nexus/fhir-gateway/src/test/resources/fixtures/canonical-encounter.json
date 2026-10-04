@@ -1,0 +1,21 @@
+{
+  "action": "created",
+  "encounter_id": "enc_01J0000000000000000000ENC1",
+  "citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4",
+  "encounter_class": "aps_individual",
+  "status": "finished",
+  "health_unit_cnes": "2112345",
+  "team_ine": "0000123456",
+  "professional_cbo": "225125",
+  "professional_id": "prof_01J0000000000000000000PRF1",
+  "start": "2026-10-01T09:00:00-03:00",
+  "end": "2026-10-01T09:30:00-03:00",
+  "condition_codes": [{"system": "CID10", "code": "I10"}, {"system": "CIAP2", "code": "K86"}],
+  "referrals_count": 1,
+  "exam_orders_count": 2,
+  "care_lines": ["hipertensao"],
+  "source_system": "ESUS_APS_PEC",
+  "source_record_id": "PEC-ATD-000777",
+  "occurred_at": "2026-10-01T09:30:00-03:00",
+  "sensitivity": "restricted"
+}

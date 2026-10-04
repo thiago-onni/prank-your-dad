@@ -29,6 +29,7 @@
     <surefire-plugin.version>3.5.3</surefire-plugin.version>
     <fmt-plugin.version>2.29</fmt-plugin.version>
     <assertj.version>3.27.3</assertj.version>
+    <wiremock.version>3.13.2</wiremock.version>
     <skipITs>true</skipITs>
   </properties>
 
@@ -81,6 +82,15 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-smallrye-health</artifactId>
+    </dependency>
+    <!-- FHIR-2: projeção por Kafka (SmallRye Reactive Messaging) + REST client para o core -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-messaging-kafka</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-client-jackson</artifactId>
     </dependency>
 
     <!-- HL7 FHIR R4: modelos, parsers, FHIRPath (biblioteca, ADR-003) -->
@@ -153,6 +163,18 @@
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <version>${assertj.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Conector em memória (substitui o Kafka em %test) e WireMock para simular o core -->
+    <dependency>
+      <groupId>io.smallrye.reactive</groupId>
+      <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>${wiremock.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

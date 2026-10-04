@@ -38,11 +38,68 @@ public final class SearchSqlBuilder {
 
   public static Sql build(SearchQuery query, String tenantId) {
     List<Object> params = new ArrayList<>();
+    String sortKey = sortKeyExpression(query, params);
     StringBuilder sql =
         new StringBuilder(
             "SELECT r.id, r.tenant_id, r.resource_type, r.version_id, r.last_updated, r.profile,"
-                + " r.content::text, r.deleted FROM fhir.fhir_resource r"
-                + " WHERE r.tenant_id = ? AND r.resource_type = ? AND r.deleted = false");
+                + " r.content::text, r.deleted, "
+                + sortKey
+                + " AS sort_key FROM fhir.fhir_resource r WHERE ");
+    appendWhere(sql, params, query, tenantId);
+
+    if (query.sort() == null) {
+      if (query.afterId() != null) {
+        sql.append(" AND r.id > ?");
+        params.add(query.afterId());
+      }
+      sql.append(" ORDER BY r.id ASC LIMIT ?");
+    } else {
+      if (query.afterId() != null && query.afterSortKey() != null) {
+        Timestamp after = Timestamp.from(java.time.Instant.parse(query.afterSortKey()));
+        String cmp = query.sort().descending() ? "<" : ">";
+        String key = sortKeyExpression(query, params);
+        sql.append(" AND ((").append(key).append(" ").append(cmp).append(" ?) OR (");
+        params.add(after);
+        String key2 = sortKeyExpression(query, params);
+        sql.append(key2).append(" = ? AND r.id > ?))");
+        params.add(after);
+        params.add(query.afterId());
+      }
+      sql.append(" ORDER BY sort_key ")
+          .append(query.sort().descending() ? "DESC" : "ASC")
+          .append(", r.id ASC LIMIT ?");
+    }
+    params.add(query.count() + 1);
+    return new Sql(sql.toString(), params);
+  }
+
+  /** Contagem total ({@code _total=accurate}) com os mesmos filtros, sem paginação. */
+  public static Sql buildCount(SearchQuery query, String tenantId) {
+    List<Object> params = new ArrayList<>();
+    StringBuilder sql = new StringBuilder("SELECT count(*) FROM fhir.fhir_resource r WHERE ");
+    appendWhere(sql, params, query, tenantId);
+    return new Sql(sql.toString(), params);
+  }
+
+  /**
+   * Expressão da chave de ordenação. Sem {@code _sort} é o próprio {@code last_updated} (não usado
+   * na ordenação); {@code _lastUpdated} usa a coluna; parâmetros de data usam o menor {@code low}
+   * indexado, com sentinela para recursos sem o elemento (ficam no fim em ordem crescente e no
+   * início em ordem decrescente — comportamento documentado).
+   */
+  private static String sortKeyExpression(SearchQuery query, List<Object> params) {
+    if (query.sort() == null || query.sort().param().isComputed()) {
+      return "r.last_updated";
+    }
+    params.add(query.sort().param().name());
+    params.add(Timestamp.from(FhirDates.MAX));
+    return "COALESCE((SELECT MIN(t.low) FROM fhir.fhir_idx_date t WHERE t.resource_id = r.id"
+        + " AND t.param = ?), ?)";
+  }
+
+  private static void appendWhere(
+      StringBuilder sql, List<Object> params, SearchQuery query, String tenantId) {
+    sql.append("r.tenant_id = ? AND r.resource_type = ? AND r.deleted = false");
     params.add(tenantId);
     params.add(query.resourceType());
 
@@ -73,13 +130,6 @@ public final class SearchSqlBuilder {
                 exists("fhir_idx_reference", filter, tenantId, referenceClause(filter), params));
       }
     }
-    if (query.afterId() != null) {
-      sql.append(" AND r.id > ?");
-      params.add(query.afterId());
-    }
-    sql.append(" ORDER BY r.id ASC LIMIT ?");
-    params.add(query.count() + 1);
-    return new Sql(sql.toString(), params);
   }
 
   private static String idClause(SearchFilter f, List<Object> params) {

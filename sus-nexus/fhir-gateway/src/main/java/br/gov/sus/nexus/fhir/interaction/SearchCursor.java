@@ -21,8 +21,13 @@ import javax.crypto.spec.SecretKeySpec;
 @ApplicationScoped
 public class SearchCursor {
 
-  /** Conteúdo do cursor. */
-  public record Payload(String type, Map<String, List<String>> params, String afterId, int count) {}
+  /** Conteúdo do cursor ({@code afterSortKey} só com {@code _sort}). */
+  public record Payload(
+      String type,
+      Map<String, List<String>> params,
+      String afterId,
+      int count,
+      String afterSortKey) {}
 
   private static final Base64.Encoder B64E = Base64.getUrlEncoder().withoutPadding();
   private static final Base64.Decoder B64D = Base64.getUrlDecoder();

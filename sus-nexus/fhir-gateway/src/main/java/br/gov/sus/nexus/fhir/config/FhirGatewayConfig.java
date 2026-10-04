@@ -17,6 +17,10 @@ public interface FhirGatewayConfig {
 
   Profiles profiles();
 
+  Terminology terminology();
+
+  Core core();
+
   /** URL base pública usada em AuditEvent.source e em referências absolutas. */
   @WithName("base-url")
   String baseUrl();
@@ -62,6 +66,11 @@ public interface FhirGatewayConfig {
     @WithName("base-url")
     String baseUrl();
 
+    /** Base dos perfis municipais (tipos sem perfil br-core). */
+    @WithName("municipal-base-url")
+    @WithDefault("http://sus-nexus.gov.br/fhir/StructureDefinition")
+    String municipalBaseUrl();
+
     String patient();
 
     String organization();
@@ -73,8 +82,55 @@ public interface FhirGatewayConfig {
     @WithName("practitioner-role")
     String practitionerRole();
 
+    String encounter();
+
+    String appointment();
+
+    @WithName("service-request")
+    String serviceRequest();
+
+    String task();
+
+    String condition();
+
+    @WithName("care-plan")
+    String carePlan();
+
     @WithName("require-profile")
     @WithDefault("true")
     boolean requireProfile();
+  }
+
+  /** Sistemas de terminologia usados pelos mapeadores canônico → FHIR (FHIR-2). */
+  interface Terminology {
+    /** CodeSystem SIGTAP (Tabela SUS). */
+    @WithName("sigtap-system")
+    @WithDefault("http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS")
+    String sigtapSystem();
+
+    @WithName("loinc-system")
+    @WithDefault("http://loinc.org")
+    String loincSystem();
+
+    /** CodeSystem para códigos locais (code_system = LOCAL). */
+    @WithName("local-system")
+    @WithDefault("http://sus-nexus.gov.br/fhir/CodeSystem/local-procedure")
+    String localSystem();
+  }
+
+  /** Acesso ao core municipal pelo consumidor de projeção (client-credentials). */
+  interface Core {
+    @WithName("token-url")
+    Optional<String> tokenUrl();
+
+    @WithName("client-id")
+    @WithDefault("fhir-gateway")
+    String clientId();
+
+    @WithName("client-secret")
+    Optional<String> clientSecret();
+
+    /** Escopo pedido ao servidor de autorização (opcional). */
+    Optional<String> scope();
   }
 }

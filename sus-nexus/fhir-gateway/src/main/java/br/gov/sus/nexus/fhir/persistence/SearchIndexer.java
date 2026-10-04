@@ -122,9 +122,17 @@ public class SearchIndexer {
   }
 
   private static void indexReference(String param, Base value, List<IndexEntry> out) {
-    if (value instanceof Reference ref && ref.hasReference()) {
+    if (!(value instanceof Reference ref)) {
+      return;
+    }
+    if (ref.hasReference()) {
       parseReference(ref.getReference())
           .ifPresent(t -> out.add(new IndexEntry.Ref(param, t.type(), t.id())));
+    } else if (ref.hasIdentifier() && ref.getIdentifier().hasValue()) {
+      // referência lógica (somente identifier): indexada pelo valor, com o tipo declarado se houver
+      out.add(
+          new IndexEntry.Ref(
+              param, ref.hasType() ? ref.getType() : null, ref.getIdentifier().getValue()));
     }
   }
 
