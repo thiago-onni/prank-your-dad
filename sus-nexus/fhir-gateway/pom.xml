@@ -112,7 +112,18 @@
           <groupId>ch.qos.logback</groupId>
           <artifactId>logback-classic</artifactId>
         </exclusion>
+        <!-- xpp3 declara junit 4 em escopo compile; conflita com hamcrest 2 (REST-assured) -->
+        <exclusion>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+        </exclusion>
       </exclusions>
+    </dependency>
+    <!-- Dependência opcional das libs HL7, exigida pelo ProfileUtilities/InstanceValidator (UCUM) -->
+    <dependency>
+      <groupId>org.fhir</groupId>
+      <artifactId>ucum</artifactId>
+      <version>1.0.10</version>
     </dependency>
     <!-- Definições FHIR 4.0.1 (somente recursos XML/JSON, sem código). hapi-fhir-base excluído. -->
     <dependency>
@@ -130,7 +141,7 @@
     <!-- Testes -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

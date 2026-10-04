@@ -1,0 +1,9 @@
+{
+  "resourceType": "Patient",
+  "meta": {
+    "profile": ["https://br-core.saude.gov.br/fhir/StructureDefinition/BRCorePatient"]
+  },
+  "name": [{"use": "official", "family": "Souza", "given": ["Carlos"]}],
+  "gender": "male",
+  "birthDate": "1975-01-30"
+}

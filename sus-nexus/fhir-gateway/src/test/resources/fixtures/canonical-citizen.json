@@ -1,0 +1,46 @@
+{
+  "id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4",
+  "version": 3,
+  "display_name": "Ana Paula Ferreira",
+  "legal_name": "Ana Paula Ferreira",
+  "social_name": null,
+  "mother_name": "Joana Ferreira",
+  "birthdate": "1992-11-03",
+  "sex": "female",
+  "registration_state": "validated",
+  "identity_confidence": "confirmed",
+  "identifiers": [
+    {
+      "id": "cid_01HZX4Y5K6M7N8P9Q0R1S2T3V1",
+      "system": "CNS",
+      "value": "700000000000001",
+      "value_masked": "700********0001",
+      "status": "active",
+      "source_system": "PEC"
+    },
+    {
+      "id": "cid_01HZX4Y5K6M7N8P9Q0R1S2T3V2",
+      "system": "CPF",
+      "value": "98765432100",
+      "value_masked": "***.***.***-00",
+      "status": "active",
+      "source_system": "PEC"
+    }
+  ],
+  "health_unit_cnes": "2112345",
+  "team_ine": "0000123456",
+  "microarea": "03",
+  "address": {
+    "street": "Rua das Acácias",
+    "number": "45",
+    "complement": "Casa 2",
+    "district": "Major Prates",
+    "city_ibge": "3143302",
+    "postal_code": "39403-000"
+  },
+  "contacts": [
+    {"kind": "mobile", "value": "+5538988880000", "preferred": true},
+    {"kind": "email", "value": "ana@example.org", "preferred": false}
+  ],
+  "updated_at": "2026-10-03T14:00:00-03:00"
+}

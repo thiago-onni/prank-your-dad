@@ -1,0 +1,20 @@
+{
+  "id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U5",
+  "display_name": "Pedro Henrique Alves",
+  "birthdate": "1988-02-20",
+  "sex": "male",
+  "mother_name_masked": "M*** A***",
+  "registration_state": "validated",
+  "identifiers": [
+    {
+      "id": "cid_01HZX4Y5K6M7N8P9Q0R1S2T3V3",
+      "system": "CNS",
+      "value_masked": "701********0002",
+      "status": "active",
+      "source_system": "PEC"
+    }
+  ],
+  "contacts": [
+    {"kind": "phone", "value_masked": "+5538*****1234", "preferred": true}
+  ]
+}

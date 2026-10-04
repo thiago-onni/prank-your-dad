@@ -1,0 +1,42 @@
+{
+  "resourceType": "Patient",
+  "meta": {
+    "profile": ["https://br-core.saude.gov.br/fhir/StructureDefinition/BRCorePatient"]
+  },
+  "identifier": [
+    {
+      "use": "official",
+      "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns",
+      "value": "898001234567890"
+    },
+    {
+      "use": "official",
+      "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf",
+      "value": "12345678909"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "text": "Maria José da Silva",
+      "family": "Silva",
+      "given": ["Maria", "José"]
+    }
+  ],
+  "telecom": [
+    {"system": "phone", "value": "+55 38 99999-0000", "use": "mobile"},
+    {"system": "email", "value": "maria@example.org"}
+  ],
+  "gender": "female",
+  "birthDate": "1980-05-12",
+  "address": [
+    {
+      "use": "home",
+      "line": ["Rua das Flores, 123"],
+      "district": "Centro",
+      "postalCode": "39400-000",
+      "country": "BR"
+    }
+  ]
+}
