@@ -10,9 +10,15 @@ connectors/
 ├── connector-template/      módulo-exemplo para copiar ao criar um conector novo (README com o passo a passo)
 ├── connector-terminology/   SIGTAP (largura fixa) + CID-10/CBO/CIAP-2 (CSV) → upsertCodes      porta 8090
 ├── connector-cnes/          tbEstabelecimento CSV/DBF por competência → upsertHealthUnits        porta 8091
-├── connector-pec/           e-SUS APS/PEC (file: CSV exportado | jdbc: réplica somente leitura) porta 8092
-└── contracts/ingestion-extensions.openapi.yaml  endpoints de upsert propostos para o core
+└── connector-pec/           e-SUS APS/PEC (file: CSV exportado | jdbc: réplica somente leitura) porta 8092
 ```
+
+Os endpoints de ingestão em lote que os conectores chamam (`POST /api/v1/reference/health-units/upsert`,
+`POST /api/v1/terminology/{system}/codes/upsert`, `POST /api/v1/integration/messages`,
+`POST /api/v1/integration/connectors/{id}/heartbeat`, `POST /api/v1/integration/reconciliation`) fazem parte
+do contrato do core: `sus-nexus/contracts/openapi/core-municipal.yaml` (tags `reference`, `terminology`,
+`integration`). Comandos de reprocessamento chegam pelo tópico `sus.integration.command.v1`
+(`contracts/events/integration/reprocess.v1.schema.json`).
 
 ## Build
 

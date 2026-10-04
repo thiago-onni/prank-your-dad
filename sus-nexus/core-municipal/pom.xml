@@ -24,6 +24,8 @@
     <commons-text.version>1.15.0</commons-text.version>
     <json-schema-validator.version>1.5.8</json-schema-validator.version>
     <assertj.version>3.27.3</assertj.version>
+    <temporal.version>1.39.0</temporal.version>
+    <wiremock.version>3.13.2</wiremock.version>
 
     <compiler-plugin.version>3.14.0</compiler-plugin.version>
     <surefire-plugin.version>3.5.3</surefire-plugin.version>
@@ -121,6 +123,23 @@
       <artifactId>quarkus-logging-json</artifactId>
     </dependency>
 
+    <!-- Mensageria (Kafka em prod/dev; conector in-memory nos testes) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-messaging-kafka</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
+    </dependency>
+
+    <!-- Workflows (Temporal) — conexão real desligada em dev/test (sus.temporal.enabled=false) -->
+    <dependency>
+      <groupId>io.temporal</groupId>
+      <artifactId>temporal-sdk</artifactId>
+      <version>${temporal.version}</version>
+    </dependency>
+
     <!-- Utilitários -->
     <dependency>
       <groupId>org.apache.commons</groupId>
@@ -155,6 +174,23 @@
       <groupId>com.networknt</groupId>
       <artifactId>json-schema-validator</artifactId>
       <version>${json-schema-validator.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.smallrye.reactive</groupId>
+      <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.temporal</groupId>
+      <artifactId>temporal-testing</artifactId>
+      <version>${temporal.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>${wiremock.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -212,6 +248,9 @@
                   <includes>
                     <include>envelope.schema.json</include>
                     <include>identity/*.schema.json</include>
+                    <include>schedule/*.schema.json</include>
+                    <include>task/*.schema.json</include>
+                    <include>integration/*.schema.json</include>
                   </includes>
                 </resource>
               </resources>

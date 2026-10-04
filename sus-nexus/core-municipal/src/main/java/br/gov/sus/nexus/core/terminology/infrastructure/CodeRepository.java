@@ -27,6 +27,11 @@ public class CodeRepository implements PanacheRepositoryBase<Code, Long> {
         .firstResultOptional();
   }
 
+  public Optional<Code> findExact(String system, String code, String competenceFrom) {
+    return find("system = ?1 and code = ?2 and competenceFrom = ?3", system, code, competenceFrom)
+        .firstResultOptional();
+  }
+
   public List<Code> search(
       String system, String q, String code, String competence, Long afterId, int limitPlusOne) {
     StringBuilder sql = new StringBuilder("select * from terminology.code c where c.system = ?1");

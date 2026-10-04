@@ -1,17 +1,23 @@
 package br.gov.sus.nexus.core.terminology.application;
 
 import br.gov.sus.nexus.core.platform.errors.DomainValidationException;
+import br.gov.sus.nexus.core.platform.ingestion.UpsertResult;
 import br.gov.sus.nexus.core.platform.pagination.Cursor;
 import br.gov.sus.nexus.core.platform.pagination.Page;
 import br.gov.sus.nexus.core.sharedkernel.Competence;
 import br.gov.sus.nexus.core.terminology.api.CodeDto;
+import br.gov.sus.nexus.core.terminology.api.CodeUpsert;
+import br.gov.sus.nexus.core.terminology.api.CodeUpsertBatch;
 import br.gov.sus.nexus.core.terminology.api.TerminologyService;
 import br.gov.sus.nexus.core.terminology.domain.Code;
 import br.gov.sus.nexus.core.terminology.infrastructure.CodeRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -54,6 +60,71 @@ public class TerminologyServiceImpl implements TerminologyService {
       return new Page<>(dtos, null);
     }
     return new Page<>(dtos.subList(0, size), Cursor.encode(rows.get(size - 1).id.toString()));
+  }
+
+  @Override
+  @Transactional
+  public UpsertResult upsertBatch(String system, CodeUpsertBatch batch) {
+    String sys = normalizeSystem(system);
+    String batchCompetence = normalizeCompetence(batch.competence());
+    UpsertResult.Counter counter = new UpsertResult.Counter();
+    for (CodeUpsert item : batch.items()) {
+      if (item == null
+          || item.code() == null
+          || item.code().isBlank()
+          || item.display() == null
+          || item.display().isBlank()) {
+        counter.rejected();
+        continue;
+      }
+      String from = item.competenceFrom() == null ? batchCompetence : item.competenceFrom();
+      String to = item.competenceTo();
+      if (from == null
+          || Competence.parse(from).isEmpty()
+          || (to != null && Competence.parse(to).isEmpty())) {
+        counter.rejected();
+        continue;
+      }
+      Optional<Code> existing = repository.findExact(sys, item.code().trim(), from);
+      if (existing.isEmpty()) {
+        Code c = new Code();
+        c.system = sys;
+        c.code = item.code().trim();
+        c.display = item.display().trim();
+        c.competenceFrom = from;
+        c.competenceTo = to;
+        c.attributes =
+            item.attributes() == null ? Map.of() : new LinkedHashMap<>(item.attributes());
+        repository.persist(c);
+        counter.created();
+        continue;
+      }
+      Code c = existing.get();
+      boolean changed = false;
+      if (!Objects.equals(c.display, item.display().trim())) {
+        c.display = item.display().trim();
+        changed = true;
+      }
+      if (to != null && !Objects.equals(c.competenceTo, to)) {
+        c.competenceTo = to;
+        changed = true;
+      }
+      if (item.attributes() != null && !item.attributes().isEmpty()) {
+        Map<String, Object> merged =
+            new LinkedHashMap<>(c.attributes == null ? Map.of() : c.attributes);
+        merged.putAll(item.attributes());
+        if (!merged.equals(c.attributes)) {
+          c.attributes = merged;
+          changed = true;
+        }
+      }
+      if (changed) {
+        counter.updated();
+      } else {
+        counter.unchanged();
+      }
+    }
+    return counter.result();
   }
 
   static String normalizeSystem(String system) {

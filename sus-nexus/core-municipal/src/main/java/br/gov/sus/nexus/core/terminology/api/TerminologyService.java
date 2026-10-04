@@ -1,5 +1,6 @@
 package br.gov.sus.nexus.core.terminology.api;
 
+import br.gov.sus.nexus.core.platform.ingestion.UpsertResult;
 import br.gov.sus.nexus.core.platform.pagination.Page;
 import java.util.Optional;
 
@@ -10,6 +11,12 @@ public interface TerminologyService {
   boolean isValid(String system, String code, String competence);
 
   Optional<CodeDto> find(String system, String code, String competence);
+
+  /**
+   * Upsert em lote por (system, code, competence_from) — porta dos conectores de terminologia.
+   * Idempotente: reenviar o mesmo lote resulta em {@code unchanged}.
+   */
+  UpsertResult upsertBatch(String system, CodeUpsertBatch batch);
 
   /** Busca por código exato e/ou texto do display (trigram + unaccent) filtrando competência. */
   Page<CodeDto> search(

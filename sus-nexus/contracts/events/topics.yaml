@@ -124,6 +124,13 @@ topics:
     key: data.connector_id
     partitions: 3
     events: [healthy, degraded, down, reconciliation_gap]
+  # comandos do core para os conectores (reprocessamento — KAF-012). event_type: sus.integration.reprocess.requested
+  - name: sus.integration.command.v1
+    class: ops
+    key: data.connector_id
+    partitions: 3
+    retention_days: 7
+    events: [reprocess.requested]
   - name: sus.audit.v1
     class: audit
     key: data.actor_id

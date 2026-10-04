@@ -378,6 +378,23 @@ paths:
               schema: { $ref: '#/components/schemas/Appointment' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/appointments/{appointmentId}:
+    get:
+      tags: [appointments]
+      operationId: getAppointment
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/appointments/duplicates:
     get:
       tags: [appointments]
@@ -514,7 +531,46 @@ paths:
                 items: { $ref: '#/components/schemas/ConnectorStatus' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/integration/connectors/{connectorId}/heartbeat:
+    post:
+      tags: [integration]
+      summary: Heartbeat/registro do conector (cliente técnico do conector)
+      operationId: connectorHeartbeat
+      parameters:
+        - name: connectorId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectorHeartbeat' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorStatus' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/integration/messages:
+    post:
+      tags: [integration]
+      summary: Escrita no ledger espelho pelos conectores (upsert por id; nunca carrega o payload)
+      operationId: recordIntegrationMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntegrationMessageWrite' }
+      responses:
+        '200':
+          description: Registrado/atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationMessage' }
+        default: { $ref: '#/components/responses/Problem' }
     get:
       tags: [integration]
       operationId: listIntegrationMessages
@@ -575,9 +631,24 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
       responses:
         '202':
-          description: Aceito
+          description: Aceito — comando publicado em sus.integration.command.v1 (sus.integration.reprocess.requested)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id: { type: string }
+                  event_id: { type: string }
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/integration/dlq:
@@ -603,6 +674,22 @@ paths:
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/integration/reconciliation:
+    post:
+      tags: [integration]
+      summary: Relatório de reconciliação enviado pelo conector (cliente técnico)
+      operationId: recordReconciliation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReconciliationEntry' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationEntry' }
+        default: { $ref: '#/components/responses/Problem' }
     get:
       tags: [integration]
       operationId: listReconciliation
@@ -662,6 +749,52 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Code' }
                   next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/terminology/{system}/codes/upsert:
+    post:
+      tags: [terminology]
+      summary: Upsert em lote de códigos de um sistema (SIGTAP, CID10, CBO, CIAP2) por competência
+      operationId: upsertCodes
+      parameters:
+        - name: system
+          in: path
+          required: true
+          schema: { type: string, enum: [SIGTAP, CID10, CBO, CIAP2] }
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/reference/health-units/upsert:
+    post:
+      tags: [reference]
+      summary: Upsert em lote de unidades de saúde (chave natural = cnes)
+      operationId: upsertHealthUnits
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthUnitUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/reference/health-units:
@@ -768,7 +901,13 @@ components:
       name: Idempotency-Key
       in: header
       required: false
+      description: Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422.
       schema: { type: string, maxLength: 128 }
+    correlationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string }
     citizenId:
       name: citizenId
       in: path
@@ -1035,6 +1174,7 @@ components:
         cancellation_reason: { type: string }
         source_system: { type: string }
         source_record_id: { type: string }
+        version: { type: integer }
         status_history:
           type: array
           items:
@@ -1075,13 +1215,16 @@ components:
         occurred_at: { type: string, format: date-time }
         regulation_request_id: { type: string }
         exam_order_id: { type: string }
+        care_line: { type: string }
         cancellation_reason: { type: string }
 
     AppointmentDuplicate:
       type: object
       required: [citizen_id, appointments, detected_at]
       properties:
+        id: { type: string }
         citizen_id: { type: string }
+        window_hours: { type: integer }
         service_code: { type: string }
         appointments:
           type: array
@@ -1121,6 +1264,9 @@ components:
             id: { type: string }
             version: { type: string }
         outcome: { type: string }
+        reason: { type: string }
+        sla_breached_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         version: { type: integer }
@@ -1152,7 +1298,9 @@ components:
         connector_version: { type: string }
         source_system: { type: string }
         health: { type: string, enum: [healthy, degraded, down, unknown] }
+        health_detail: { type: string }
         last_message_at: { type: string, format: date-time }
+        last_heartbeat_at: { type: string, format: date-time }
         received_24h: { type: integer }
         failed_24h: { type: integer }
         dlq_open: { type: integer }
@@ -1170,6 +1318,7 @@ components:
         connector_id: { type: string }
         source_system: { type: string }
         source_record_id: { type: string }
+        source_record_version: { type: string }
         entity_type: { type: string }
         status: { $ref: '#/components/schemas/IntegrationMessageStatus' }
         raw_ref: { type: string, description: Referência à raw zone (object storage) }
@@ -1186,12 +1335,60 @@ components:
             stage: { type: string }
             occurred_at: { type: string, format: date-time }
 
+    IntegrationMessageWrite:
+      type: object
+      description: Escrita no ledger espelho (sem payload). Upsert por id (msg_<ULID> gerado pelo conector).
+      required: [id, connector_id, source_system, status]
+      properties:
+        id: { type: string, pattern: '^msg_[0-9A-HJKMNP-TV-Z]{26}$' }
+        connector_id: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        source_record_version: { type: string }
+        entity_type: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        raw_ref: { type: string }
+        raw_sha256: { type: string }
+        correlation_id: { type: string }
+        received_at: { type: string, format: date-time }
+        processed_at: { type: string, format: date-time }
+        attempts: { type: integer }
+        last_error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            stage: { type: string }
+            occurred_at: { type: string, format: date-time }
+        dead_letter:
+          type: object
+          description: Quando presente, abre/atualiza o dead letter da mensagem
+          required: [reason]
+          properties:
+            topic: { type: string }
+            reason: { type: string }
+            stage: { type: string }
+            owner: { type: string }
+            payload_ref: { type: string }
+
+    ConnectorHeartbeat:
+      type: object
+      required: [connector_version, source_system]
+      properties:
+        connector_version: { type: string }
+        source_system: { type: string }
+        health: { type: string, enum: [healthy, degraded, down, unknown] }
+        detail: { type: string }
+        descriptor: { type: object, additionalProperties: true, description: ConnectorDescriptor do SDK }
+        metrics: { type: object, additionalProperties: true }
+
     DeadLetter:
       type: object
       required: [id, message_id, reason, attempts, created_at]
       properties:
         id: { type: string }
         message_id: { type: string }
+        connector_id: { type: string }
         topic: { type: string }
         reason: { type: string }
         stage: { type: string }
@@ -1205,6 +1402,7 @@ components:
       type: object
       required: [connector_id, entity_type, period_start, period_end, source_count, bus_count, gap]
       properties:
+        id: { type: string, readOnly: true }
         connector_id: { type: string }
         entity_type: { type: string }
         period_start: { type: string, format: date-time }
@@ -1238,6 +1436,71 @@ components:
         kind_description: { type: string }
         address: { type: string }
         active: { type: boolean }
+
+    SourceRef:
+      type: object
+      required: [system, connector, source_record_id]
+      properties:
+        system: { type: string }
+        connector: { type: string }
+        source_record_id: { type: string, description: Nome do arquivo/lote de origem }
+        source_record_version: { type: string, description: Hash ou versão do arquivo }
+        cnes: { type: string }
+
+    HealthUnitUpsert:
+      type: object
+      required: [cnes, name]
+      properties:
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        name: { type: string }
+        kind_code: { type: string }
+        kind_description: { type: string }
+        address: { type: string }
+        city_ibge: { type: string }
+        active: { type: boolean }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        attributes: { type: object, additionalProperties: true }
+
+    HealthUnitUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/HealthUnitUpsert' }
+
+    CodeUpsert:
+      type: object
+      required: [code, display]
+      properties:
+        code: { type: string }
+        display: { type: string }
+        competence_from: { type: string }
+        competence_to: { type: string }
+        attributes: { type: object, additionalProperties: true }
+
+    CodeUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, description: Competência do arquivo (AAAAMM) }
+        version: { type: string, description: Versão do layout/mapeamento usado }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/CodeUpsert' }
+
+    UpsertResult:
+      type: object
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        rejected: { type: integer }
 
     TimelineEvent:
       type: object

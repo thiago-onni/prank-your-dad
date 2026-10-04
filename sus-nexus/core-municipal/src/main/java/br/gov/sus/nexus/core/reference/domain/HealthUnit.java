@@ -6,6 +6,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Map;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** Estabelecimento de saúde (CNES). */
 @Entity
@@ -33,6 +36,14 @@ public class HealthUnit {
   public String kindDescription;
 
   public String address;
+
+  @Column(name = "city_ibge")
+  public String cityIbge;
+
+  public String competence;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  public Map<String, Object> attributes;
 
   @Column(nullable = false)
   public boolean active = true;

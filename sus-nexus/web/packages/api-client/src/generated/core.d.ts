@@ -4,1742 +4,2062 @@
  */
 
 export interface paths {
-  '/api/v1/admin/rules': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/admin/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conjuntos de regras versionados (SLA, MPI, protocolos) */
+        get: operations["listRuleSets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Conjuntos de regras versionados (SLA, MPI, protocolos) */
-    get: operations['listRuleSets'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/appointments': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agenda consolidada da rede */
+        get: operations["listAppointments"];
+        put?: never;
+        /** Registrar agendamento vindo de um sistema de origem */
+        post: operations["registerAppointment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Agenda consolidada da rede */
-    get: operations['listAppointments'];
-    put?: never;
-    /** Registrar agendamento vindo de um sistema de origem */
-    post: operations['registerAppointment'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/appointments/duplicates': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/appointments/{appointmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAppointment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Duplicidades detectadas (AGE-004) */
-    get: operations['listAppointmentDuplicates'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/audit/access': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/appointments/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Duplicidades detectadas (AGE-004) */
+        get: operations["listAppointmentDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Trilha de acessos (DPO) */
-    get: operations['listAccessLog'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/citizens': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/audit/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trilha de acessos (DPO) */
+        get: operations["listAccessLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Busca de cidadãos */
-    get: operations['searchCitizens'];
-    put?: never;
-    /** Registrar cidadão vindo de um sistema de origem (porta única de entrada — resolve identidade) */
-    post: operations['registerCitizen'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/citizens/{citizenId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/citizens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Busca de cidadãos */
+        get: operations["searchCitizens"];
+        put?: never;
+        /** Registrar cidadão vindo de um sistema de origem (porta única de entrada — resolve identidade) */
+        post: operations["registerCitizen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Detalhe do cidadão (dados por perfil; identificadores mascarados por padrão) */
-    get: operations['getCitizen'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/citizens/{citizenId}/identifiers/{identifierId}/reveal': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/citizens/{citizenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalhe do cidadão (dados por perfil; identificadores mascarados por padrão) */
+        get: operations["getCitizen"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Revelar identificador em claro (gera access_log com finalidade; exige papel) */
-    post: operations['revealIdentifier'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/citizens/{citizenId}/summary': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/citizens/{citizenId}/identifiers/{identifierId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revelar identificador em claro (gera access_log com finalidade; exige papel) */
+        post: operations["revealIdentifier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Resumo operacional (JOR-008) — sem dado clínico além do mínimo */
-    get: operations['getCitizenSummary'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/citizens/{citizenId}/timeline': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/citizens/{citizenId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resumo operacional (JOR-008) — sem dado clínico além do mínimo */
+        get: operations["getCitizenSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Linha do tempo do cidadão (filtrada por perfil/finalidade no servidor) */
-    get: operations['getTimeline'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/connectors': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/citizens/{citizenId}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Linha do tempo do cidadão (filtrada por perfil/finalidade no servidor) */
+        get: operations["getTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listConnectors'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/dlq': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnectors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listDeadLetters'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/messages': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/connectors/{connectorId}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat/registro do conector (cliente técnico do conector) */
+        post: operations["connectorHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listIntegrationMessages'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/messages/{messageId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/dlq": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDeadLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['getIntegrationMessage'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/messages/{messageId}/reprocess': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listIntegrationMessages"];
+        put?: never;
+        /** Escrita no ledger espelho pelos conectores (upsert por id; nunca carrega o payload) */
+        post: operations["recordIntegrationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Reprocessar mensagem (idempotente; efeitos externos suprimidos — KAF-012) */
-    post: operations['reprocessMessage'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/integration/reconciliation': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/messages/{messageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getIntegrationMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listReconciliation'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/mpi/cases': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/messages/{messageId}/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reprocessar mensagem (idempotente; efeitos externos suprimidos — KAF-012) */
+        post: operations["reprocessMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Fila de revisão de duplicidades/conflitos */
-    get: operations['listMergeCases'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/mpi/cases/{caseId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/integration/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listReconciliation"];
+        put?: never;
+        /** Relatório de reconciliação enviado pelo conector (cliente técnico) */
+        post: operations["recordReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['getMergeCase'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/mpi/cases/{caseId}/merge': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/mpi/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fila de revisão de duplicidades/conflitos */
+        get: operations["listMergeCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Fundir (MPI-007) — exige justificativa; registra auditoria e evento */
-    post: operations['mergeCase'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/mpi/cases/{caseId}/reject': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/mpi/cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMergeCase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Rejeitar correspondência (não são a mesma pessoa) */
-    post: operations['rejectCase'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/mpi/merges/{mergeId}/unmerge': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/mpi/cases/{caseId}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fundir (MPI-007) — exige justificativa; registra auditoria e evento */
+        post: operations["mergeCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Reverter fusão (MPI-007) */
-    post: operations['unmerge'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/reference/health-units': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/mpi/cases/{caseId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rejeitar correspondência (não são a mesma pessoa) */
+        post: operations["rejectCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listHealthUnits'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/mpi/merges/{mergeId}/unmerge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverter fusão (MPI-007) */
+        post: operations["unmerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['listTasks'];
-    put?: never;
-    post: operations['createTask'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks/{taskId}': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/reference/health-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listHealthUnits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations['getTask'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/tasks/{taskId}/transition': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/reference/health-units/upsert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upsert em lote de unidades de saúde (chave natural = cnes) */
+        post: operations["upsertHealthUnits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Transição de estado (assign, start, complete, cancel, escalate) */
-    post: operations['transitionTask'];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v1/terminology/{system}/codes': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTasks"];
+        put?: never;
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Consulta de códigos (SIGTAP, CID10, CIAP2, CBO) por competência */
-    get: operations['searchCodes'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/api/v1/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{taskId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transição de estado (assign, start, complete, cancel, escalate) */
+        post: operations["transitionTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminology/{system}/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consulta de códigos (SIGTAP, CID10, CIAP2, CBO) por competência */
+        get: operations["searchCodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terminology/{system}/codes/upsert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upsert em lote de códigos de um sistema (SIGTAP, CID10, CBO, CIAP2) por competência */
+        post: operations["upsertCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    AccessLogEntry: {
-      action: string;
-      actor_id: string;
-      actor_roles?: string[];
-      break_glass?: boolean;
-      citizen_id?: string;
-      correlation_id?: string;
-      /** @enum {string} */
-      decision?: 'allow' | 'deny';
-      id: string;
-      /** Format: date-time */
-      occurred_at: string;
-      purpose: components['schemas']['Purpose'];
-      resource_id?: string;
-      resource_type: string;
-    };
-    Appointment: {
-      cancellation_reason?: string;
-      care_line?: string;
-      citizen_id: string;
-      code_system?: string;
-      exam_order_id?: string;
-      health_unit_cnes?: string;
-      id: string;
-      /** @enum {string} */
-      kind: 'direct' | 'regulated' | 'walk_in' | 'block' | 'waitlist' | 'return';
-      professional_id?: string;
-      regulation_request_id?: string;
-      /** Format: date-time */
-      scheduled_end?: string;
-      /** Format: date-time */
-      scheduled_start: string;
-      service_code?: string;
-      service_description?: string;
-      source_record_id?: string;
-      source_system: string;
-      status: components['schemas']['AppointmentStatus'];
-      status_history?: {
-        /** Format: date-time */
-        occurred_at?: string;
-        reason?: string;
-        status?: components['schemas']['AppointmentStatus'];
-      }[];
-    };
-    AppointmentDuplicate: {
-      appointments: components['schemas']['Appointment'][];
-      citizen_id: string;
-      /** Format: date-time */
-      detected_at: string;
-      service_code?: string;
-    };
-    AppointmentRegistration: {
-      cancellation_reason?: string;
-      /** @description municipal_citizen_id OU identificador de origem para resolução */
-      citizen_ref: {
-        identifier_system?: components['schemas']['IdentifierSystem'];
-        identifier_value?: string;
-        municipal_citizen_id?: string;
-      };
-      code_system?: string;
-      exam_order_id?: string;
-      health_unit_cnes?: string;
-      /** @enum {string} */
-      kind: 'direct' | 'regulated' | 'walk_in' | 'block' | 'waitlist' | 'return';
-      /** Format: date-time */
-      occurred_at?: string;
-      professional_id?: string;
-      regulation_request_id?: string;
-      /** Format: date-time */
-      scheduled_end?: string;
-      /** Format: date-time */
-      scheduled_start: string;
-      service_code?: string;
-      source: {
-        cnes?: string;
-        connector: string;
-        source_record_id: string;
-        source_record_version?: string;
-        system: string;
-      };
-      status: components['schemas']['AppointmentStatus'];
-    };
-    /** @enum {string} */
-    AppointmentStatus:
-      | 'proposed'
-      | 'booked'
-      | 'confirmed'
-      | 'arrived'
-      | 'fulfilled'
-      | 'cancelled'
-      | 'noshow'
-      | 'waitlist';
-    Assignee: {
-      id: string;
-      /** @enum {string} */
-      kind: 'user' | 'team' | 'health_unit' | 'queue';
-    };
-    CitizenDetail: components['schemas']['CitizenSummary'] & {
-      address?: {
-        city_ibge?: string;
-        complement?: string;
-        district?: string;
-        number?: string;
-        postal_code?: string;
-        street?: string;
-      };
-      attribute_provenance?: {
-        [key: string]: components['schemas']['Provenance'];
-      };
-      contacts?: {
+    schemas: {
+        AccessLogEntry: {
+            action: string;
+            actor_id: string;
+            actor_roles?: string[];
+            break_glass?: boolean;
+            citizen_id?: string;
+            correlation_id?: string;
+            /** @enum {string} */
+            decision?: "allow" | "deny";
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            purpose: components["schemas"]["Purpose"];
+            resource_id?: string;
+            resource_type: string;
+        };
+        Appointment: {
+            cancellation_reason?: string;
+            care_line?: string;
+            citizen_id: string;
+            code_system?: string;
+            exam_order_id?: string;
+            health_unit_cnes?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "direct" | "regulated" | "walk_in" | "block" | "waitlist" | "return";
+            professional_id?: string;
+            regulation_request_id?: string;
+            /** Format: date-time */
+            scheduled_end?: string;
+            /** Format: date-time */
+            scheduled_start: string;
+            service_code?: string;
+            service_description?: string;
+            source_record_id?: string;
+            source_system: string;
+            status: components["schemas"]["AppointmentStatus"];
+            status_history?: {
+                /** Format: date-time */
+                occurred_at?: string;
+                reason?: string;
+                status?: components["schemas"]["AppointmentStatus"];
+            }[];
+            version?: number;
+        };
+        AppointmentDuplicate: {
+            appointments: components["schemas"]["Appointment"][];
+            citizen_id: string;
+            /** Format: date-time */
+            detected_at: string;
+            id?: string;
+            service_code?: string;
+            window_hours?: number;
+        };
+        AppointmentRegistration: {
+            cancellation_reason?: string;
+            care_line?: string;
+            /** @description municipal_citizen_id OU identificador de origem para resolução */
+            citizen_ref: {
+                identifier_system?: components["schemas"]["IdentifierSystem"];
+                identifier_value?: string;
+                municipal_citizen_id?: string;
+            };
+            code_system?: string;
+            exam_order_id?: string;
+            health_unit_cnes?: string;
+            /** @enum {string} */
+            kind: "direct" | "regulated" | "walk_in" | "block" | "waitlist" | "return";
+            /** Format: date-time */
+            occurred_at?: string;
+            professional_id?: string;
+            regulation_request_id?: string;
+            /** Format: date-time */
+            scheduled_end?: string;
+            /** Format: date-time */
+            scheduled_start: string;
+            service_code?: string;
+            source: {
+                cnes?: string;
+                connector: string;
+                source_record_id: string;
+                source_record_version?: string;
+                system: string;
+            };
+            status: components["schemas"]["AppointmentStatus"];
+        };
         /** @enum {string} */
-        kind?: 'phone' | 'mobile' | 'email';
-        preferred?: boolean;
-        value_masked?: string;
-      }[];
-      data_quality_issues?: {
-        field?: string;
-        message?: string;
-        rule?: string;
-      }[];
-      legal_name?: string;
-      mother_name?: string;
-      social_name?: string;
-      version: number;
-    };
-    CitizenOperationalSummary: {
-      care_gaps?: number;
-      care_lines?: string[];
-      citizen_id: string;
-      contact_valid?: boolean;
-      /** Format: date-time */
-      last_aps_encounter_at?: string;
-      /** Format: date-time */
-      last_hospital_discharge_at?: string;
-      /** Format: date-time */
-      next_appointment_at?: string;
-      open_regulation_requests?: number;
-      open_tasks?: number;
-      pending_exams?: number;
-    };
-    CitizenRegistration: {
-      address?: {
-        city_ibge?: string;
-        complement?: string;
-        district?: string;
-        number?: string;
-        postal_code?: string;
-        street?: string;
-      };
-      contacts?: {
+        AppointmentStatus: "proposed" | "booked" | "confirmed" | "arrived" | "fulfilled" | "cancelled" | "noshow" | "waitlist";
+        Assignee: {
+            id: string;
+            /** @enum {string} */
+            kind: "user" | "team" | "health_unit" | "queue";
+        };
+        CitizenDetail: components["schemas"]["CitizenSummary"] & {
+            address?: {
+                city_ibge?: string;
+                complement?: string;
+                district?: string;
+                number?: string;
+                postal_code?: string;
+                street?: string;
+            };
+            attribute_provenance?: {
+                [key: string]: components["schemas"]["Provenance"];
+            };
+            contacts?: {
+                /** @enum {string} */
+                kind?: "phone" | "mobile" | "email";
+                preferred?: boolean;
+                value_masked?: string;
+            }[];
+            data_quality_issues?: {
+                field?: string;
+                message?: string;
+                rule?: string;
+            }[];
+            legal_name?: string;
+            mother_name?: string;
+            social_name?: string;
+            version: number;
+        };
+        CitizenOperationalSummary: {
+            care_gaps?: number;
+            care_lines?: string[];
+            citizen_id: string;
+            contact_valid?: boolean;
+            /** Format: date-time */
+            last_aps_encounter_at?: string;
+            /** Format: date-time */
+            last_hospital_discharge_at?: string;
+            /** Format: date-time */
+            next_appointment_at?: string;
+            open_regulation_requests?: number;
+            open_tasks?: number;
+            pending_exams?: number;
+        };
+        CitizenRegistration: {
+            address?: {
+                city_ibge?: string;
+                complement?: string;
+                district?: string;
+                number?: string;
+                postal_code?: string;
+                street?: string;
+            };
+            contacts?: {
+                /** @enum {string} */
+                kind: "phone" | "mobile" | "email";
+                value: string;
+            }[];
+            demographics: {
+                /** Format: date */
+                birthdate: string;
+                deceased?: boolean;
+                /** Format: date */
+                deceased_at?: string;
+                father_name?: string;
+                legal_name: string;
+                mother_name?: string;
+                nationality?: string;
+                race_color?: string;
+                /** @enum {string} */
+                sex?: "female" | "male" | "unknown";
+                social_name?: string;
+            };
+            identifiers?: {
+                system: components["schemas"]["IdentifierSystem"];
+                value: string;
+            }[];
+            source: {
+                cnes?: string;
+                connector: string;
+                source_record_id: string;
+                source_record_version?: string;
+                system: string;
+            };
+            territory?: {
+                health_unit_cnes?: string;
+                microarea?: string;
+                team_ine?: string;
+            };
+        };
+        CitizenSummary: {
+            /** Format: date */
+            birthdate?: string;
+            /** @description Nome social quando existir */
+            display_name: string;
+            health_unit_cnes?: string;
+            id: string;
+            identifiers: components["schemas"]["MaskedIdentifier"][];
+            /** @enum {string} */
+            identity_confidence?: "confirmed" | "probable" | "pending" | "divergent";
+            microarea?: string;
+            mother_name_masked?: string;
+            registration_state: components["schemas"]["RegistrationState"];
+            /** @enum {string} */
+            sex?: "female" | "male" | "unknown";
+            team_ine?: string;
+        };
+        Code: {
+            attributes?: {
+                [key: string]: unknown;
+            };
+            code: string;
+            competence_from?: string;
+            competence_to?: string;
+            display: string;
+            system: string;
+        };
+        CodeUpsert: {
+            attributes?: {
+                [key: string]: unknown;
+            };
+            code: string;
+            competence_from?: string;
+            competence_to?: string;
+            display: string;
+        };
+        CodeUpsertBatch: {
+            /** @description Competência do arquivo (AAAAMM) */
+            competence?: string;
+            items: components["schemas"]["CodeUpsert"][];
+            source: components["schemas"]["SourceRef"];
+            /** @description Versão do layout/mapeamento usado */
+            version?: string;
+        };
+        ConnectorHeartbeat: {
+            connector_version: string;
+            /** @description ConnectorDescriptor do SDK */
+            descriptor?: {
+                [key: string]: unknown;
+            };
+            detail?: string;
+            /** @enum {string} */
+            health?: "healthy" | "degraded" | "down" | "unknown";
+            metrics?: {
+                [key: string]: unknown;
+            };
+            source_system: string;
+        };
+        ConnectorStatus: {
+            connector_id: string;
+            connector_version: string;
+            dlq_open?: number;
+            failed_24h?: number;
+            /** @enum {string} */
+            health: "healthy" | "degraded" | "down" | "unknown";
+            health_detail?: string;
+            /** Format: date-time */
+            last_heartbeat_at?: string;
+            /** Format: date-time */
+            last_message_at?: string;
+            received_24h?: number;
+            reconciliation_gap?: number;
+            source_system: string;
+        };
+        DeadLetter: {
+            attempts: number;
+            connector_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            message_id: string;
+            owner?: string;
+            payload_ref?: string;
+            reason: string;
+            stage?: string;
+            topic?: string;
+            /** Format: date-time */
+            triaged_at?: string;
+        };
         /** @enum {string} */
-        kind: 'phone' | 'mobile' | 'email';
-        value: string;
-      }[];
-      demographics: {
-        /** Format: date */
-        birthdate: string;
-        deceased?: boolean;
-        /** Format: date */
-        deceased_at?: string;
-        father_name?: string;
-        legal_name: string;
-        mother_name?: string;
-        nationality?: string;
-        race_color?: string;
+        Domain: "identity" | "aps" | "schedule" | "regulation" | "exam" | "hospital" | "careplan" | "task" | "production" | "communication";
+        HealthUnit: {
+            active?: boolean;
+            address?: string;
+            cnes: string;
+            id: string;
+            kind_code?: string;
+            kind_description?: string;
+            name: string;
+        };
+        HealthUnitUpsert: {
+            active?: boolean;
+            address?: string;
+            attributes?: {
+                [key: string]: unknown;
+            };
+            city_ibge?: string;
+            cnes: string;
+            competence?: string;
+            kind_code?: string;
+            kind_description?: string;
+            name: string;
+        };
+        HealthUnitUpsertBatch: {
+            competence?: string;
+            items: components["schemas"]["HealthUnitUpsert"][];
+            source: components["schemas"]["SourceRef"];
+        };
         /** @enum {string} */
-        sex?: 'female' | 'male' | 'unknown';
-        social_name?: string;
-      };
-      identifiers?: {
-        system: components['schemas']['IdentifierSystem'];
-        value: string;
-      }[];
-      source: {
-        cnes?: string;
-        connector: string;
-        source_record_id: string;
-        source_record_version?: string;
-        system: string;
-      };
-      territory?: {
-        health_unit_cnes?: string;
-        microarea?: string;
-        team_ine?: string;
-      };
-    };
-    CitizenSummary: {
-      /** Format: date */
-      birthdate?: string;
-      /** @description Nome social quando existir */
-      display_name: string;
-      health_unit_cnes?: string;
-      id: string;
-      identifiers: components['schemas']['MaskedIdentifier'][];
-      /** @enum {string} */
-      identity_confidence?: 'confirmed' | 'probable' | 'pending' | 'divergent';
-      microarea?: string;
-      mother_name_masked?: string;
-      registration_state: components['schemas']['RegistrationState'];
-      /** @enum {string} */
-      sex?: 'female' | 'male' | 'unknown';
-      team_ine?: string;
-    };
-    Code: {
-      attributes?: {
-        [key: string]: unknown;
-      };
-      code: string;
-      competence_from?: string;
-      competence_to?: string;
-      display: string;
-      system: string;
-    };
-    ConnectorStatus: {
-      connector_id: string;
-      connector_version: string;
-      dlq_open?: number;
-      failed_24h?: number;
-      /** @enum {string} */
-      health: 'healthy' | 'degraded' | 'down' | 'unknown';
-      /** Format: date-time */
-      last_message_at?: string;
-      received_24h?: number;
-      reconciliation_gap?: number;
-      source_system: string;
-    };
-    DeadLetter: {
-      attempts: number;
-      /** Format: date-time */
-      created_at: string;
-      id: string;
-      message_id: string;
-      owner?: string;
-      payload_ref?: string;
-      reason: string;
-      stage?: string;
-      topic?: string;
-      /** Format: date-time */
-      triaged_at?: string;
-    };
-    /** @enum {string} */
-    Domain:
-      | 'identity'
-      | 'aps'
-      | 'schedule'
-      | 'regulation'
-      | 'exam'
-      | 'hospital'
-      | 'careplan'
-      | 'task'
-      | 'production'
-      | 'communication';
-    HealthUnit: {
-      active?: boolean;
-      address?: string;
-      cnes: string;
-      id: string;
-      kind_code?: string;
-      kind_description?: string;
-      name: string;
-    };
-    /** @enum {string} */
-    IdentifierSystem:
-      'CNS' | 'CPF' | 'PEC' | 'SISREG' | 'ESUS_REGULACAO' | 'HIS' | 'AIH' | 'APAC' | 'LOCAL';
-    IdentityResolution: {
-      /** @enum {string} */
-      classification: 'confirmed' | 'probable' | 'pending' | 'rejected' | 'new';
-      merge_case_id?: string;
-      method: string;
-      municipal_citizen_id: string;
-      registration_state?: components['schemas']['RegistrationState'];
-      rule_version?: string;
-      score?: number;
-    };
-    IntegrationMessage: {
-      attempts?: number;
-      connector_id: string;
-      correlation_id?: string;
-      entity_type?: string;
-      id: string;
-      last_error?: {
-        code?: string;
-        message?: string;
-        /** Format: date-time */
-        occurred_at?: string;
-        stage?: string;
-      };
-      /** Format: date-time */
-      processed_at?: string;
-      /** @description Referência à raw zone (object storage) */
-      raw_ref?: string;
-      raw_sha256?: string;
-      /** Format: date-time */
-      received_at: string;
-      source_record_id?: string;
-      source_system: string;
-      status: components['schemas']['IntegrationMessageStatus'];
-    };
-    /** @enum {string} */
-    IntegrationMessageStatus:
-      | 'received'
-      | 'transformed'
-      | 'validated'
-      | 'published'
-      | 'processed'
-      | 'failed'
-      | 'dead_lettered'
-      | 'reprocessing';
-    MaskedIdentifier: {
-      id: string;
-      source_system: string;
-      /** @enum {string} */
-      status: 'active' | 'deprecated' | 'invalid';
-      system: components['schemas']['IdentifierSystem'];
-      /** Format: date-time */
-      valid_from?: string;
-      value_masked: string;
-    };
-    MergeCase: {
-      candidates: components['schemas']['CitizenSummary'][];
-      /** @description Divergências relevantes (CNS, CPF, data de nascimento) que impedem fusão automática */
-      conflicts?: string[];
-      /** Format: date-time */
-      decided_at?: string;
-      decided_by?: string;
-      decision_reason?: string;
-      evidence?: {
+        IdentifierSystem: "CNS" | "CPF" | "PEC" | "SISREG" | "ESUS_REGULACAO" | "HIS" | "AIH" | "APAC" | "LOCAL";
+        IdentityResolution: {
+            /** @enum {string} */
+            classification: "confirmed" | "probable" | "pending" | "rejected" | "new";
+            merge_case_id?: string;
+            method: string;
+            municipal_citizen_id: string;
+            registration_state?: components["schemas"]["RegistrationState"];
+            rule_version?: string;
+            score?: number;
+        };
+        IntegrationMessage: {
+            attempts?: number;
+            connector_id: string;
+            correlation_id?: string;
+            entity_type?: string;
+            id: string;
+            last_error?: {
+                code?: string;
+                message?: string;
+                /** Format: date-time */
+                occurred_at?: string;
+                stage?: string;
+            };
+            /** Format: date-time */
+            processed_at?: string;
+            /** @description Referência à raw zone (object storage) */
+            raw_ref?: string;
+            raw_sha256?: string;
+            /** Format: date-time */
+            received_at: string;
+            source_record_id?: string;
+            source_record_version?: string;
+            source_system: string;
+            status: components["schemas"]["IntegrationMessageStatus"];
+        };
         /** @enum {string} */
-        agreement?: 'agree' | 'disagree' | 'missing';
-        attribute?: string;
-        comparison?: string;
-        weight?: number;
-      }[];
-      id: string;
-      merge_id?: string;
-      /** Format: date-time */
-      opened_at: string;
-      reason?: string;
-      rule_version?: string;
-      score?: number;
-      status: components['schemas']['MergeCaseStatus'];
-    };
-    /** @enum {string} */
-    MergeCaseStatus: 'open' | 'in_review' | 'merged' | 'rejected' | 'unmerged';
-    Problem: {
-      correlation_id?: string;
-      detail?: string;
-      errors?: {
-        field?: string;
-        message?: string;
-      }[];
-      instance?: string;
-      status?: number;
-      title?: string;
-      /** Format: uri */
-      type?: string;
-    };
-    Provenance: {
-      confidence?: number;
-      /** Format: date-time */
-      received_at: string;
-      source_record_id?: string;
-      source_system: string;
-    };
-    /** @enum {string} */
-    Purpose:
-      | 'care_coordination'
-      | 'regulation'
-      | 'scheduling'
-      | 'identity_management'
-      | 'production_audit'
-      | 'public_health_surveillance'
-      | 'management_analytics'
-      | 'integration_operations'
-      | 'security_audit';
-    ReconciliationEntry: {
-      bus_count: number;
-      /** Format: date-time */
-      checked_at?: string;
-      connector_id: string;
-      entity_type: string;
-      gap: number;
-      /** Format: date-time */
-      period_end: string;
-      /** Format: date-time */
-      period_start: string;
-      source_count: number;
-    };
-    /** @enum {string} */
-    RegistrationState: 'validated' | 'divergent' | 'incomplete' | 'duplicate' | 'pending';
-    RuleSet: {
-      approved_by?: string;
-      current_version: string;
-      /** Format: date-time */
-      effective_from?: string;
-      id: string;
-      name: string;
-      /** @enum {string} */
-      status: 'draft' | 'in_review' | 'approved' | 'active' | 'revoked';
-    };
-    Task: {
-      assignee?: components['schemas']['Assignee'];
-      citizen_id?: string;
-      /** Format: date-time */
-      created_at: string;
-      description?: string;
-      /** Format: date-time */
-      due_at?: string;
-      id: string;
-      origin?: {
-        id?: string;
+        IntegrationMessageStatus: "received" | "transformed" | "validated" | "published" | "processed" | "failed" | "dead_lettered" | "reprocessing";
+        /** @description Escrita no ledger espelho (sem payload). Upsert por id (msg_<ULID> gerado pelo conector). */
+        IntegrationMessageWrite: {
+            attempts?: number;
+            connector_id: string;
+            correlation_id?: string;
+            /** @description Quando presente, abre/atualiza o dead letter da mensagem */
+            dead_letter?: {
+                owner?: string;
+                payload_ref?: string;
+                reason: string;
+                stage?: string;
+                topic?: string;
+            };
+            entity_type?: string;
+            id: string;
+            last_error?: {
+                code?: string;
+                message?: string;
+                /** Format: date-time */
+                occurred_at?: string;
+                stage?: string;
+            };
+            /** Format: date-time */
+            processed_at?: string;
+            raw_ref?: string;
+            raw_sha256?: string;
+            /** Format: date-time */
+            received_at?: string;
+            source_record_id?: string;
+            source_record_version?: string;
+            source_system: string;
+            status: components["schemas"]["IntegrationMessageStatus"];
+        };
+        MaskedIdentifier: {
+            id: string;
+            source_system: string;
+            /** @enum {string} */
+            status: "active" | "deprecated" | "invalid";
+            system: components["schemas"]["IdentifierSystem"];
+            /** Format: date-time */
+            valid_from?: string;
+            value_masked: string;
+        };
+        MergeCase: {
+            candidates: components["schemas"]["CitizenSummary"][];
+            /** @description Divergências relevantes (CNS, CPF, data de nascimento) que impedem fusão automática */
+            conflicts?: string[];
+            /** Format: date-time */
+            decided_at?: string;
+            decided_by?: string;
+            decision_reason?: string;
+            evidence?: {
+                /** @enum {string} */
+                agreement?: "agree" | "disagree" | "missing";
+                attribute?: string;
+                comparison?: string;
+                weight?: number;
+            }[];
+            id: string;
+            merge_id?: string;
+            /** Format: date-time */
+            opened_at: string;
+            reason?: string;
+            rule_version?: string;
+            score?: number;
+            status: components["schemas"]["MergeCaseStatus"];
+        };
         /** @enum {string} */
-        kind?: 'workflow' | 'agent' | 'user' | 'rule' | 'connector';
-        version?: string;
-      };
-      outcome?: string;
-      overdue?: boolean;
-      /** @enum {string} */
-      priority: 'low' | 'medium' | 'high' | 'urgent';
-      sla_policy_id?: string;
-      status: components['schemas']['TaskStatus'];
-      task_type: string;
-      title?: string;
-      /** Format: date-time */
-      updated_at?: string;
-      version?: number;
-    };
-    TaskCreate: {
-      assignee?: components['schemas']['Assignee'];
-      citizen_id?: string;
-      description?: string;
-      /** Format: date-time */
-      due_at?: string;
-      origin?: {
-        id?: string;
+        MergeCaseStatus: "open" | "in_review" | "merged" | "rejected" | "unmerged";
+        Problem: {
+            correlation_id?: string;
+            detail?: string;
+            errors?: {
+                field?: string;
+                message?: string;
+            }[];
+            instance?: string;
+            status?: number;
+            title?: string;
+            /** Format: uri */
+            type?: string;
+        };
+        Provenance: {
+            confidence?: number;
+            /** Format: date-time */
+            received_at: string;
+            source_record_id?: string;
+            source_system: string;
+        };
         /** @enum {string} */
-        kind?: 'workflow' | 'agent' | 'user' | 'rule' | 'connector';
-        version?: string;
-      };
-      /** @enum {string} */
-      priority: 'low' | 'medium' | 'high' | 'urgent';
-      sla_policy_id?: string;
-      task_type: string;
-      title: string;
+        Purpose: "care_coordination" | "regulation" | "scheduling" | "identity_management" | "production_audit" | "public_health_surveillance" | "management_analytics" | "integration_operations" | "security_audit";
+        ReconciliationEntry: {
+            bus_count: number;
+            /** Format: date-time */
+            checked_at?: string;
+            connector_id: string;
+            entity_type: string;
+            gap: number;
+            readonly id?: string;
+            /** Format: date-time */
+            period_end: string;
+            /** Format: date-time */
+            period_start: string;
+            source_count: number;
+        };
+        /** @enum {string} */
+        RegistrationState: "validated" | "divergent" | "incomplete" | "duplicate" | "pending";
+        RuleSet: {
+            approved_by?: string;
+            current_version: string;
+            /** Format: date-time */
+            effective_from?: string;
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "draft" | "in_review" | "approved" | "active" | "revoked";
+        };
+        SourceRef: {
+            cnes?: string;
+            connector: string;
+            /** @description Nome do arquivo/lote de origem */
+            source_record_id: string;
+            /** @description Hash ou versão do arquivo */
+            source_record_version?: string;
+            system: string;
+        };
+        Task: {
+            assignee?: components["schemas"]["Assignee"];
+            citizen_id?: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            /** Format: date-time */
+            due_at?: string;
+            id: string;
+            origin?: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "workflow" | "agent" | "user" | "rule" | "connector";
+                version?: string;
+            };
+            outcome?: string;
+            overdue?: boolean;
+            /** @enum {string} */
+            priority: "low" | "medium" | "high" | "urgent";
+            reason?: string;
+            /** Format: date-time */
+            sla_breached_at?: string;
+            sla_policy_id?: string;
+            status: components["schemas"]["TaskStatus"];
+            task_type: string;
+            title?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            version?: number;
+        };
+        TaskCreate: {
+            assignee?: components["schemas"]["Assignee"];
+            citizen_id?: string;
+            description?: string;
+            /** Format: date-time */
+            due_at?: string;
+            origin?: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "workflow" | "agent" | "user" | "rule" | "connector";
+                version?: string;
+            };
+            /** @enum {string} */
+            priority: "low" | "medium" | "high" | "urgent";
+            sla_policy_id?: string;
+            task_type: string;
+            title: string;
+        };
+        /** @enum {string} */
+        TaskStatus: "open" | "assigned" | "in_progress" | "completed" | "cancelled" | "escalated";
+        TimelineEvent: {
+            citizen_id: string;
+            cnes?: string;
+            /** @enum {string} */
+            confidence?: "confirmed" | "pending" | "divergent" | "unsynced";
+            correlation_chain?: string[];
+            detail_ref?: string;
+            domain: components["schemas"]["Domain"];
+            event_type: string;
+            health_unit_name?: string;
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            professional_ref?: string;
+            /** Format: date-time */
+            recorded_at: string;
+            /** @enum {string} */
+            sensitivity?: "public" | "internal" | "restricted" | "highly_restricted";
+            source_system: string;
+            status: string;
+            summary?: string;
+        };
+        UpsertResult: {
+            created?: number;
+            rejected?: number;
+            unchanged?: number;
+            updated?: number;
+        };
     };
-    /** @enum {string} */
-    TaskStatus: 'open' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'escalated';
-    TimelineEvent: {
-      citizen_id: string;
-      cnes?: string;
-      /** @enum {string} */
-      confidence?: 'confirmed' | 'pending' | 'divergent' | 'unsynced';
-      correlation_chain?: string[];
-      detail_ref?: string;
-      domain: components['schemas']['Domain'];
-      event_type: string;
-      health_unit_name?: string;
-      id: string;
-      /** Format: date-time */
-      occurred_at: string;
-      professional_ref?: string;
-      /** Format: date-time */
-      recorded_at: string;
-      /** @enum {string} */
-      sensitivity?: 'public' | 'internal' | 'restricted' | 'highly_restricted';
-      source_system: string;
-      status: string;
-      summary?: string;
+    responses: {
+        /** @description Erro (RFC 9457) */
+        Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
-  };
-  responses: {
-    /** @description Erro (RFC 9457) */
-    Problem: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        'application/problem+json': components['schemas']['Problem'];
-      };
+    parameters: {
+        caseId: string;
+        citizenId: string;
+        correlationId: string;
+        cursor: string;
+        /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+        idempotencyKey: string;
+        limit: number;
+        /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+        purpose: components["schemas"]["Purpose"];
+        taskId: string;
     };
-  };
-  parameters: {
-    caseId: string;
-    citizenId: string;
-    cursor: string;
-    idempotencyKey: string;
-    limit: number;
-    /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
-    purpose: components['schemas']['Purpose'];
-    taskId: string;
-  };
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  listRuleSets: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['RuleSet'][];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listAppointments: {
-    parameters: {
-      query?: {
-        citizen_id?: string;
-        cnes?: string;
-        cursor?: components['parameters']['cursor'];
-        from?: string;
-        limit?: components['parameters']['limit'];
-        status?: components['schemas']['AppointmentStatus'];
-        to?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['Appointment'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  registerAppointment: {
-    parameters: {
-      query?: never;
-      header?: {
-        'Idempotency-Key'?: components['parameters']['idempotencyKey'];
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['AppointmentRegistration'];
-      };
-    };
-    responses: {
-      /** @description Atualizado (mesmo source_record_id) */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Appointment'];
-        };
-      };
-      /** @description Criado */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Appointment'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listAppointmentDuplicates: {
-    parameters: {
-      query?: {
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-        window_hours?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['AppointmentDuplicate'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listAccessLog: {
-    parameters: {
-      query?: {
-        actor_id?: string;
-        citizen_id?: string;
-        cursor?: components['parameters']['cursor'];
-        from?: string;
-        limit?: components['parameters']['limit'];
-        to?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['AccessLogEntry'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  searchCitizens: {
-    parameters: {
-      query?: {
-        birthdate?: string;
-        cursor?: components['parameters']['cursor'];
-        /** @description system|value, ex.: CNS|898001234567890 ou CPF|12345678909 */
-        identifier?: string;
-        limit?: components['parameters']['limit'];
-        /** @description Nome, nome social ou nome da mãe (busca textual normalizada) */
-        q?: string;
-        registration_state?: components['schemas']['RegistrationState'];
-      };
-      header: {
-        /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
-        'X-Purpose-Of-Use': components['parameters']['purpose'];
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Página de resultados */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['CitizenSummary'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  registerCitizen: {
-    parameters: {
-      query?: never;
-      header?: {
-        'Idempotency-Key'?: components['parameters']['idempotencyKey'];
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['CitizenRegistration'];
-      };
-    };
-    responses: {
-      /** @description Cidadão resolvido (vinculado a existente) */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['IdentityResolution'];
-        };
-      };
-      /** @description Cidadão criado */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['IdentityResolution'];
-        };
-      };
-      /** @description Correspondência pendente — caso de revisão aberto */
-      202: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['IdentityResolution'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getCitizen: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
-        'X-Purpose-Of-Use': components['parameters']['purpose'];
-      };
-      path: {
-        citizenId: components['parameters']['citizenId'];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          ETag?: string;
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['CitizenDetail'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  revealIdentifier: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        citizenId: components['parameters']['citizenId'];
-        identifierId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          justification: string;
-          purpose: components['schemas']['Purpose'];
-        };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            system: string;
-            value: string;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getCitizenSummary: {
-    parameters: {
-      query?: never;
-      header: {
-        /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
-        'X-Purpose-Of-Use': components['parameters']['purpose'];
-      };
-      path: {
-        citizenId: components['parameters']['citizenId'];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['CitizenOperationalSummary'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getTimeline: {
-    parameters: {
-      query?: {
-        cnes?: string;
-        cursor?: components['parameters']['cursor'];
-        domain?: components['schemas']['Domain'][];
-        from?: string;
-        limit?: components['parameters']['limit'];
-        status?: string;
-        to?: string;
-      };
-      header: {
-        /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
-        'X-Purpose-Of-Use': components['parameters']['purpose'];
-      };
-      path: {
-        citizenId: components['parameters']['citizenId'];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['TimelineEvent'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listConnectors: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['ConnectorStatus'][];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listDeadLetters: {
-    parameters: {
-      query?: {
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['DeadLetter'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listIntegrationMessages: {
-    parameters: {
-      query?: {
-        connector_id?: string;
-        cursor?: components['parameters']['cursor'];
-        from?: string;
-        limit?: components['parameters']['limit'];
-        status?: components['schemas']['IntegrationMessageStatus'];
-        to?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['IntegrationMessage'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getIntegrationMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        messageId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['IntegrationMessage'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  reprocessMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        messageId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Aceito */
-      202: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listReconciliation: {
-    parameters: {
-      query?: {
-        connector_id?: string;
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['ReconciliationEntry'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listMergeCases: {
-    parameters: {
-      query?: {
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-        status?: components['schemas']['MergeCaseStatus'];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['MergeCase'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getMergeCase: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        caseId: components['parameters']['caseId'];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MergeCase'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  mergeCase: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        caseId: components['parameters']['caseId'];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          reason: string;
-          surviving_citizen_id: string;
-        };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MergeCase'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  rejectCase: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        caseId: components['parameters']['caseId'];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          reason: string;
-        };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MergeCase'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  unmerge: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        mergeId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          reason: string;
-        };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['MergeCase'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listHealthUnits: {
-    parameters: {
-      query?: {
-        cnes?: string;
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-        q?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['HealthUnit'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  listTasks: {
-    parameters: {
-      query?: {
-        assignee_id?: string;
-        assignee_kind?: 'user' | 'team' | 'health_unit' | 'queue';
-        citizen_id?: string;
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-        overdue?: boolean;
-        status?: components['schemas']['TaskStatus'];
-        task_type?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['Task'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  createTask: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['TaskCreate'];
-      };
-    };
-    responses: {
-      /** @description Criada */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Task'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  getTask: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        taskId: components['parameters']['taskId'];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Task'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  transitionTask: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        taskId: components['parameters']['taskId'];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        'application/json': {
-          /** @enum {string} */
-          action: 'assign' | 'start' | 'complete' | 'cancel' | 'escalate';
-          assignee?: components['schemas']['Assignee'];
-          outcome?: string;
-          reason?: string;
-        };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': components['schemas']['Task'];
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
-  searchCodes: {
-    parameters: {
-      query?: {
-        code?: string;
-        /** @description AAAAMM */
-        competence?: string;
-        cursor?: components['parameters']['cursor'];
-        limit?: components['parameters']['limit'];
-        q?: string;
-      };
-      header?: never;
-      path: {
-        system: 'SIGTAP' | 'CID10' | 'CIAP2' | 'CBO';
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          'application/json': {
-            items: components['schemas']['Code'][];
-            next_cursor?: string | null;
-          };
-        };
-      };
-      default: components['responses']['Problem'];
-    };
-  };
+    listRuleSets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleSet"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAppointments: {
+        parameters: {
+            query?: {
+                citizen_id?: string;
+                cnes?: string;
+                cursor?: components["parameters"]["cursor"];
+                from?: string;
+                limit?: components["parameters"]["limit"];
+                status?: components["schemas"]["AppointmentStatus"];
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Appointment"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerAppointment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentRegistration"];
+            };
+        };
+        responses: {
+            /** @description Atualizado (mesmo source_record_id) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            /** @description Criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Appointment"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAppointmentDuplicates: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                window_hours?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AppointmentDuplicate"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAccessLog: {
+        parameters: {
+            query?: {
+                actor_id?: string;
+                citizen_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                from?: string;
+                limit?: components["parameters"]["limit"];
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AccessLogEntry"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchCitizens: {
+        parameters: {
+            query?: {
+                birthdate?: string;
+                cursor?: components["parameters"]["cursor"];
+                /** @description system|value, ex.: CNS|898001234567890 ou CPF|12345678909 */
+                identifier?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description Nome, nome social ou nome da mãe (busca textual normalizada) */
+                q?: string;
+                registration_state?: components["schemas"]["RegistrationState"];
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página de resultados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CitizenSummary"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerCitizen: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CitizenRegistration"];
+            };
+        };
+        responses: {
+            /** @description Cidadão resolvido (vinculado a existente) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityResolution"];
+                };
+            };
+            /** @description Cidadão criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityResolution"];
+                };
+            };
+            /** @description Correspondência pendente — caso de revisão aberto */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityResolution"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCitizen: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                citizenId: components["parameters"]["citizenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitizenDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revealIdentifier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                citizenId: components["parameters"]["citizenId"];
+                identifierId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    justification: string;
+                    purpose: components["schemas"]["Purpose"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        system: string;
+                        value: string;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCitizenSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                citizenId: components["parameters"]["citizenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitizenOperationalSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTimeline: {
+        parameters: {
+            query?: {
+                cnes?: string;
+                cursor?: components["parameters"]["cursor"];
+                domain?: components["schemas"]["Domain"][];
+                from?: string;
+                limit?: components["parameters"]["limit"];
+                status?: string;
+                to?: string;
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                citizenId: components["parameters"]["citizenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TimelineEvent"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorStatus"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    connectorHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorStatus"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDeadLetters: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["DeadLetter"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listIntegrationMessages: {
+        parameters: {
+            query?: {
+                connector_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                from?: string;
+                limit?: components["parameters"]["limit"];
+                status?: components["schemas"]["IntegrationMessageStatus"];
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["IntegrationMessage"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordIntegrationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationMessageWrite"];
+            };
+        };
+        responses: {
+            /** @description Registrado/atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationMessage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getIntegrationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationMessage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reprocessMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Aceito — comando publicado em sus.integration.command.v1 (sus.integration.reprocess.requested) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        event_id?: string;
+                        message_id?: string;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listReconciliation: {
+        parameters: {
+            query?: {
+                connector_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ReconciliationEntry"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconciliationEntry"];
+            };
+        };
+        responses: {
+            /** @description Registrado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationEntry"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMergeCases: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                status?: components["schemas"]["MergeCaseStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MergeCase"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMergeCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: components["parameters"]["caseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    mergeCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: components["parameters"]["caseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    surviving_citizen_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    rejectCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: components["parameters"]["caseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    unmerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mergeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listHealthUnits: {
+        parameters: {
+            query?: {
+                cnes?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["HealthUnit"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    upsertHealthUnits: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+                "X-Correlation-Id"?: components["parameters"]["correlationId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthUnitUpsertBatch"];
+            };
+        };
+        responses: {
+            /** @description Lote aplicado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpsertResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: {
+                assignee_id?: string;
+                assignee_kind?: "user" | "team" | "health_unit" | "queue";
+                citizen_id?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                overdue?: boolean;
+                status?: components["schemas"]["TaskStatus"];
+                task_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Task"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Criada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["taskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    transitionTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["taskId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "assign" | "start" | "complete" | "cancel" | "escalate";
+                    assignee?: components["schemas"]["Assignee"];
+                    outcome?: string;
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchCodes: {
+        parameters: {
+            query?: {
+                code?: string;
+                /** @description AAAAMM */
+                competence?: string;
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                q?: string;
+            };
+            header?: never;
+            path: {
+                system: "SIGTAP" | "CID10" | "CIAP2" | "CBO";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Code"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    upsertCodes: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+                "X-Correlation-Id"?: components["parameters"]["correlationId"];
+            };
+            path: {
+                system: "SIGTAP" | "CID10" | "CBO" | "CIAP2";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeUpsertBatch"];
+            };
+        };
+        responses: {
+            /** @description Lote aplicado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpsertResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
 }

@@ -1,15 +1,19 @@
 package br.gov.sus.nexus.core.reference.infrastructure;
 
+import br.gov.sus.nexus.core.platform.ingestion.UpsertResult;
 import br.gov.sus.nexus.core.platform.pagination.Page;
 import br.gov.sus.nexus.core.platform.security.Roles;
 import br.gov.sus.nexus.core.reference.api.HealthUnitDto;
 import br.gov.sus.nexus.core.reference.api.HealthUnitService;
 import br.gov.sus.nexus.core.reference.api.HealthUnitUpsert;
+import br.gov.sus.nexus.core.reference.api.HealthUnitUpsertBatch;
 import io.quarkus.security.Authenticated;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -39,5 +43,14 @@ public class HealthUnitResource {
   @RolesAllowed({Roles.OPERADOR_INTEGRACAO, Roles.ADMIN_MUNICIPAL})
   public HealthUnitDto upsert(HealthUnitUpsert command) {
     return service.upsert(command);
+  }
+
+  /** Upsert em lote (chave natural = cnes) — porta dos conectores CNES; idempotente. */
+  @POST
+  @Path("/upsert")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @RolesAllowed({Roles.OPERADOR_INTEGRACAO, Roles.ADMIN_MUNICIPAL})
+  public UpsertResult upsertBatch(@Valid HealthUnitUpsertBatch batch) {
+    return service.upsertBatch(batch);
   }
 }

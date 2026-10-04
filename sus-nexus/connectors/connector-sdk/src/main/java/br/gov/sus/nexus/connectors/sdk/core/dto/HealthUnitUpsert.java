@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Item de ingestão de unidade de saúde ({@code POST /api/v1/reference/health-units/upsert}).
- * Extensão de ingestão documentada em {@code contracts/ingestion-extensions.openapi.yaml}.
+ * Contrato: {@code contracts/openapi/core-municipal.yaml} (operação {@code upsertHealthUnits}).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

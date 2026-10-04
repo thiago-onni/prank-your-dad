@@ -14,7 +14,16 @@ import org.junit.jupiter.api.Test;
 class ArchitectureTest {
 
   static final String ROOT = "br.gov.sus.nexus.core";
-  static final List<String> MODULES = List.of("identity", "reference", "terminology", "audit");
+  static final List<String> MODULES =
+      List.of(
+          "identity",
+          "reference",
+          "terminology",
+          "audit",
+          "integration",
+          "scheduling",
+          "tasks",
+          "journey");
   static JavaClasses classes;
 
   @BeforeAll

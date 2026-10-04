@@ -30,6 +30,16 @@ public final class Ulid {
   public static final String ROLE = "role_";
   public static final String TERRITORY = "terr_";
   public static final String MICROAREA = "micro_";
+  public static final String APPOINTMENT = "apt_";
+  public static final String APPOINTMENT_HISTORY = "ash_";
+  public static final String APPOINTMENT_DUPLICATE = "dup_";
+  public static final String TASK = "task_";
+  public static final String TASK_HISTORY = "th_";
+  public static final String INTEGRATION_MESSAGE = "msg_";
+  public static final String INTEGRATION_ERROR = "ierr_";
+  public static final String DEAD_LETTER = "dlq_";
+  public static final String RECONCILIATION = "rec_";
+  public static final String TIMELINE_EVENT = "tle_";
 
   private static final char[] ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
   private static final Pattern ULID_PATTERN = Pattern.compile("^[0-9A-HJKMNP-TV-Z]{26}$");

@@ -13,6 +13,8 @@ public final class Roles {
   public static final String DPO = "dpo";
   public static final String OPERADOR_INTEGRACAO = "operador_integracao";
   public static final String AGENTE_IA = "agente_ia";
+  public static final String CADASTRO_MESTRE = "cadastro_mestre";
+  public static final String PROFISSIONAL_HOSPITALAR = "profissional_hospitalar";
 
   private Roles() {}
 }
