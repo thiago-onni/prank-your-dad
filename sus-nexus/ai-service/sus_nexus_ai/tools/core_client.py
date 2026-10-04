@@ -13,10 +13,15 @@ Endpoints usados (todos com ``Authorization: Bearer`` da identidade do agente,
 | ``get_regulation_request`` | ``GET  /regulation/requests/{id}``    | regulation          |
 | ``add_regulation_issue``   | ``POST /regulation/requests/{id}/issues`` | regulation      |
 | ``get_exam_order``         | ``GET  /exams/orders/{id}``           | care_coordination   |
+| ``get_hospital_episode``   | ``GET  /hospital/episodes/{id}``      | care_coordination   |
+| ``list_care_gaps``         | ``GET  /caregaps?…``                  | care_coordination   |
 | ``get_merge_case``         | ``GET  /mpi/cases/{id}``              | identity_management |
 | ``list_merge_cases``       | ``GET  /mpi/cases``                   | identity_management |
 | ``create_task``            | ``POST /tasks``                       | care_coordination   |
 | ``request_message``        | *stub* — sem módulo de comunicação    | —                   |
+
+``GET /caregaps`` não tem filtro por cidadão no contrato: ``list_care_gaps`` aceita
+``citizen_id`` opcional e filtra **no cliente** (a consulta ao core vai por equipe/unidade).
 
 ``POST …/issues`` exige o papel ``agente_ia`` e o core cria a pendência **já aberta**; por isso o
 ai-service só o chama depois de aprovação humana (ferramenta ``requires_approval``).
@@ -336,6 +341,136 @@ class ExamOrder(BaseModel):
     version: int | None = None
 
 
+HospitalEpisodeStatus = Literal[
+    "admitted", "in_progress", "transferred", "discharged", "deceased", "cancelled"
+]
+FollowupStatus = Literal["pending", "contacted", "scheduled", "closed", "escalated"]
+HospitalRiskLevel = Literal["low", "medium", "high"]
+
+
+class HospitalFollowup(BaseModel):
+    """``HospitalEpisode.followup`` — seguimento pós-alta criado pelo core na alta."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: FollowupStatus | None = None
+    task_id: str | None = None
+    due_at: datetime | None = None
+    outcome: str | None = None
+    contacted_at: datetime | None = None
+    care_plan_id: str | None = None
+
+
+class HospitalCounterReferral(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    received_at: datetime | None = None
+    has_document: bool | None = None
+    recommendations_count: int | None = None
+
+
+class HospitalEpisode(BaseModel):
+    """``HospitalEpisode`` — ``GET /api/v1/hospital/episodes/{episodeId}``.
+
+    ``risk_level``/``risk_rule_version`` vêm da regra versionada do core (HOS-005) — o agente não
+    recalcula. ``principal_diagnosis_cid`` só vem quando a política permite e **nunca** é repassado
+    ao LLM nem a tarefas.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    citizen_id: str
+    hospital_cnes: str
+    hospital_name: str | None = None
+    episode_class: Literal["inpatient", "emergency", "observation", "day_hospital"]
+    status: HospitalEpisodeStatus
+    admitted_at: datetime
+    discharged_at: datetime | None = None
+    length_of_stay_days: int | None = None
+    disposition: str | None = None
+    ward: str | None = None
+    bed: str | None = None
+    admission_source: str | None = None
+    regulation_request_id: str | None = None
+    principal_diagnosis_cid: str | None = None
+    aih_number: str | None = None
+    readmission_within_30d: bool | None = None
+    previous_episode_id: str | None = None
+    reference_health_unit_cnes: str | None = None
+    reference_team_ine: str | None = None
+    risk_level: HospitalRiskLevel | None = None
+    risk_rule_version: str | None = None
+    followup: HospitalFollowup | None = None
+    counter_referral: HospitalCounterReferral | None = None
+    has_summary_document: bool | None = None
+    movements: list[dict[str, Any]] = Field(default_factory=list)
+    source_system: str
+    source_record_id: str | None = None
+    version: int | None = None
+
+
+CareGapKind = Literal[
+    "consultation_overdue",
+    "exam_overdue",
+    "vaccine_overdue",
+    "return_overdue",
+    "no_contact",
+    "lost_to_followup",
+    "post_discharge_no_contact",
+]
+
+
+class CareGap(BaseModel):
+    """``CareGap`` — item de ``GET /api/v1/caregaps`` (lista de busca ativa)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    citizen_id: str
+    citizen_display_name: str | None = None
+    care_plan_id: str | None = None
+    care_line: str
+    gap_kind: CareGapKind
+    status: Literal["open", "resolved"] = "open"
+    expected_by: datetime | None = None
+    days_overdue: int | None = None
+    protocol_id: str | None = None
+    protocol_version: str
+    health_unit_cnes: str | None = None
+    team_ine: str | None = None
+    microarea: str | None = None
+    task_id: str | None = None
+    detected_at: datetime
+    resolved_at: datetime | None = None
+    resolution: str | None = None
+    contact_valid: bool | None = None
+
+
+class CareGapQuery(BaseModel):
+    """Filtros de ``GET /api/v1/caregaps`` (+ ``citizen_id``, aplicado no cliente)."""
+
+    care_line: str | None = None
+    gap_kind: CareGapKind | None = None
+    cnes: str | None = None
+    team_ine: str | None = None
+    microarea: str | None = None
+    status: Literal["open", "resolved"] = "open"
+    min_days_overdue: int | None = Field(default=None, ge=0)
+    cursor: str | None = None
+    limit: int = Field(default=50, ge=1, le=200)
+    citizen_id: str | None = None
+
+    def params(self) -> dict[str, Any]:
+        """Query string do contrato (sem ``citizen_id``, que não existe no core)."""
+        return self.model_dump(exclude_none=True, exclude={"citizen_id"})
+
+
+class CareGapPage(BaseModel):
+    items: list[CareGap] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
 class MessageRequest(BaseModel):
     """STUB: o core ainda não expõe módulo de comunicação (``Domain=communication``)."""
 
@@ -408,6 +543,19 @@ class CoreClient(Protocol):
     async def get_exam_order(
         self, order_id: str, *, token: str, tenant: str, correlation_id: str | None = None
     ) -> ExamOrder: ...
+
+    async def get_hospital_episode(
+        self, episode_id: str, *, token: str, tenant: str, correlation_id: str | None = None
+    ) -> HospitalEpisode: ...
+
+    async def list_care_gaps(
+        self,
+        query: CareGapQuery,
+        *,
+        token: str,
+        tenant: str,
+        correlation_id: str | None = None,
+    ) -> CareGapPage: ...
 
     async def request_message(
         self,
@@ -549,6 +697,35 @@ class HttpCoreClient:
         )
         return ExamOrder.model_validate(data)
 
+    async def get_hospital_episode(
+        self, episode_id: str, *, token: str, tenant: str, correlation_id: str | None = None
+    ) -> HospitalEpisode:
+        data = await self._request(
+            "GET",
+            f"/api/v1/hospital/episodes/{episode_id}",
+            headers=self._headers(token, tenant, "care_coordination", correlation_id),
+        )
+        return HospitalEpisode.model_validate(data)
+
+    async def list_care_gaps(
+        self,
+        query: CareGapQuery,
+        *,
+        token: str,
+        tenant: str,
+        correlation_id: str | None = None,
+    ) -> CareGapPage:
+        data = await self._request(
+            "GET",
+            "/api/v1/caregaps",
+            params=query.params(),
+            headers=self._headers(token, tenant, "care_coordination", correlation_id),
+        )
+        page = CareGapPage.model_validate(data)
+        if query.citizen_id:
+            page.items = [g for g in page.items if g.citizen_id == query.citizen_id]
+        return page
+
     async def request_message(
         self,
         message: MessageRequest,
@@ -583,6 +760,8 @@ class InMemoryCoreClient:
         self.merge_cases: dict[str, MergeCase] = {}
         self.regulation_requests: dict[str, RegulationRequest] = {}
         self.exam_orders: dict[str, ExamOrder] = {}
+        self.hospital_episodes: dict[str, HospitalEpisode] = {}
+        self.care_gaps: list[CareGap] = []
         self.tasks: list[Task] = []
         self.issues: list[CreatedIssue] = []
         self.messages: list[MessageRequest] = []
@@ -687,6 +866,41 @@ class InMemoryCoreClient:
             return self.exam_orders[order_id]
         except KeyError as exc:
             raise CoreError(404, f"pedido de exame {order_id} não encontrado") from exc
+
+    async def get_hospital_episode(
+        self, episode_id: str, *, token: str, tenant: str, correlation_id: str | None = None
+    ) -> HospitalEpisode:
+        self._record("get_hospital_episode", token, tenant, correlation_id)
+        try:
+            return self.hospital_episodes[episode_id]
+        except KeyError as exc:
+            raise CoreError(404, f"episódio {episode_id} não encontrado") from exc
+
+    async def list_care_gaps(
+        self,
+        query: CareGapQuery,
+        *,
+        token: str,
+        tenant: str,
+        correlation_id: str | None = None,
+    ) -> CareGapPage:
+        self._record("list_care_gaps", token, tenant, correlation_id)
+        checks: list[tuple[str | int | None, str]] = [
+            (query.care_line, "care_line"),
+            (query.gap_kind, "gap_kind"),
+            (query.cnes, "health_unit_cnes"),
+            (query.team_ine, "team_ine"),
+            (query.microarea, "microarea"),
+            (query.citizen_id, "citizen_id"),
+        ]
+        items = [
+            g
+            for g in self.care_gaps
+            if g.status == query.status
+            and all(v is None or getattr(g, attr) == v for v, attr in checks)
+            and (query.min_days_overdue is None or (g.days_overdue or 0) >= query.min_days_overdue)
+        ]
+        return CareGapPage(items=items[: query.limit])
 
     async def request_message(
         self,

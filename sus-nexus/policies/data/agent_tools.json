@@ -16,6 +16,8 @@
       "core.get_citizen_summary": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /citizens/{id}/summary (resumo operacional)."},
       "core.get_regulation_request": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /regulation/requests/{id} (sem texto clínico)."},
       "core.get_exam_order": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /exams/orders/{id} (só metadados de resultado)."},
+      "core.get_hospital_episode": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /hospital/episodes/{id} (alta, risco por regra do core, seguimento; sem CID ao LLM)."},
+      "core.list_care_gaps": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /caregaps (lacunas de cuidado / busca ativa)."},
       "core.get_merge_case": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /mpi/cases/{id}."},
       "core.list_merge_case": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: GET /mpi/cases."},
       "core.create_task": {"action_class": "auto", "risk": "low", "owner": "core-municipal", "description": "ai-service: POST /tasks com origin.kind=agent."},

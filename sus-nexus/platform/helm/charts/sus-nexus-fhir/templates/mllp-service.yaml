@@ -1,0 +1,39 @@
+{{- include "sus.mllpValidate" . }}
+{{- if eq (include "sus.mllpEnabled" .) "true" }}
+{{- $m := .Values.connector.mllp }}
+# Service TCP dedicado ao listener MLLP (HL7 v2) do conector — separado do Service http para poder ser
+# exposto (LoadBalancer interno/NodePort) sem expor a API. Origem restrita por loadBalancerSourceRanges
+# e pela NetworkPolicy (ipBlock de connector.mllp.allowedSourceCidrs).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sus.fullname" . }}-mllp
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+    sus-nexus.gov.br/protocol: mllp
+  {{- with $m.serviceAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $m.serviceType | default "ClusterIP" }}
+  {{- if ne ($m.serviceType | default "ClusterIP") "ClusterIP" }}
+  # Preserva o IP de origem para a NetworkPolicy (ipBlock) avaliar a faixa real do hospital/laboratório.
+  externalTrafficPolicy: Local
+  {{- end }}
+  {{- if eq ($m.serviceType | default "ClusterIP") "LoadBalancer" }}
+  loadBalancerSourceRanges:
+    {{- toYaml $m.allowedSourceCidrs | nindent 4 }}
+  {{- end }}
+  ports:
+    - name: mllp
+      port: {{ $m.servicePort | default $m.port }}
+      targetPort: mllp
+      protocol: TCP
+      {{- if and (eq ($m.serviceType | default "ClusterIP") "NodePort") $m.nodePort }}
+      nodePort: {{ $m.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "sus.selectorLabels" . | nindent 4 }}
+{{- end }}

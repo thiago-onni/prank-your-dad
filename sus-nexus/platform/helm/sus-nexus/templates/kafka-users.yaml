@@ -41,7 +41,7 @@ spec:
   {{- end }}
 {{- end }}
 {{- /* Conectores: um KafkaUser por alias habilitado */}}
-{{- range $alias := list "connector-pec" "connector-agenda" "connector-sisreg" "connector-cnes" "connector-cadsus" "connector-his" }}
+{{- range $alias := list "connector-pec" "connector-agenda" "connector-sisreg" "connector-cnes" "connector-cadsus" "connector-his" "connector-esus-regulacao" "connector-lis" "connector-ris" }}
 {{- $cv := index $root.Values $alias }}
 {{- if and $cv $cv.enabled }}
 {{- $id := $cv.connector.id }}

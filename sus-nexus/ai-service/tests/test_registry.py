@@ -11,6 +11,8 @@ EXPECTED = {
     "core.get_citizen_summary": ("auto", "low", "read"),
     "core.get_regulation_request": ("auto", "low", "read"),
     "core.get_exam_order": ("auto", "low", "read"),
+    "core.get_hospital_episode": ("auto", "low", "read"),
+    "core.list_care_gaps": ("auto", "low", "read"),
     "core.get_merge_case": ("auto", "low", "read"),
     "core.list_merge_case": ("auto", "low", "read"),
     "core.create_task": ("auto", "low", "write"),

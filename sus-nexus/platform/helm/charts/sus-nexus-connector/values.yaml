@@ -328,3 +328,11 @@ connector:
   pollInterval: PT5M
   reconciliationCron: 0 0 3 * * ?
   edgeAgent: false
+  mllp:
+    enabled: false
+    port: 2575
+    servicePort: null
+    serviceType: ClusterIP
+    nodePort: null
+    serviceAnnotations: {}
+    allowedSourceCidrs: []

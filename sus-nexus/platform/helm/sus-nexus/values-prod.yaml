@@ -64,8 +64,33 @@ connector-cnes:
   enabled: true
 connector-cadsus:
   enabled: true
+connector-esus-regulacao:
+  enabled: true
+connector-lis:
+  enabled: true
+  replicaCount: 1   # listener MLLP com estado de sessão: uma réplica por laboratório/rota
+  connector:
+    mllp:
+      serviceType: LoadBalancer
+      serviceAnnotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external         # NLB (AWS LB Controller)
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internal       # só rede/VPN municipal
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        # IP de origem preservado → NetworkPolicy (ipBlock) avalia a faixa real do laboratório
+        service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=true
+      # Somente as faixas dos laboratórios conveniados (rede municipal/VPN) — ajuste por município.
+      allowedSourceCidrs: ["172.16.20.0/24", "172.16.21.0/24"]
 connector-his:
   enabled: true     # agente de borda no hospital: só gera KafkaUser/ACL (connector.edgeAgent=true)
+  connector:
+    edgeAgent: true
+    # Se o HIS precisar rodar no cluster (edgeAgent=false), defina as faixas dos hospitais:
+    mllp: { allowedSourceCidrs: ["172.16.30.0/24"] }
+connector-ris:
+  enabled: true     # agente de borda no serviço de imagem (connector.edgeAgent=true)
+  connector:
+    edgeAgent: true
+    mllp: { allowedSourceCidrs: ["172.16.31.0/24"] }
 
 cnpg:
   enabled: true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sus_nexus_ai.agents.catalog import build_fake_llm
+from sus_nexus_ai.config import Settings
 from sus_nexus_ai.persistence.schemas import Trigger
 from sus_nexus_ai.security.kill_switch import KillSwitchState
 from sus_nexus_ai.service import AIService, build_service
@@ -8,9 +9,13 @@ from sus_nexus_ai.tools.core_client import InMemoryCoreClient
 from tests.conftest import (
     CASE_ID,
     CITIZEN_ID,
+    DIAGNOSIS_CID,
+    EPISODE_ID,
+    EPISODE_ID_TRACKED,
     EXAM_ORDER_ID,
     REQUEST_ID,
     REQUESTING_CNES,
+    TEAM_INE,
     TENANT,
     discharge_input,
     exam_order_fixture,
@@ -166,7 +171,67 @@ async def test_mpi_duplicate_suggestion_only_suggests(
     assert all(n.startswith("[PESSOA_") for n in names)
 
 
-async def test_post_discharge_creates_task_automatically(
+async def test_post_discharge_does_not_duplicate_core_task(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    """Core já criou a tarefa na alta → só resumo operacional, sem ação nem nova tarefa."""
+    run = await service.run_agent(
+        "post_discharge_followup",
+        tenant=TENANT,
+        trigger=Trigger(kind="event", ref="evt_01J8XE01ABCDEFGHJKMNPQRSTV"),
+        input_data=discharge_input(EPISODE_ID_TRACKED),
+    )
+    assert run.status == "completed" and run.agent_version == "2.0.0"
+    assert run.prompt_version == "v2"
+    assert run.rule_versions == {"attention": "post_discharge_attention_v2"}
+    assert run.output is not None and run.output["mode"] == "summary_only"
+    assert run.actions == [] and core.tasks == []
+    assert [p["code"] for p in run.output["attention_points"]] == [
+        "readmission_30d",
+        "long_stay",
+        "no_valid_contact",
+        "open_care_gaps",
+    ]
+    assert "hospital_risk_v1" in run.output["summary"]
+    script = run.output["suggested_contact_script"]
+    assert script and DIAGNOSIS_CID not in script and "Hospital" not in script
+    # o risco vem do core: o agente não recalcula
+    assert run.minimized_context["assessment"]["risk_level"] == "high"
+    assert [c[0] for c in core.calls] == [
+        "get_hospital_episode",
+        "get_citizen_summary",
+        "list_care_gaps",
+    ]
+
+
+async def test_post_discharge_context_has_no_clinical_content(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    run = await service.run_agent(
+        "post_discharge_followup",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data=discharge_input(EPISODE_ID_TRACKED, care_lines=["insuficiencia_cardiaca"]),
+    )
+    import json
+
+    blob = json.dumps(run.minimized_context, ensure_ascii=False) + json.dumps(run.output)
+    for forbidden in (
+        DIAGNOSIS_CID,
+        "Hospital Regional",
+        "3126100012345",
+        "12B",
+        "insuficiencia_cardiaca",
+        "hipertensao",
+        "Maria",
+    ):
+        assert forbidden not in blob, forbidden
+    assert run.minimized_context["episode"]["care_lines_count"] == 1
+    assert run.output is not None
+    assert [p["code"] for p in run.output["attention_points"]][-1] == "active_care_lines"
+
+
+async def test_post_discharge_fallback_creates_task_when_core_did_not(
     service: AIService, core: InMemoryCoreClient
 ) -> None:
     run = await service.run_agent(
@@ -176,7 +241,7 @@ async def test_post_discharge_creates_task_automatically(
         input_data=discharge_input(),
     )
     assert run.status == "completed"
-    assert run.output is not None and run.output["risk_level"] == "high"
+    assert run.output is not None and run.output["mode"] == "fallback_task"
     assert len(run.actions) == 1
     action = run.actions[0]
     assert action.tool == "core.create_task" and action.action_class == "auto"
@@ -186,23 +251,62 @@ async def test_post_discharge_creates_task_automatically(
     assert task.task_type == "post_discharge_followup" and task.priority == "urgent"
     assert task.citizen_id == CITIZEN_ID
     assert task.assignee is not None and task.assignee.kind == "team"
-    assert task.assignee.id == "0001234567"  # INE de 10 dígitos não é telefone: chega intacto
+    assert task.assignee.id == TEAM_INE  # INE de 10 dígitos não é telefone: chega intacto
     assert task.origin is not None and task.origin.kind == "agent"
-    assert task.due_at is not None and task.due_at.day == 3  # alta 01/10 + 2 dias
+    assert task.origin.version == "2.0.0"
+    assert task.due_at is not None and task.due_at.day == 3  # alta 01/10 + 2 dias (risco high)
+    assert DIAGNOSIS_CID not in f"{task.title} {task.description}"
+    assert "hospital_risk_v1" in (task.description or "")
 
 
-async def test_post_discharge_death_creates_no_task(
+async def test_post_discharge_death_creates_no_action(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    core.hospital_episodes[EPISODE_ID] = core.hospital_episodes[EPISODE_ID].model_copy(
+        update={"disposition": "deceased", "status": "deceased"}
+    )
+    run = await service.run_agent(
+        "post_discharge_followup",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data=discharge_input(),
+    )
+    assert run.status == "completed"
+    assert run.output is not None and run.output["mode"] == "no_action_deceased"
+    assert run.output["suggested_contact_script"] == ""
+    assert run.output["attention_points"] == []
+    assert run.actions == [] and core.tasks == []
+
+
+async def test_post_discharge_rejects_cid_in_llm_output(
+    settings: Settings, core: InMemoryCoreClient
+) -> None:
+    import json
+
+    leaked = json.dumps(
+        {"mode": "summary_only", "summary": "Alta por I50.0, acompanhar.", "attention_points": []}
+    )
+    llm = build_fake_llm(scripted=[leaked, leaked, leaked])
+    service = build_service(settings, core=core, llm=llm)
+    run = await service.run_agent(
+        "post_discharge_followup",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data=discharge_input(EPISODE_ID_TRACKED),
+    )
+    assert run.status == "invalid_output" and run.actions == [] and core.tasks == []
+
+
+async def test_post_discharge_unknown_episode_fails_without_actions(
     service: AIService, core: InMemoryCoreClient
 ) -> None:
     run = await service.run_agent(
         "post_discharge_followup",
         tenant=TENANT,
         trigger=Trigger(kind="manual"),
-        input_data=discharge_input(discharge_type="death"),
+        input_data=discharge_input("hep_01J8XH99ABCDEFGHJKMNPQRSTV"),
     )
-    assert run.status == "completed"
-    assert run.output is not None and run.output["risk_level"] == "none"
-    assert run.actions == [] and core.tasks == []
+    assert run.status == "failed" and run.actions == [] and core.tasks == []
 
 
 async def test_invalid_output_retries_then_discards(settings, core: InMemoryCoreClient) -> None:  # type: ignore[no-untyped-def]

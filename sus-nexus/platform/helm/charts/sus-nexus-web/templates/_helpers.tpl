@@ -73,6 +73,28 @@ cluster (agente de borda): o chart não cria workload; o umbrella cria apenas Ka
 {{- if and .Values.connector .Values.connector.edgeAgent -}}false{{- else -}}true{{- end -}}
 {{- end -}}
 
+{{/*
+Listener MLLP (HL7 v2 sobre TCP) de conectores HIS/LIS/RIS: `connector.mllp.enabled=true`.
+"true" quando o workload existe no cluster e o MLLP está habilitado. Charts sem `connector` → "false".
+*/}}
+{{- define "sus.mllpEnabled" -}}
+{{- $c := .Values.connector | default dict -}}
+{{- $m := $c.mllp | default dict -}}
+{{- if and (eq (include "sus.workloadEnabled" .) "true") $m.enabled -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{/* Valida o MLLP: exige faixas de origem explícitas (hospitais/laboratórios). */}}
+{{- define "sus.mllpValidate" -}}
+{{- if eq (include "sus.mllpEnabled" .) "true" -}}
+{{- if not .Values.connector.mllp.port -}}
+{{- fail (printf "%s: connector.mllp.port é obrigatório com connector.mllp.enabled=true" (include "sus.fullname" .)) -}}
+{{- end -}}
+{{- if not .Values.connector.mllp.allowedSourceCidrs -}}
+{{- fail (printf "%s: connector.mllp.allowedSourceCidrs vazio — informe as faixas dos hospitais/laboratórios autorizados a enviar HL7 (MLLP)" (include "sus.fullname" .)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "sus.configMapName" -}}
 {{- printf "%s-config" (include "sus.fullname" .) -}}
 {{- end -}}
@@ -141,6 +163,11 @@ spec:
         - name: {{ .name }}
           containerPort: {{ .containerPort }}
           protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+        {{- if eq (include "sus.mllpEnabled" .) "true" }}
+        - name: mllp
+          containerPort: {{ .Values.connector.mllp.port }}
+          protocol: TCP
         {{- end }}
       env:
         - name: POD_NAME

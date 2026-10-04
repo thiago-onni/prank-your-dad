@@ -50,6 +50,11 @@ jobs:
           - { component: fhir-gateway, context: sus-nexus/fhir-gateway, dockerfile: Dockerfile, build_args: "" }
           - { component: connector-pec, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-pec" }
           - { component: connector-agenda, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-agenda" }
+          - { component: connector-sisreg, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-sisreg\nPORT=8093" }
+          - { component: connector-esus-regulacao, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-esus-regulacao\nPORT=8094" }
+          - { component: connector-lis, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-lis\nPORT=8095" }
+          - { component: connector-his, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-his\nPORT=8096" }
+          - { component: connector-ris, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-ris\nPORT=8097" }
           - { component: web-shell, context: sus-nexus, dockerfile: web/apps/shell/Dockerfile }
           - { component: ai-service, context: sus-nexus/ai-service, dockerfile: Dockerfile, build_args: "" }
           - { component: kafka-connect-debezium, context: sus-nexus/platform/images/kafka-connect-debezium, dockerfile: Dockerfile, build_args: "" }

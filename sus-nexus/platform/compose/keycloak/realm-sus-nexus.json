@@ -1070,6 +1070,104 @@
         }
       ],
       "secret": "connector-files-dev-secret"
+    },
+    {
+      "id": "b692b560-8249-5e9a-ac51-115b90d5ed0e",
+      "clientId": "connector-ris",
+      "name": "Conector RIS (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "0abb835b-afa9-5f14-9f17-afa8cb68b016",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-ris-dev-secret"
+    },
+    {
+      "id": "57ca4a6b-142f-5ec0-a77d-39da71579a4b",
+      "clientId": "connector-esus-regulacao",
+      "name": "Conector e-SUS Regulação (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "ec533512-d076-5198-b42a-567cec43cfe2",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-esus-regulacao-dev-secret"
     }
   ],
   "users": [
@@ -1628,6 +1726,34 @@
       "username": "service-account-connector-files",
       "enabled": true,
       "serviceAccountClientId": "connector-files",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "ba6a3d85-6e8a-551f-8007-cc8d4c4b8d0b",
+      "username": "service-account-connector-ris",
+      "enabled": true,
+      "serviceAccountClientId": "connector-ris",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "df41ea84-ab69-5a85-bf63-61639cf30401",
+      "username": "service-account-connector-esus-regulacao",
+      "enabled": true,
+      "serviceAccountClientId": "connector-esus-regulacao",
       "realmRoles": [
         "operador_integracao"
       ],

@@ -13,6 +13,7 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
 from sus_nexus_ai.tools.core_client import (
+    CareGapQuery,
     CoreError,
     HttpCoreClient,
     IssueOrigin,
@@ -22,10 +23,16 @@ from sus_nexus_ai.tools.core_client import (
 from tests.conftest import (
     CASE_ID,
     CITIZEN_ID,
+    CITIZEN_ID_2,
+    CORE_TASK_ID,
+    EPISODE_ID,
     EXAM_ORDER_ID,
     REQUEST_ID,
+    TEAM_INE,
     TENANT,
+    care_gap_fixture,
     exam_order_fixture,
+    hospital_episode_fixture,
     regulation_request_fixture,
 )
 
@@ -125,6 +132,65 @@ async def test_get_exam_order(core_client: HttpCoreClient, openapi: dict[str, An
     _assert_headers(route.calls.last.request, "care_coordination")
     assert order.results[0].critical is True and order.results[0].followup_task_id is None
     assert "critical" in order.issues
+
+
+@respx.mock
+async def test_get_hospital_episode(core_client: HttpCoreClient, openapi: dict[str, Any]) -> None:
+    payload = hospital_episode_fixture(
+        followup={"status": "pending", "task_id": CORE_TASK_ID, "due_at": "2026-10-03T15:30:00Z"},
+        counter_referral={"received_at": "2026-10-02T10:00:00Z", "has_document": True},
+    ).model_dump(mode="json", exclude_none=True)
+    response_validator(openapi, "/api/v1/hospital/episodes/{episodeId}", "get", "200").validate(
+        payload
+    )
+    route = respx.get(f"{BASE}/api/v1/hospital/episodes/{EPISODE_ID}").respond(200, json=payload)
+    episode = await core_client.get_hospital_episode(
+        EPISODE_ID, token="tok-agent", tenant=TENANT, correlation_id="corr_abc"
+    )
+    assert route.called
+    _assert_headers(route.calls.last.request, "care_coordination")
+    assert episode.risk_level == "high" and episode.risk_rule_version == "hospital_risk_v1"
+    assert episode.followup is not None and episode.followup.task_id == CORE_TASK_ID
+    assert episode.readmission_within_30d is True and episode.length_of_stay_days == 9
+
+
+@respx.mock
+async def test_list_care_gaps_query_and_client_side_citizen_filter(
+    core_client: HttpCoreClient, openapi: dict[str, Any]
+) -> None:
+    payload = {
+        "items": [
+            care_gap_fixture().model_dump(mode="json", exclude_none=True),
+            care_gap_fixture(
+                id="gap_01J8XG02ABCDEFGHJKMNPQRSTV", citizen_id=CITIZEN_ID_2
+            ).model_dump(mode="json", exclude_none=True),
+        ],
+        "next_cursor": None,
+    }
+    response_validator(openapi, "/api/v1/caregaps", "get", "200").validate(payload)
+    route = respx.get(f"{BASE}/api/v1/caregaps").respond(200, json=payload)
+    page = await core_client.list_care_gaps(
+        CareGapQuery(
+            team_ine=TEAM_INE, gap_kind="post_discharge_no_contact", citizen_id=CITIZEN_ID
+        ),
+        token="tok-agent",
+        tenant=TENANT,
+        correlation_id="corr_abc",
+    )
+    request = route.calls.last.request
+    _assert_headers(request, "care_coordination")
+    params = dict(request.url.params)
+    assert params == {
+        "team_ine": TEAM_INE,
+        "gap_kind": "post_discharge_no_contact",
+        "status": "open",
+        "limit": "50",
+    }
+    declared = {
+        p["name"] for p in openapi["paths"]["/api/v1/caregaps"]["get"]["parameters"] if "name" in p
+    } | {"cursor", "limit"}
+    assert set(params) <= declared  # citizen_id não existe no contrato: filtro no cliente
+    assert [g.citizen_id for g in page.items] == [CITIZEN_ID]
 
 
 @respx.mock
@@ -282,6 +348,8 @@ def test_contract_paths_used_by_client_exist(openapi: dict[str, Any]) -> None:
         ("/api/v1/exams/orders/{orderId}", "get"),
         ("/api/v1/mpi/cases/{caseId}", "get"),
         ("/api/v1/mpi/cases", "get"),
+        ("/api/v1/hospital/episodes/{episodeId}", "get"),
+        ("/api/v1/caregaps", "get"),
         ("/api/v1/tasks", "post"),
     ):
         assert method in paths[path], f"{method.upper()} {path}"

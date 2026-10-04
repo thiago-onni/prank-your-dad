@@ -33,6 +33,27 @@ connector-sisreg:
   enabled: true
 connector-cnes:
   enabled: true
+connector-esus-regulacao:
+  enabled: true
+connector-lis:
+  enabled: true
+  connector:
+    mllp:
+      serviceType: LoadBalancer
+      serviceAnnotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external         # NLB (AWS LB Controller)
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internal       # só rede/VPN municipal
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        # IP de origem preservado → NetworkPolicy (ipBlock) avalia a faixa real do laboratório
+        service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=true
+      allowedSourceCidrs: ["172.20.10.0/24"]   # rede de homologação dos laboratórios (ajuste)
+# HIS/RIS em homologação: agentes de borda no hospital piloto (só KafkaUser/ACL no cluster).
+connector-his:
+  enabled: true
+  connector: { edgeAgent: true }
+connector-ris:
+  enabled: true
+  connector: { edgeAgent: true }
 
 cnpg:
   enabled: true

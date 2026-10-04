@@ -9,6 +9,10 @@ Eventos (``contracts/events/*.schema.json``) → agentes:
 | ``sus.identity.merge.v1``     | ``.case_opened``               | ``mpi_duplicate_suggestion`` |
 | ``sus.hospital.discharge.v1`` | ``.completed``                 | ``post_discharge_followup``  |
 
+``sus.hospital.discharge.completed`` → ``post_discharge_followup`` v2 com
+``data.hospital_episode_id`` (o agente relê o episódio no core; ``counter_referral_received`` é
+ignorado).
+
 Tenant vem **sempre** do envelope (``tenant.municipality_id``). Idempotência por ``event_id`` via
 ``agent_event_inbox(event_id, consumer_group)``. O handler (``AgentEventHandler.handle``) é
 testável sem rede; ``KafkaAgentConsumer`` usa ``aiokafka`` (dependência opcional ``.[kafka]``).
@@ -47,16 +51,6 @@ DEFAULT_TOPICS: tuple[str, ...] = (
     "sus.exam.result.v1",
     "sus.identity.merge.v1",
 )
-
-# ``disposition`` do schema ``hospital/discharge`` → ``discharge_type`` do agente pós-alta.
-_DISPOSITION_TO_DISCHARGE_TYPE: dict[str, str] = {
-    "home": "home",
-    "home_with_care": "home",
-    "transfer": "transfer",
-    "against_advice": "evasion",
-    "deceased": "death",
-    "other": "home",
-}
 
 
 class EventEnvelope(BaseModel):
@@ -101,32 +95,15 @@ class AgentEventHandler:
         data = envelope.data
         citizen_id = (envelope.subject or {}).get("municipal_citizen_id") or data.get("citizen_id")
         if agent_id == "post_discharge_followup":
-            diagnosis = data.get("principal_diagnosis") or {}
-            event = {
+            # v2: o agente lê o episódio real no core (risco e tarefa já definidos na alta);
+            # do evento só usa a referência do episódio e as linhas de cuidado (contagem).
+            care_lines = data.get("care_lines")
+            return {
+                "hospital_episode_id": data.get("hospital_episode_id"),
                 "event_id": envelope.event_id,
                 "citizen_id": citizen_id,
-                "episode_id": data.get("episode_id") or data.get("hospital_episode_id"),
-                "discharged_at": data.get("discharged_at") or data.get("occurred_at"),
-                "discharge_type": data.get("discharge_type")
-                or _DISPOSITION_TO_DISCHARGE_TYPE.get(str(data.get("disposition")), "home"),
-                "length_of_stay_days": data.get("length_of_stay_days", 0),
-                "primary_diagnosis_cid10": data.get("primary_diagnosis_cid10")
-                or (diagnosis.get("code") if isinstance(diagnosis, dict) else None),
-                "readmissions_30d": data.get(
-                    "readmissions_30d", 1 if data.get("readmission_within_30d") else 0
-                ),
-                "age_years": data.get("age_years"),
-                "comorbidities_count": data.get("comorbidities_count", 0),
-                "has_care_plan": data.get(
-                    "has_care_plan", data.get("followup_plan_present", False)
-                ),
+                "care_lines": care_lines if isinstance(care_lines, list) else [],
             }
-            team = data.get("reference_team") or {
-                "team_ine": data.get("team_ine") or data.get("reference_team_ine") or "unknown",
-                "health_unit_cnes": data.get("health_unit_cnes")
-                or data.get("reference_health_unit_cnes"),
-            }
-            return {"event": event, "reference_team": team}
         if agent_id == "regulation_completeness":
             return {
                 "request_id": data.get("regulation_request_id")

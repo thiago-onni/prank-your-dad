@@ -36,5 +36,5 @@ COPY --from=build --chown=sus:sus /workspace/quarkus-app/quarkus/ /app/quarkus/
 USER 1001
 VOLUME ["/app/data"]
 EXPOSE ${PORT}
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh", "-c", "wget -qO- http://localhost:${PORT}/q/health/ready | grep -q UP"]
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Dquarkus.http.port=${PORT} -jar /app/quarkus-run.jar"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh", "-c", "wget -qO- http://localhost:${QUARKUS_HTTP_PORT:-$PORT}/q/health/ready | grep -q UP"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Dquarkus.http.port=${QUARKUS_HTTP_PORT:-$PORT} -jar /app/quarkus-run.jar"]

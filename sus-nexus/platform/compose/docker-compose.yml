@@ -5,6 +5,8 @@
 #                  serviços pelo IDE/`quarkus dev`
 #   core           infra + serviços da aplicação (core-municipal, fhir-gateway, web-shell, connector-pec)
 #   ai             infra + ai-service + LiteLLM + Langfuse
+#   connectors     infra + core-municipal + conectores SISREG, e-SUS Regulação, LIS, HIS e RIS
+#                  (MLLP: LIS 2575, HIS 2576, RIS 2577)
 #   observability  OTel Collector, Prometheus, Grafana, Loki, Tempo, Metabase
 #
 # Exemplos:
@@ -27,7 +29,7 @@ x-logging: &default-logging
     max-file: "3"
 
 x-infra-profiles: &infra-profiles
-  profiles: ["infra", "core", "ai"]
+  profiles: ["infra", "core", "ai", "connectors"]
 
 x-postgres-env: &postgres-env
   POSTGRES_HOST: postgres
@@ -48,6 +50,30 @@ x-otel-env: &otel-env
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
   OTEL_EXPORTER_OTLP_PROTOCOL: grpc
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,tenant.id=${TENANT_ID:-ibge_3143302}
+
+# Conectores do runtime genérico (sus-nexus/connectors/Dockerfile, CONNECTOR_MODULE + PORT).
+# Autenticam no core por client credentials (perfil Quarkus prod → OIDC client do Keycloak).
+x-connector-env: &connector-env
+  QUARKUS_PROFILE: ${CONNECTORS_QUARKUS_PROFILE:-prod}
+  TENANT_ID: ${TENANT_ID:-ibge_3143302}
+  CORE_URL: http://core-municipal:8080
+  CORE_AUTH_MODE: oidc
+  KEYCLOAK_URL: http://keycloak:8080
+  RAW_STORE_TYPE: s3
+  RAW_STORE_ENDPOINT: http://minio:9000
+  RAW_STORE_BUCKET: raw-zone
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  AWS_REGION: us-east-1
+  QUARKUS_OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+
+x-connector-depends: &connector-depends
+  keycloak:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+  core-municipal:
+    condition: service_healthy
 
 services:
   # ---------------------------------------------------------------------------
@@ -409,7 +435,7 @@ services:
   # Aplicação (profile core)
   # ---------------------------------------------------------------------------
   core-municipal:
-    profiles: ["core"]
+    profiles: ["core", "connectors"]
     build:
       context: ../../core-municipal
       dockerfile: ${CORE_DOCKERFILE:-Dockerfile}
@@ -540,7 +566,7 @@ services:
     environment:
       <<: [*kafka-env, *keycloak-env, *otel-env]
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-dev}
-      QUARKUS_HTTP_PORT: "8090"
+      QUARKUS_HTTP_PORT: "8092"
       CONNECTOR_ID: pec
       CONNECTOR_TENANT_ID: ${TENANT_ID:-ibge_3143302}
       QUARKUS_OIDC_CLIENT_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
@@ -556,11 +582,170 @@ services:
       PEC_JDBC_PASSWORD: ${PEC_JDBC_PASSWORD:-esus}
       QUARKUS_OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
     ports:
-      - "${CONNECTOR_PEC_PORT:-8090}:8090"
+      - "${CONNECTOR_PEC_PORT:-8092}:8092"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8090 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8092 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  # Conectores de regulação, laboratório, hospital e imagem (perfil `connectors`; HIS/RIS rodam na
+  # borda em produção — aqui simulados localmente, MLLP exposto no host).
+  connector-sisreg:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-sisreg
+        PORT: "8093"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-sisreg:${IMAGE_TAG:-local}
+    container_name: sus-connector-sisreg
+    depends_on: *connector-depends
+    environment:
+      <<: [*connector-env, *otel-env]
+      PORT: "8093"
+      CORE_CLIENT_ID: connector-sisreg
+      CORE_CLIENT_SECRET: ${CONNECTOR_SISREG_OIDC_SECRET:-connector-sisreg-dev-secret}
+      SISREG_INPUT_DIR: /app/data/sisreg/in
+    ports:
+      - "${CONNECTOR_SISREG_PORT:-8093}:8093"
+    volumes:
+      - connector-sisreg-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8093 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  connector-esus-regulacao:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-esus-regulacao
+        PORT: "8094"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-esus-regulacao:${IMAGE_TAG:-local}
+    container_name: sus-connector-esus-regulacao
+    depends_on: *connector-depends
+    environment:
+      <<: [*connector-env, *otel-env]
+      PORT: "8094"
+      CORE_CLIENT_ID: connector-esus-regulacao
+      CORE_CLIENT_SECRET: ${CONNECTOR_ESUS_REGULACAO_OIDC_SECRET:-connector-esus-regulacao-dev-secret}
+      ESUS_MODE: ${ESUS_MODE:-file}
+      ESUS_API_URL: ${ESUS_API_URL:-http://host.docker.internal:9080}
+      ESUS_INPUT_DIR: /app/data/esus-regulacao/in
+    ports:
+      - "${CONNECTOR_ESUS_REGULACAO_PORT:-8094}:8094"
+    volumes:
+      - connector-esus-regulacao-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8094 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  connector-lis:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-lis
+        PORT: "8095"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-lis:${IMAGE_TAG:-local}
+    container_name: sus-connector-lis
+    depends_on: *connector-depends
+    environment:
+      <<: [*connector-env, *otel-env]
+      PORT: "8095"
+      CORE_CLIENT_ID: connector-lis
+      CORE_CLIENT_SECRET: ${CONNECTOR_LIS_OIDC_SECRET:-connector-lis-dev-secret}
+      LIS_MLLP_PORT: "2575"
+      LIS_INPUT_DIR: /app/data/lis/in
+    ports:
+      - "${CONNECTOR_LIS_PORT:-8095}:8095"
+      - "${CONNECTOR_LIS_MLLP_PORT:-2575}:2575"   # MLLP (HL7 v2)
+    volumes:
+      - connector-lis-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8095 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  connector-his:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-his
+        PORT: "8096"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-his:${IMAGE_TAG:-local}
+    container_name: sus-connector-his
+    depends_on: *connector-depends
+    environment:
+      <<: [*connector-env, *otel-env]
+      PORT: "8096"
+      CORE_CLIENT_ID: connector-his
+      CORE_CLIENT_SECRET: ${CONNECTOR_HIS_OIDC_SECRET:-connector-his-dev-secret}
+      CONNECTOR_EDGE: "true"
+      HIS_MLLP_PORT: "2576"
+      HIS_HOSPITAL_CNES: ${HIS_HOSPITAL_CNES:-7654321}
+      HIS_INPUT_DIR: /app/data/his/in
+    ports:
+      - "${CONNECTOR_HIS_PORT:-8096}:8096"
+      - "${CONNECTOR_HIS_MLLP_PORT:-2576}:2576"   # MLLP (HL7 v2)
+    volumes:
+      - connector-his-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8096 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  connector-ris:
+    profiles: ["connectors"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-ris
+        PORT: "8097"
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-ris:${IMAGE_TAG:-local}
+    container_name: sus-connector-ris
+    depends_on: *connector-depends
+    environment:
+      <<: [*connector-env, *otel-env]
+      PORT: "8097"
+      CORE_CLIENT_ID: connector-ris
+      CORE_CLIENT_SECRET: ${CONNECTOR_RIS_OIDC_SECRET:-connector-ris-dev-secret}
+      CONNECTOR_EDGE: "true"
+      RIS_MLLP_PORT: "2577"
+      RIS_INPUT_DIR: /app/data/ris/in
+      RIS_DICOM_INPUT_DIR: /app/data/ris/dicom
+    ports:
+      - "${CONNECTOR_RIS_PORT:-8097}:8097"
+      - "${CONNECTOR_RIS_MLLP_PORT:-2577}:2577"   # MLLP (HL7 v2)
+    volumes:
+      - connector-ris-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8097 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -843,6 +1028,11 @@ volumes:
   loki-data:
   tempo-data:
   grafana-data:
+  connector-sisreg-data:
+  connector-esus-regulacao-data:
+  connector-lis-data:
+  connector-his-data:
+  connector-ris-data:
 
 networks:
   default:

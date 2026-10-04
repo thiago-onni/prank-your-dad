@@ -47,6 +47,28 @@ connector-pec:
   enabled: true
 connector-agenda:
   enabled: true
+connector-sisreg:
+  enabled: true
+connector-esus-regulacao:
+  enabled: true
+connector-lis:
+  enabled: true
+  connector:
+    mllp:
+      allowedSourceCidrs: ["10.0.0.0/8"]   # dev: simuladores HL7 dentro do cluster/rede de dev
+# HIS/RIS: em dev rodam no cluster (simulando o hospital) — edgeAgent=false + MLLP.
+connector-his:
+  enabled: true
+  connector:
+    edgeAgent: false
+    mllp:
+      allowedSourceCidrs: ["10.0.0.0/8"]
+connector-ris:
+  enabled: true
+  connector:
+    edgeAgent: false
+    mllp:
+      allowedSourceCidrs: ["10.0.0.0/8"]
 
 cnpg:
   enabled: true

@@ -53,12 +53,6 @@ connector-agenda:
   fullnameOverride: connector-agenda
   image: { repository: sus-nexus/connector-agenda }
   connector: { id: agenda, sourceSystem: AGENDA, ingestTopic: sus.ingest.agenda.v1, tenantId: ibge_3143302, pollInterval: PT2M, reconciliationCron: "0 0 3 * * ?", edgeAgent: false }
-connector-sisreg:
-  enabled: false
-  namespaceOverride: connectors
-  fullnameOverride: connector-sisreg
-  image: { repository: sus-nexus/connector-sisreg }
-  connector: { id: sisreg, sourceSystem: SISREG, ingestTopic: sus.ingest.agenda.v1, tenantId: ibge_3143302, pollInterval: PT15M, reconciliationCron: "0 0 4 * * ?", edgeAgent: false }
 connector-cnes:
   enabled: false
   namespaceOverride: connectors
@@ -71,13 +65,196 @@ connector-cadsus:
   fullnameOverride: connector-cadsus
   image: { repository: sus-nexus/connector-cadsus }
   connector: { id: cadsus, sourceSystem: CADSUS, ingestTopic: sus.ingest.pec.v1, tenantId: ibge_3143302, pollInterval: PT30M, reconciliationCron: "0 0 5 * * ?", edgeAgent: false }
+# Conectores do runtime genérico com imagem própria (sus-nexus/connectors/Dockerfile, build args
+# CONNECTOR_MODULE/PORT). Autenticam no core por client credentials (`connector-<id>` no Keycloak).
+connector-sisreg:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-sisreg
+  image: { repository: sus-nexus/connector-sisreg }
+  containerPort: 8093
+  service: { port: 8093 }
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 1Gi }]
+  config:
+    PORT: "8093"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8093)
+    QUARKUS_HTTP_PORT: "8093"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+  connector:
+    id: sisreg
+    sourceSystem: SISREG
+    ingestTopic: sus.ingest.regulation.v1
+    tenantId: ibge_3143302
+    pollInterval: PT15M
+    reconciliationCron: "0 0 4 * * ?"
+    edgeAgent: false
+connector-esus-regulacao:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-esus-regulacao
+  image: { repository: sus-nexus/connector-esus-regulacao }
+  containerPort: 8094
+  service: { port: 8094 }
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 1Gi }]
+  config:
+    PORT: "8094"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8094)
+    QUARKUS_HTTP_PORT: "8094"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+  connector:
+    id: esus-regulacao
+    sourceSystem: ESUS_REGULACAO
+    ingestTopic: sus.ingest.regulation.v1
+    tenantId: ibge_3143302
+    pollInterval: PT5M
+    reconciliationCron: "0 30 4 * * ?"
+    edgeAgent: false
+connector-lis:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-lis
+  image: { repository: sus-nexus/connector-lis }
+  containerPort: 8095
+  service: { port: 8095 }
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 1Gi }]
+  config:
+    PORT: "8095"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8095)
+    QUARKUS_HTTP_PORT: "8095"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+    LIS_MLLP_ENABLED: "true"
+    LIS_MLLP_PORT: "2575"
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+  connector:
+    id: lis
+    sourceSystem: LIS
+    ingestTopic: sus.ingest.exam.v1
+    tenantId: ibge_3143302
+    pollInterval: PT1M
+    reconciliationCron: "0 0 4 * * ?"
+    edgeAgent: false
+    mllp:
+      enabled: true
+      port: 2575
+      serviceType: ClusterIP       # LoadBalancer/NodePort para receber da rede dos hospitais/laboratórios
+      allowedSourceCidrs: []       # OBRIGATÓRIO por ambiente: faixas autorizadas a enviar HL7 (MLLP)
 connector-his:
   enabled: false
   namespaceOverride: connectors
   fullnameOverride: connector-his
   image: { repository: sus-nexus/connector-his }
-  connector: { id: his, sourceSystem: HIS, ingestTopic: sus.ingest.pec.v1, tenantId: ibge_3143302, pollInterval: PT1M, reconciliationCron: "0 0 4 * * ?", edgeAgent: true }
-
+  containerPort: 8096
+  service: { port: 8096 }
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 1Gi }]
+  config:
+    PORT: "8096"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8096)
+    QUARKUS_HTTP_PORT: "8096"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+    HIS_MLLP_ENABLED: "true"
+    HIS_MLLP_PORT: "2576"
+    CONNECTOR_EDGE: "{{ .Values.connector.edgeAgent }}"
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+  connector:
+    id: his
+    sourceSystem: HIS
+    ingestTopic: sus.ingest.hospital.v1
+    tenantId: ibge_3143302
+    pollInterval: PT1M
+    reconciliationCron: "0 0 4 * * ?"
+    edgeAgent: true   # true → roda na borda (hospital): chart só gera KafkaUser/ACL; false → workload + MLLP no cluster
+    mllp:
+      enabled: true
+      port: 2576
+      serviceType: ClusterIP       # LoadBalancer/NodePort para receber da rede dos hospitais/laboratórios
+      allowedSourceCidrs: []       # OBRIGATÓRIO por ambiente: faixas autorizadas a enviar HL7 (MLLP)
+connector-ris:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-ris
+  image: { repository: sus-nexus/connector-ris }
+  containerPort: 8097
+  service: { port: 8097 }
+  writableDirs: [{ name: data, mountPath: /app/data, sizeLimit: 1Gi }]
+  config:
+    PORT: "8097"                 # a imagem fixa -Dquarkus.http.port=${PORT} (build arg PORT=8097)
+    QUARKUS_HTTP_PORT: "8097"
+    TENANT_ID: "{{ .Values.connector.tenantId }}"
+    CORE_URL: http://core-municipal.core.svc.cluster.local:8080
+    CORE_AUTH_MODE: oidc
+    KEYCLOAK_URL: "{{ .Values.global.keycloakUrl }}"
+    CORE_CLIENT_ID: "connector-{{ .Values.connector.id }}"
+    RAW_STORE_TYPE: s3
+    RAW_STORE_ENDPOINT: https://minio.data.svc.cluster.local
+    RAW_STORE_BUCKET: raw-zone
+    DLQ_DIR: /app/data/dlq
+    RIS_MLLP_ENABLED: "true"
+    RIS_MLLP_PORT: "2577"
+    CONNECTOR_EDGE: "{{ .Values.connector.edgeAgent }}"
+  externalSecret:
+    data:   # o SDK usa a cadeia padrão AWS (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) para o raw store S3
+      - { secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc", property: client_secret } }
+      - { secretKey: AWS_ACCESS_KEY_ID, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: access_key } }
+      - { secretKey: AWS_SECRET_ACCESS_KEY, remoteRef: { key: "{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3", property: secret_key } }
+  connector:
+    id: ris
+    sourceSystem: RIS
+    ingestTopic: sus.ingest.exam.v1
+    tenantId: ibge_3143302
+    pollInterval: PT1M
+    reconciliationCron: "0 15 4 * * ?"
+    edgeAgent: true   # true → roda na borda (hospital): chart só gera KafkaUser/ACL; false → workload + MLLP no cluster
+    mllp:
+      enabled: true
+      port: 2577
+      serviceType: ClusterIP       # LoadBalancer/NodePort para receber da rede dos hospitais/laboratórios
+      allowedSourceCidrs: []       # OBRIGATÓRIO por ambiente: faixas autorizadas a enviar HL7 (MLLP)
 # ----------------------------------------------------------------------------------------------------
 # Plataforma de dados
 # ----------------------------------------------------------------------------------------------------

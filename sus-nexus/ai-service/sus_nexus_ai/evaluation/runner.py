@@ -3,7 +3,8 @@
 Formato de cada linha::
 
     {"id": "...", "input": {...}, "fixtures": {"regulation_requests": [...],
-     "merge_cases": [...], "exam_orders": [...], "citizen_summaries": [...]}, "expected": {...}}
+     "merge_cases": [...], "exam_orders": [...], "citizen_summaries": [...],
+     "hospital_episodes": [...], "care_gaps": [...]}, "expected": {...}}
 
 O runner executa o agente com ``InMemoryCoreClient`` carregado com os fixtures, política local,
 SQLite em memória e o LLM configurado (fake por padrão) e compara com ``expected``.
@@ -22,8 +23,10 @@ from sus_nexus_ai.llm.client import LLMClient
 from sus_nexus_ai.persistence.schemas import AgentRunRecord, Trigger
 from sus_nexus_ai.service import build_service
 from sus_nexus_ai.tools.core_client import (
+    CareGap,
     CitizenOperationalSummary,
     ExamOrder,
+    HospitalEpisode,
     InMemoryCoreClient,
     MergeCase,
     RegulationRequest,
@@ -96,6 +99,11 @@ def _load_fixtures(core: InMemoryCoreClient, fixtures: dict[str, Any]) -> None:
     for item in fixtures.get("exam_orders", []):
         order = ExamOrder.model_validate(item)
         core.exam_orders[order.id] = order
+    for item in fixtures.get("hospital_episodes", []):
+        episode = HospitalEpisode.model_validate(item)
+        core.hospital_episodes[episode.id] = episode
+    for item in fixtures.get("care_gaps", []):
+        core.care_gaps.append(CareGap.model_validate(item))
     for item in fixtures.get("citizen_summaries", []):
         summary = CitizenOperationalSummary.model_validate(item)
         core.summaries[summary.citizen_id] = summary
@@ -158,20 +166,67 @@ def _compare_mpi(
 def _compare_post_discharge(
     run: AgentRunRecord, expected: dict[str, Any], core: InMemoryCoreClient
 ) -> tuple[dict[str, Any], list[str]]:
+    """v2: resumo informativo; tarefa só como fallback; nunca duplica a do core."""
     out = run.output or {}
-    task_created = any(a.tool == "core.create_task" and a.status == "executed" for a in run.actions)
-    actual = {"risk_level": out.get("risk_level"), "task_created": task_created}
+    executed = [a for a in run.actions if a.tool == "core.create_task" and a.status == "executed"]
+    task = core.tasks[-1] if executed and core.tasks else None
+    actual: dict[str, Any] = {
+        "mode": out.get("mode"),
+        "task_created": bool(executed),
+        "actions": len(run.actions),
+        "attention_codes": [p.get("code") for p in out.get("attention_points", [])],
+        "priority": task.priority if task else None,
+        "assignee_kind": task.assignee.kind if task and task.assignee else None,
+    }
     mismatches = []
-    if expected.get("risk_level") != actual["risk_level"]:
-        mismatches.append("risk_level")
-    if expected.get("task_created") is not None and expected["task_created"] != task_created:
+    if expected.get("mode") != actual["mode"]:
+        mismatches.append("mode")
+    if (
+        expected.get("task_created") is not None
+        and expected["task_created"] != actual["task_created"]
+    ):
         mismatches.append("task_created")
     if (
-        task_created
-        and expected.get("priority")
-        and core.tasks[-1].priority != expected["priority"]
+        expected.get("attention_codes") is not None
+        and expected["attention_codes"] != actual["attention_codes"]
     ):
-        mismatches.append("priority")
+        mismatches.append("attention_codes")
+    for key in ("priority", "assignee_kind"):
+        if expected.get(key) is not None and expected[key] != actual[key]:
+            mismatches.append(key)
+    # Só o fallback gera ação; com tarefa do core (ou óbito) a saída é apenas informativa.
+    if actual["mode"] != "fallback_task" and run.actions:
+        mismatches.append("informative_mode_must_have_no_actions")
+    if len(core.tasks) > 1:
+        mismatches.append("duplicated_task")
+    if actual["mode"] == "summary_only" and core.tasks:
+        mismatches.append("duplicated_core_task")
+    if task is not None:
+        if task.task_type != "post_discharge_followup":
+            mismatches.append("task_shape")
+        if task.origin is None or task.origin.kind != "agent":
+            mismatches.append("task_origin")
+    # Sem conteúdo clínico (CID, linhas de cuidado, hospital) na saída nem na tarefa.
+    blob = " ".join(
+        [
+            str(out.get("summary", "")),
+            str(out.get("suggested_contact_script", "")),
+            " ".join(str(p.get("note", "")) for p in out.get("attention_points", [])),
+            f"{task.title} {task.description}" if task else "",
+        ]
+    )
+    for episode in core.hospital_episodes.values():
+        extra = episode.model_extra or {}
+        raw_lines = extra.get("care_lines")
+        lines = [str(x) for x in raw_lines] if isinstance(raw_lines, list) else []
+        clinical = [episode.principal_diagnosis_cid or "", episode.hospital_name or "", *lines]
+        if any(c and str(c) in blob for c in clinical):
+            mismatches.append("clinical_content_in_output")
+            break
+    if actual["mode"] in {"no_action_deceased", "no_action_not_discharged"} and out.get(
+        "suggested_contact_script"
+    ):
+        mismatches.append("contact_script_without_followup")
     return actual, mismatches
 
 

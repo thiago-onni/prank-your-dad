@@ -5,6 +5,8 @@
 | core.get_citizen_summary      | auto (leitura)    | GET  /citizens/{id}/summary            |
 | core.get_regulation_request   | auto (leitura)    | GET  /regulation/requests/{id}         |
 | core.get_exam_order           | auto (leitura)    | GET  /exams/orders/{id}                |
+| core.get_hospital_episode     | auto (leitura)    | GET  /hospital/episodes/{id}           |
+| core.list_care_gaps           | auto (leitura)    | GET  /caregaps?…                       |
 | core.get_merge_case           | auto (leitura)    | GET  /mpi/cases/{id}                   |
 | core.list_merge_case          | auto (leitura)    | GET  /mpi/cases[/{id}]                 |
 | core.create_task              | auto              | POST /tasks (origin.kind=agent)        |
@@ -36,8 +38,11 @@ from pydantic import BaseModel, Field
 
 from sus_nexus_ai.tools.core_client import (
     AgentOrigin,
+    CareGapPage,
+    CareGapQuery,
     CitizenOperationalSummary,
     ExamOrder,
+    HospitalEpisode,
     IssueKind,
     IssueOrigin,
     MergeCase,
@@ -70,6 +75,10 @@ class GetRegulationRequestInput(BaseModel):
 
 class GetExamOrderInput(BaseModel):
     order_id: str = Field(min_length=1)
+
+
+class GetHospitalEpisodeInput(BaseModel):
+    episode_id: str = Field(pattern=r"^hep_[0-9A-Za-z]+$")
 
 
 class GetMergeCaseInput(BaseModel):
@@ -149,6 +158,24 @@ async def _get_regulation_request(
 async def _get_exam_order(ctx: ToolContext, args: GetExamOrderInput) -> ExamOrder:
     return await ctx.core.get_exam_order(
         args.order_id,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
+
+
+async def _get_hospital_episode(ctx: ToolContext, args: GetHospitalEpisodeInput) -> HospitalEpisode:
+    return await ctx.core.get_hospital_episode(
+        args.episode_id,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
+
+
+async def _list_care_gaps(ctx: ToolContext, args: CareGapQuery) -> CareGapPage:
+    return await ctx.core.list_care_gaps(
+        args,
         token=ctx.token.access_token,
         tenant=ctx.tenant,
         correlation_id=ctx.correlation_id,
@@ -267,6 +294,38 @@ def build_default_registry() -> ToolRegistry:
             action_class="auto",
             scope="exam:order:read",
             handler=_get_exam_order,
+            kind="read",
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="core.get_hospital_episode",
+            description=(
+                "Episódio hospitalar (alta, disposition, LOS, reinternação, risco e versão da "
+                "regra do core, seguimento/tarefa já criada) — o CID nunca vai ao LLM."
+            ),
+            input_model=GetHospitalEpisodeInput,
+            output_model=HospitalEpisode,
+            risk="low",
+            action_class="auto",
+            scope="hospital:episode:read",
+            handler=_get_hospital_episode,
+            kind="read",
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="core.list_care_gaps",
+            description=(
+                "Lacunas de cuidado / busca ativa (GET /caregaps) por linha, tipo, unidade, "
+                "equipe ou microárea; citizen_id opcional filtra no cliente."
+            ),
+            input_model=CareGapQuery,
+            output_model=CareGapPage,
+            risk="low",
+            action_class="auto",
+            scope="careplan:gap:read",
+            handler=_list_care_gaps,
             kind="read",
         )
     )

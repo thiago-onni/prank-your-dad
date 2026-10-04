@@ -82,18 +82,27 @@ Extras: Kafka UI 8086, Connect 8083, OpenBao 8200, LiteLLM 4000, Langfuse 3003, 
 1. Módulo Maven em `sus-nexus/connectors/connector-<id>` (fora deste diretório) + entrada no realm
    (`compose/keycloak/realm-sus-nexus.json`: client `connector-<id>`; rode `helm/scripts/sync-realm.sh`).
 2. Tópico de ingestão em `contracts/events/topics.yaml` (se novo) → `python3 helm/scripts/gen-kafka-topics.py`.
-3. Compose: copie o bloco `connector-pec` em `compose/docker-compose.yml` (porta 8091, 8092, ...).
+3. Compose: copie um bloco do perfil `connectors` (ex.: `connector-lis`) em `compose/docker-compose.yml`
+   (build `../../connectors` com `CONNECTOR_MODULE`/`PORT`; portas 8093–8097, MLLP 2575–2577).
 4. Helm: em `helm/sus-nexus/Chart.yaml` adicione uma dependência com `alias: connector-<id>` (chart
    `sus-nexus-connector`) e o bloco `connector-<id>:` em `values.yaml` (`connector.id`, `sourceSystem`,
    `ingestTopic`, `edgeAgent`); ligue nos `values-<env>.yaml`. O `KafkaUser` + ACLs são gerados
    automaticamente (`templates/kafka-users.yaml`); adicione o alias à lista em `kafka-users.yaml`.
 5. Argo: inclua `connector-<id>: { enabled: true }` no elemento `connectors` de
    `argocd/apps/20-sus-nexus-envs.yaml`.
-6. CI: adicione a linha na matriz `images` de `sus-nexus-ci.yml`/`sus-nexus-release.yml`.
+6. CI: adicione a linha na matriz `images` de `sus-nexus-ci.yml`/`sus-nexus-release.yml`
+   (`context: sus-nexus/connectors`, `dockerfile: Dockerfile`, `build_args: "CONNECTOR_MODULE=<mod>\nPORT=<porta>"`).
 7. Segredos no OpenBao: `secret/<env>/connector-<id>/{oidc,s3,kafka,source}`.
 
 Conector como **agente de borda** (roda dentro da unidade): `connector.edgeAgent: true` — o chart não cria
 workload, só `KafkaUser`/ACL; o agente usa o listener externo mTLS (porta 9095) e sai apenas para o barramento.
+
+Conector com **listener MLLP** (HL7 v2 — LIS 2575, HIS 2576, RIS 2577): `connector.mllp.enabled: true`,
+`connector.mllp.port` e **obrigatoriamente** `connector.mllp.allowedSourceCidrs` (faixas dos
+hospitais/laboratórios; o render falha se vazio). O chart cria o Service TCP `<conector>-mllp`
+(`serviceType` ClusterIP/NodePort/LoadBalancer; em LoadBalancer usa `loadBalancerSourceRanges` e
+`externalTrafficPolicy: Local`) e uma regra na NetworkPolicy que só aceita a porta `mllp` vinda desses
+`ipBlock`s. HIS/RIS vêm com `edgeAgent: true` (borda); em dev rodam no cluster (`edgeAgent: false`).
 
 ## Como adicionar um serviço
 

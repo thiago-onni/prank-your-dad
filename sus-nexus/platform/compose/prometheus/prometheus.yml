@@ -32,8 +32,18 @@ scrape_configs:
   - job_name: connectors
     metrics_path: /q/metrics
     static_configs:
-      - targets: ["connector-pec:8090"]
+      - targets: ["connector-pec:8092"]
         labels: { service: connector-pec, connector_id: pec }
+      - targets: ["connector-sisreg:8093"]
+        labels: { service: connector-sisreg, connector_id: sisreg }
+      - targets: ["connector-esus-regulacao:8094"]
+        labels: { service: connector-esus-regulacao, connector_id: esus-regulacao }
+      - targets: ["connector-lis:8095"]
+        labels: { service: connector-lis, connector_id: lis }
+      - targets: ["connector-his:8096"]
+        labels: { service: connector-his, connector_id: his }
+      - targets: ["connector-ris:8097"]
+        labels: { service: connector-ris, connector_id: ris }
 
   - job_name: ai-service
     metrics_path: /metrics

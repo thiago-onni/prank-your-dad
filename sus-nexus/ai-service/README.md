@@ -54,6 +54,8 @@ Toda chamada ao core leva `Authorization: Bearer <token do agente>`, `X-Tenant-I
 | `core.get_citizen_summary` | auto | low | `GET /api/v1/citizens/{id}/summary` | parâmetro |
 | `core.get_regulation_request` | auto | low | `GET /api/v1/regulation/requests/{id}` (`RegulationRequest`: status, priority, `justification_present`, `attached_documents_count`, `issues[]`, `requesting_cnes`, `specialty`, `requested_service_code`, `sla_due_at`, `waiting_days`) | `regulation` |
 | `core.get_exam_order` | auto | low | `GET /api/v1/exams/orders/{id}` (`ExamOrder` com `issues[]` e `results[]` sem valores) | `care_coordination` |
+| `core.get_hospital_episode` | auto | low | `GET /api/v1/hospital/episodes/{id}` (`HospitalEpisode`: status, disposition, LOS, `readmission_within_30d`, `risk_level`/`risk_rule_version` do core, `followup.task_id`) — CID/hospital/AIH/leito nunca vão ao LLM | `care_coordination` |
+| `core.list_care_gaps` | auto | low | `GET /api/v1/caregaps?care_line&gap_kind&cnes&team_ine&microarea&status&min_days_overdue&cursor&limit` (`CareGap`); `citizen_id` opcional é filtrado **no cliente** (o contrato não tem esse filtro) | `care_coordination` |
 | `core.get_merge_case` / `core.list_merge_case` | auto | low | `GET /api/v1/mpi/cases[/{id}]` (`MergeCase` com `evidence[]`/`conflicts[]`) | `identity_management` |
 | `core.create_task` | auto | low | `POST /api/v1/tasks` (`TaskCreate`, `origin={kind:"agent",id,version}` sempre preenchido pelo handler) | `care_coordination` |
 | `core.create_pending_issue` | **requires_approval** | medium | `POST /api/v1/regulation/requests/{id}/issues` — `{kind, description, origin:{kind:"agent",id,version}}` | `regulation` |
@@ -86,7 +88,7 @@ rebaixar. Contrato OPA: `POST {AI_OPA_URL}/v1/data/sus/agents/decision` com
 | `regulation_completeness` (2.0.0, prompt v2) | `sus.regulation.request.created\|updated` | `{request_id, citizen_id?}` | `missing_items[] {kind, description}`, `summary`, `duplicate_suspected`, `confidence` | `completeness_rules_v2` | um `core.create_pending_issue` (requires_approval) por `kind` faltante → ao aprovar, `POST …/issues` |
 | `exam_critical_result` (1.0.0) | `sus.exam.result.critical_flagged` | `{order_id, result_id?, requesting_cnes?}` | `urgency` (`urgent`/`tracked`/`none`), `rationale`, `create_task` | `exam_critical_rule_v1` | `core.create_task` (auto) `exam_result_followup`, prioridade `urgent`, para a unidade solicitante (`health_unit`) → equipe (`team`) → fila; **só se** nenhum `results[].followup_task_id` existir; título/descrição sem conteúdo clínico (EXA-008) |
 | `mpi_duplicate_suggestion` (2.0.0) | `sus.identity.merge.case_opened` | `{case_id}` | `verdict`, `justification`, `confidence`, `key_evidence` | `duplicate_heuristics_v1` | nenhuma (somente sugestão) |
-| `post_discharge_followup` (1.0.0) | `sus.hospital.discharge.completed` | `{event, reference_team}` | `risk_level`, `risk_score`, `rationale`, `followup_due_days`, `create_task` | `post_discharge_risk_v1` | `core.create_task` (auto) |
+| `post_discharge_followup` (2.0.0, prompt v2) | `sus.hospital.discharge.completed` | `{hospital_episode_id, event_id?, citizen_id?, care_lines?}` | `mode`, `summary`, `suggested_contact_script` (genérico), `attention_points[] {code, note}` — **informativa** | `post_discharge_attention_v2` (risco é do core) | nenhuma quando o core já criou a tarefa; `core.create_task` (auto) **só** como fallback (sem `followup.task_id` e não óbito) |
 
 ### `regulation_completeness` v2 — regra determinística pré-LLM
 
@@ -101,6 +103,28 @@ proíbe acrescentar kinds). `plan_actions` usa a regra, não a saída do LLM, pa
   (pendências `resolved` não bloqueiam);
 * status fora de `{requested, pending_documents, returned, under_review}` → nada a fazer;
 * `citizen_summary.open_regulation_requests >= 2` → `duplicate_suspected` (sinal, sem ação).
+
+### `post_discharge_followup` v2 — o core decide risco e tarefa
+
+Na alta o core já classifica o risco (regra versionada, `risk_level` + `risk_rule_version`, HOS-005)
+e cria a tarefa `post_discharge_followup` (`followup.task_id`). O agente v2 **não recalcula risco**
+(a regra `post_discharge_risk_v1` e o prompt v1 foram aposentados; `prompts/…/v1.md` fica para
+auditoria de runs antigos). Ele lê o episódio, o resumo do cidadão e as lacunas abertas e aplica
+`post_discharge_attention_v2`:
+
+| `mode` | quando | efeito |
+|---|---|---|
+| `no_action_deceased` | `status` ou `disposition` = óbito | nenhuma ação, roteiro vazio |
+| `no_action_not_discharged` | sem alta concluída (internado, transferido, cancelado) | nenhuma ação |
+| `summary_only` | `followup.task_id` existe | só resumo operacional — **não duplica** a tarefa do core |
+| `fallback_task` | alta sem `followup.task_id` | `core.create_task` (auto), prioridade pelo `risk_level` do core (`high→urgent`, `medium→high`, `low→medium`; ausente → `high`), prazo `followup.due_at` ou alta + 2/5/10 dias, para equipe (`reference_team_ine`) → unidade → fila |
+
+`attention_points` vêm da regra: `readmission_30d`, `long_stay` (LOS ≥ 7), `no_valid_contact`
+(resumo ou lacuna com contato inválido), `open_care_gaps`, `active_care_lines`. O contexto do LLM não
+tem CID, nome do hospital, AIH, leito nem nomes de linhas de cuidado (só a contagem); a saída é
+recusada (e re-solicitada) se `summary`/`suggested_contact_script` contiverem algo com formato de
+CID-10. Evals v2 (13 casos) cobrem "não duplicar tarefa do core", "óbito não gera ação", fallback e
+ausência de conteúdo clínico na saída/tarefa.
 
 ## Como adicionar
 
@@ -171,7 +195,7 @@ cd ../contracts && pnpm validate                           # SwaggerParser valid
 | `sus.regulation.request.v1` | `….created`, `….updated` | `regulation_completeness` | `request_id = data.regulation_request_id`, `citizen_id = subject.municipal_citizen_id` |
 | `sus.exam.result.v1` | `….critical_flagged` | `exam_critical_result` | `order_id = data.exam_order_id`, `result_id = data.exam_result_id`, `requesting_cnes` |
 | `sus.identity.merge.v1` | `….case_opened` | `mpi_duplicate_suggestion` | `case_id = data.case_id` |
-| `sus.hospital.discharge.v1` | `….completed` | `post_discharge_followup` | handler anterior mantido (aceita também os nomes do schema `hospital/discharge`) |
+| `sus.hospital.discharge.v1` | `….completed` (`counter_referral_received` é ignorado) | `post_discharge_followup` | `hospital_episode_id = data.hospital_episode_id`, `citizen_id = subject.municipal_citizen_id`, `care_lines = data.care_lines` — o agente relê o episódio no core |
 
 Tenant sempre do envelope (`tenant.municipality_id`); idempotência por `event_id` em
 `agent_event_inbox`. Os envelopes de teste são validados contra `contracts/events/*.schema.json`

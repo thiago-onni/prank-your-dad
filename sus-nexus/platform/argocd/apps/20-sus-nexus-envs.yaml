@@ -79,6 +79,9 @@ spec:
                     connector-cnes: { enabled: true }
                     connector-cadsus: { enabled: true }
                     connector-his: { enabled: true }
+                    connector-esus-regulacao: { enabled: true }
+                    connector-lis: { enabled: true }
+                    connector-ris: { enabled: true }
   template:
     metadata:
       name: "sus-nexus-{{ .env }}-{{ .component }}"
@@ -116,6 +119,9 @@ spec:
             connector-cnes: { enabled: false }
             connector-cadsus: { enabled: false }
             connector-his: { enabled: false }
+            connector-esus-regulacao: { enabled: false }
+            connector-lis: { enabled: false }
+            connector-ris: { enabled: false }
             cnpg: { enabled: false }
             strimzi: { enabled: false }
             kafkaConnect: { enabled: false }

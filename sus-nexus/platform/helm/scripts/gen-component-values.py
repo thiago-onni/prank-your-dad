@@ -240,6 +240,17 @@ CHARTS = {
                 "pollInterval": "PT5M",
                 "reconciliationCron": "0 0 3 * * ?",
                 "edgeAgent": False,   # true → conector roda como agente de borda (fora do cluster); chart só gera KafkaUser/ACL
+                # Listener MLLP (HL7 v2/TCP) — HIS/LIS/RIS. Gera Service `<nome>-mllp` + NetworkPolicy que só
+                # aceita as faixas de `allowedSourceCidrs` (obrigatório quando enabled=true).
+                "mllp": {
+                    "enabled": False,
+                    "port": 2575,
+                    "servicePort": None,
+                    "serviceType": "ClusterIP",   # ClusterIP | NodePort | LoadBalancer (usa loadBalancerSourceRanges)
+                    "nodePort": None,
+                    "serviceAnnotations": {},
+                    "allowedSourceCidrs": [],
+                },
             }
         },
     },

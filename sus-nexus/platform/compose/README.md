@@ -14,6 +14,7 @@ cp .env.example .env
 docker compose --profile infra up -d                # só dependências (rodar serviços pelo IDE)
 docker compose --profile core up -d --build         # infra + core-municipal, fhir-gateway, web-shell, connector-pec
 docker compose --profile core --profile ai up -d    # + ai-service, LiteLLM, Langfuse
+docker compose --profile connectors up -d --build   # infra + core-municipal + SISREG, e-SUS Regulação, LIS, HIS, RIS
 docker compose --profile core --profile observability up -d   # + OTel, Prometheus, Grafana, Loki, Tempo, Metabase
 ```
 
@@ -36,6 +37,10 @@ exportarem telemetria.
 | core-municipal | http://localhost:8080 (`/q/health`, `/q/swagger-ui`) | JWT Keycloak |
 | fhir-gateway | http://localhost:8081/fhir/r4 | JWT Keycloak |
 | connector-pec | http://localhost:8090 | — |
+| connector-sisreg / connector-esus-regulacao | http://localhost:8093 / :8094 | client credentials (`connector-sisreg`, `connector-esus-regulacao`) |
+| connector-lis | http://localhost:8095 · MLLP `localhost:2575` | client credentials `connector-lis` |
+| connector-his (borda) | http://localhost:8096 · MLLP `localhost:2576` | client credentials `connector-his` |
+| connector-ris (borda) | http://localhost:8097 · MLLP `localhost:2577` | client credentials `connector-ris` |
 | web shell | http://localhost:3000 | usuários abaixo |
 | ai-service | http://localhost:8000 (`/health`, `/docs`) | client credentials |
 | PostgreSQL | localhost:5432 | `postgres`/`postgres`; app `sus_nexus`/`sus_nexus` |

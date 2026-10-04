@@ -448,6 +448,11 @@ jobs:
           - { component: core-municipal, context: sus-nexus/core-municipal, dockerfile: Dockerfile, changed: core }
           - { component: fhir-gateway, context: sus-nexus/fhir-gateway, dockerfile: Dockerfile, changed: fhir }
           - { component: connector-pec, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-pec", changed: connectors }
+          - { component: connector-sisreg, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-sisreg\nPORT=8093", changed: connectors }
+          - { component: connector-esus-regulacao, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-esus-regulacao\nPORT=8094", changed: connectors }
+          - { component: connector-lis, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-lis\nPORT=8095", changed: connectors }
+          - { component: connector-his, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-his\nPORT=8096", changed: connectors }
+          - { component: connector-ris, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-ris\nPORT=8097", changed: connectors }
           - { component: web-shell, context: sus-nexus, dockerfile: web/apps/shell/Dockerfile, changed: web }
           - { component: ai-service, context: sus-nexus/ai-service, dockerfile: Dockerfile, changed: ai }
     steps:

@@ -13,10 +13,12 @@ from sus_nexus_ai.config import Settings
 from sus_nexus_ai.security.kill_switch import KillSwitch
 from sus_nexus_ai.service import AIService, build_service
 from sus_nexus_ai.tools.core_client import (
+    CareGap,
     CitizenOperationalSummary,
     CitizenSummary,
     ExamOrder,
     ExamResult,
+    HospitalEpisode,
     InMemoryCoreClient,
     MaskedIdentifier,
     MergeCase,
@@ -32,6 +34,11 @@ CASE_ID = "case_01J8XM01ABCDEFGHJKMNPQRSTV"
 EXAM_ORDER_ID = "exo_01J8XX01ABCDEFGHJKMNPQRSTV"
 EXAM_RESULT_ID = "exr_01J8XY01ABCDEFGHJKMNPQRSTV"
 REQUESTING_CNES = "2143456"
+TEAM_INE = "0001234567"
+EPISODE_ID = "hep_01J8XH01ABCDEFGHJKMNPQRSTV"  # alta sem tarefa do core → fallback
+EPISODE_ID_TRACKED = "hep_01J8XH02ABCDEFGHJKMNPQRSTV"  # alta com tarefa já criada pelo core
+CORE_TASK_ID = "task_01J8XT02ABCDEFGHJKMNPQRSTV"
+DIAGNOSIS_CID = "I50.0"
 
 # PII sintética usada para garantir que NUNCA aparece em prompts/registros.
 PII_NAME = "Maria Aparecida da Silva"
@@ -127,6 +134,56 @@ def exam_order_fixture(**overrides: object) -> ExamOrder:
     return ExamOrder.model_validate(data)
 
 
+def hospital_episode_fixture(**overrides: object) -> HospitalEpisode:
+    """``HospitalEpisode`` conforme o contrato: alta para casa, risco high pela regra do core."""
+    data: dict[str, object] = {
+        "id": EPISODE_ID,
+        "citizen_id": CITIZEN_ID,
+        "hospital_cnes": "7654321",
+        "hospital_name": "Hospital Regional Sintético",
+        "episode_class": "inpatient",
+        "status": "discharged",
+        "admitted_at": "2026-09-22T10:00:00-03:00",
+        "discharged_at": "2026-10-01T15:30:00-03:00",
+        "length_of_stay_days": 9,
+        "disposition": "home",
+        "ward": "Clínica médica",
+        "bed": "12B",
+        "principal_diagnosis_cid": DIAGNOSIS_CID,
+        "aih_number": "3126100012345",
+        "readmission_within_30d": True,
+        "reference_health_unit_cnes": REQUESTING_CNES,
+        "reference_team_ine": TEAM_INE,
+        "risk_level": "high",
+        "risk_rule_version": "hospital_risk_v1",
+        "source_system": "HIS",
+        "source_record_id": "his-991",
+        "version": 3,
+    }
+    data.update(overrides)
+    return HospitalEpisode.model_validate(data)
+
+
+def care_gap_fixture(**overrides: object) -> CareGap:
+    data: dict[str, object] = {
+        "id": "gap_01J8XG01ABCDEFGHJKMNPQRSTV",
+        "citizen_id": CITIZEN_ID,
+        "citizen_display_name": PII_NAME,
+        "care_line": "hipertensao",
+        "gap_kind": "post_discharge_no_contact",
+        "status": "open",
+        "days_overdue": 2,
+        "protocol_id": "has",
+        "protocol_version": "1.0",
+        "health_unit_cnes": REQUESTING_CNES,
+        "team_ine": TEAM_INE,
+        "detected_at": "2026-10-03T08:00:00-03:00",
+        "contact_valid": False,
+    }
+    data.update(overrides)
+    return CareGap.model_validate(data)
+
+
 @pytest.fixture
 def core() -> InMemoryCoreClient:
     client = InMemoryCoreClient()
@@ -139,6 +196,16 @@ def core() -> InMemoryCoreClient:
         team_ine="0001234567",
     )
     client.exam_orders[EXAM_ORDER_ID] = exam_order_fixture()
+    client.hospital_episodes[EPISODE_ID] = hospital_episode_fixture()
+    client.hospital_episodes[EPISODE_ID_TRACKED] = hospital_episode_fixture(
+        id=EPISODE_ID_TRACKED,
+        followup={
+            "status": "pending",
+            "task_id": CORE_TASK_ID,
+            "due_at": "2026-10-03T15:30:00-03:00",
+        },
+    )
+    client.care_gaps.append(care_gap_fixture())
     client.merge_cases[CASE_ID] = MergeCase(
         id=CASE_ID,
         score=0.96,
@@ -185,24 +252,10 @@ def client(settings: Settings, service: AIService) -> Iterator[TestClient]:
         yield test_client
 
 
-def discharge_input(**overrides: object) -> dict[str, object]:
-    event: dict[str, object] = {
-        "citizen_id": CITIZEN_ID,
-        "episode_id": "hep_01J8XH01ABCDEFGHJKMNPQRSTV",
-        "discharged_at": "2026-10-01T15:30:00-03:00",
-        "discharge_type": "home",
-        "length_of_stay_days": 9,
-        "primary_diagnosis_cid10": "I50.0",
-        "readmissions_30d": 1,
-        "age_years": 72,
-        "comorbidities_count": 3,
-        "has_care_plan": False,
-    }
-    event.update(overrides)
-    return {
-        "event": event,
-        "reference_team": {"team_ine": "0001234567", "health_unit_cnes": REQUESTING_CNES},
-    }
+def discharge_input(episode_id: str = EPISODE_ID, **overrides: object) -> dict[str, object]:
+    data: dict[str, object] = {"hospital_episode_id": episode_id}
+    data.update(overrides)
+    return data
 
 
 def approver_headers(roles: str = "agent_approver") -> dict[str, str]:

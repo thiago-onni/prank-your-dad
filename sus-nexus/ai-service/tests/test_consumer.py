@@ -12,7 +12,16 @@ from jsonschema import Draft202012Validator, FormatChecker
 from sus_nexus_ai.consumers.kafka import DEFAULT_TOPICS, AgentEventHandler, EventEnvelope
 from sus_nexus_ai.service import AIService
 from sus_nexus_ai.tools.core_client import InMemoryCoreClient
-from tests.conftest import CASE_ID, CITIZEN_ID, EXAM_ORDER_ID, EXAM_RESULT_ID, REQUEST_ID, TENANT
+from tests.conftest import (
+    CASE_ID,
+    CITIZEN_ID,
+    EPISODE_ID,
+    EPISODE_ID_TRACKED,
+    EXAM_ORDER_ID,
+    EXAM_RESULT_ID,
+    REQUEST_ID,
+    TENANT,
+)
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts" / "events"
 
@@ -39,16 +48,21 @@ def _envelope(event_type: str, data: dict[str, Any], event_id: str, purpose: str
 DISCHARGE_EVENT = _envelope(
     "sus.hospital.discharge.completed",
     {
-        "episode_id": "hep_01J8XH01ABCDEFGHJKMNPQRSTV",
+        "action": "completed",
+        "hospital_episode_id": EPISODE_ID,
+        "hospital_cnes": "7654321",
         "discharged_at": "2026-10-01T15:30:00-03:00",
-        "discharge_type": "home",
+        "admitted_at": "2026-09-22T10:00:00-03:00",
         "length_of_stay_days": 9,
-        "primary_diagnosis_cid10": "I50.0",
-        "readmissions_30d": 1,
-        "age_years": 72,
-        "comorbidities_count": 3,
-        "has_care_plan": False,
-        "reference_team": {"team_ine": "0001234567", "health_unit_cnes": "2143456"},
+        "disposition": "home",
+        "principal_diagnosis": {"system": "CID10", "code": "I50.0"},
+        "readmission_within_30d": True,
+        "followup_plan_present": False,
+        "reference_health_unit_cnes": "2143456",
+        "reference_team_ine": "0001234567",
+        "risk_level": "high",
+        "risk_rule_version": "hospital_risk_v1",
+        "care_lines": ["insuficiencia_cardiaca"],
     },
     "evt_01J8XE01ABCDEFGHJKMNPQRSTV",
     "care_coordination",
@@ -112,11 +126,12 @@ def _schema(path: str) -> Draft202012Validator:
 @pytest.mark.parametrize(
     ("event", "data_schema"),
     [
+        (DISCHARGE_EVENT, "hospital/discharge.v1.schema.json"),
         (REGULATION_EVENT, "regulation/request.v1.schema.json"),
         (EXAM_EVENT, "exam/result.v1.schema.json"),
         (MERGE_EVENT, "identity/merge.v1.schema.json"),
     ],
-    ids=["regulation", "exam", "merge"],
+    ids=["discharge", "regulation", "exam", "merge"],
 )
 def test_example_envelopes_are_valid_against_contracts(
     event: dict[str, Any], data_schema: str
@@ -140,11 +155,35 @@ async def test_discharge_event_triggers_post_discharge_agent(
     service: AIService, core: InMemoryCoreClient
 ) -> None:
     handler = AgentEventHandler(service, consumer_group="ai-service")
+    envelope = EventEnvelope.model_validate(DISCHARGE_EVENT)
+    assert AgentEventHandler.agent_for(envelope) == "post_discharge_followup"
+    assert AgentEventHandler.build_input("post_discharge_followup", envelope) == {
+        "hospital_episode_id": EPISODE_ID,
+        "event_id": DISCHARGE_EVENT["event_id"],
+        "citizen_id": CITIZEN_ID,
+        "care_lines": ["insuficiencia_cardiaca"],
+    }
     run = await handler.handle(json.dumps(DISCHARGE_EVENT).encode())
     assert run is not None and run.status == "completed"
-    assert run.agent_id == "post_discharge_followup"
+    assert run.agent_id == "post_discharge_followup" and run.tenant == TENANT
     assert run.trigger.kind == "event" and run.trigger.ref == DISCHARGE_EVENT["event_id"]
+    assert core.calls[0][0] == "get_hospital_episode" and core.calls[0][2] == TENANT
+    # episódio sem tarefa do core → fallback cria UMA tarefa
     assert len(core.tasks) == 1 and core.tasks[0].citizen_id == CITIZEN_ID
+
+
+async def test_discharge_event_with_core_task_only_summarizes(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    event = {
+        **DISCHARGE_EVENT,
+        "event_id": "evt_01J8XE0CABCDEFGHJKMNPQRSTV",
+        "data": {**DISCHARGE_EVENT["data"], "hospital_episode_id": EPISODE_ID_TRACKED},
+    }
+    run = await AgentEventHandler(service).handle(event)
+    assert run is not None and run.status == "completed"
+    assert run.output is not None and run.output["mode"] == "summary_only"
+    assert run.actions == [] and core.tasks == []
 
 
 async def test_duplicate_event_id_is_idempotent(

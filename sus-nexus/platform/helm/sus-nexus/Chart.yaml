@@ -67,6 +67,21 @@ dependencies:
     repository: file://../charts/sus-nexus-connector
     alias: connector-his
     condition: connector-his.enabled
+  - name: sus-nexus-connector
+    version: 0.1.0
+    repository: file://../charts/sus-nexus-connector
+    alias: connector-esus-regulacao
+    condition: connector-esus-regulacao.enabled
+  - name: sus-nexus-connector
+    version: 0.1.0
+    repository: file://../charts/sus-nexus-connector
+    alias: connector-lis
+    condition: connector-lis.enabled
+  - name: sus-nexus-connector
+    version: 0.1.0
+    repository: file://../charts/sus-nexus-connector
+    alias: connector-ris
+    condition: connector-ris.enabled
   # --- Temporal (chart oficial) ---
   - name: temporal
     version: 0.52.0
