@@ -1,0 +1,17 @@
+{
+  "name": "@sus-nexus/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Contratos do SUS Nexus: JSON Schemas de eventos, OpenAPI do core e tópicos Kafka",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "test": "node scripts/validate.mjs"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.6.0"
+  }
+}

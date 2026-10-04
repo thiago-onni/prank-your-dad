@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/envelope/1.0.0",
+  "title": "SUS Nexus Event Envelope",
+  "description": "Envelope padrão de todo evento publicado no barramento (KAF-001). Mapeável para CloudEvents 1.0: event_id→id, event_type→type, source.connector→source, occurred_at→time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "published_at",
+    "tenant",
+    "source",
+    "data",
+    "privacy",
+    "trace"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID prefixado; imutável e único (KAF-002)."
+    },
+    "event_type": {
+      "type": "string",
+      "pattern": "^sus\\.[a-z][a-z-]*(\\.[a-z][a-z-]*)?\\.[a-z][a-z_]*$",
+      "examples": ["sus.identity.citizen.created", "sus.regulation.request.created", "sus.task.created"]
+    },
+    "event_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "published_at": { "type": "string", "format": "date-time" },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["municipality_id"],
+      "properties": {
+        "municipality_id": { "type": "string", "pattern": "^ibge_[0-9]{7}$" },
+        "health_secretariat_id": { "type": "string" }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cidadão a que o evento se refere. Nunca trafegar CPF/CNS em claro (KAF-009, SEC-007).",
+      "properties": {
+        "municipal_citizen_id": { "type": "string", "pattern": "^cit_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["system", "value_masked"],
+            "properties": {
+              "system": { "type": "string", "enum": ["CNS", "CPF", "PEC", "SISREG", "ESUS_REGULACAO", "HIS", "AIH", "APAC", "LOCAL"] },
+              "value_masked": { "type": "string", "maxLength": 32 },
+              "value_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "connector", "source_record_id"],
+      "properties": {
+        "system": { "type": "string" },
+        "connector": { "type": "string" },
+        "source_record_id": { "type": "string" },
+        "source_record_version": { "type": "string" },
+        "cnes": { "type": "string", "pattern": "^[0-9]{7}$" }
+      }
+    },
+    "data": { "type": "object" },
+    "data_ref": {
+      "type": "string",
+      "format": "uri",
+      "description": "Referência ao payload completo no object storage (raw zone) quando o dado é sensível ou grande."
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "purpose"],
+      "properties": {
+        "classification": { "type": "string", "enum": ["public", "internal", "restricted", "highly_restricted"] },
+        "purpose": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["care_coordination", "regulation", "scheduling", "identity_management", "production_audit", "public_health_surveillance", "management_analytics", "integration_operations", "security_audit"]
+          }
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correlation_id", "schema_version"],
+      "properties": {
+        "correlation_id": { "type": "string", "minLength": 1 },
+        "causation_id": { "type": "string" },
+        "schema_version": { "type": "string" }
+      }
+    },
+    "replay": { "type": "boolean", "default": false }
+  }
+}

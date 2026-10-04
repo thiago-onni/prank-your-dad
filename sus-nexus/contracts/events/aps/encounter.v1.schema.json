@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/aps/encounter/1.0.0",
+  "title": "sus.aps.encounter.* — data",
+  "description": "Atendimento APS (resumo operacional, sem conteúdo clínico detalhado — JOR-008).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "encounter_id", "encounter_class", "status", "start"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "updated"] },
+    "encounter_id": { "type": "string", "pattern": "^enc_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "encounter_class": { "type": "string", "enum": ["aps_individual", "aps_odonto", "aps_home_visit", "aps_procedure", "aps_collective", "emergency", "ambulatory", "inpatient"] },
+    "status": { "type": "string", "enum": ["planned", "in_progress", "finished", "cancelled"] },
+    "health_unit_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "team_ine": { "type": "string" },
+    "professional_cbo": { "type": "string", "pattern": "^[0-9]{6}$" },
+    "professional_id": { "type": "string" },
+    "start": { "type": "string", "format": "date-time" },
+    "end": { "type": "string", "format": "date-time" },
+    "condition_codes": {
+      "type": "array",
+      "description": "Códigos de condição (CID-10/CIAP-2) somente quando a finalidade permitir; classificação highly_restricted exige omissão.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["system", "code"],
+        "properties": {
+          "system": { "type": "string", "enum": ["CID10", "CIAP2"] },
+          "code": { "type": "string" }
+        }
+      }
+    },
+    "referrals_count": { "type": "integer", "minimum": 0 },
+    "exam_orders_count": { "type": "integer", "minimum": 0 },
+    "care_lines": { "type": "array", "items": { "type": "string" } }
+  }
+}

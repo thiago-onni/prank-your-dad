@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/schedule/appointment/1.0.0",
+  "title": "sus.schedule.appointment.* / sus.aps.appointment.* — data",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "appointment_id", "status", "kind", "scheduled_start"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "confirmed", "cancelled", "rescheduled", "attended", "no_show", "duplicate_detected"] },
+    "appointment_id": { "type": "string", "pattern": "^apt_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "status": { "type": "string", "enum": ["proposed", "booked", "confirmed", "arrived", "fulfilled", "cancelled", "noshow", "waitlist"] },
+    "kind": { "type": "string", "enum": ["direct", "regulated", "walk_in", "block", "waitlist", "return"] },
+    "service_code": { "type": "string" },
+    "code_system": { "type": "string", "enum": ["SIGTAP", "LOCAL"] },
+    "health_unit_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "professional_id": { "type": "string" },
+    "scheduled_start": { "type": "string", "format": "date-time" },
+    "scheduled_end": { "type": "string", "format": "date-time" },
+    "regulation_request_id": { "type": "string" },
+    "exam_order_id": { "type": "string" },
+    "care_line": { "type": "string" },
+    "cancellation_reason": { "type": "string" },
+    "previous_status": { "type": "string" }
+  }
+}

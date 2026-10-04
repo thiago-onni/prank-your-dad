@@ -1,0 +1,1306 @@
+openapi: 3.1.0
+info:
+  title: SUS Nexus — Core Municipal API
+  version: 1.0.0
+  description: |
+    API interna do core municipal (Fase 1). Contract-first: o backend implementa e o frontend gera cliente a partir deste arquivo.
+    Autenticação Bearer JWT (Keycloak). Erros em RFC 9457 (application/problem+json). Paginação por cursor.
+servers:
+  - url: http://localhost:8080
+    description: dev local
+security:
+  - bearerAuth: []
+tags:
+  - name: citizens
+  - name: mpi
+  - name: timeline
+  - name: appointments
+  - name: tasks
+  - name: integration
+  - name: terminology
+  - name: reference
+  - name: audit
+  - name: admin
+
+paths:
+  /api/v1/citizens:
+    get:
+      tags: [citizens]
+      summary: Busca de cidadãos
+      operationId: searchCitizens
+      parameters:
+        - name: q
+          in: query
+          description: Nome, nome social ou nome da mãe (busca textual normalizada)
+          schema: { type: string }
+        - name: identifier
+          in: query
+          description: "system|value, ex.: CNS|898001234567890 ou CPF|12345678909"
+          schema: { type: string }
+        - name: birthdate
+          in: query
+          schema: { type: string, format: date }
+        - name: registration_state
+          in: query
+          schema: { $ref: '#/components/schemas/RegistrationState' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: Página de resultados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CitizenSummary' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [citizens]
+      summary: Registrar cidadão vindo de um sistema de origem (porta única de entrada — resolve identidade)
+      operationId: registerCitizen
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CitizenRegistration' }
+      responses:
+        '200':
+          description: Cidadão resolvido (vinculado a existente)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        '201':
+          description: Cidadão criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        '202':
+          description: Correspondência pendente — caso de revisão aberto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}:
+    get:
+      tags: [citizens]
+      summary: Detalhe do cidadão (dados por perfil; identificadores mascarados por padrão)
+      operationId: getCitizen
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CitizenDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/identifiers/{identifierId}/reveal:
+    post:
+      tags: [citizens]
+      summary: Revelar identificador em claro (gera access_log com finalidade; exige papel)
+      operationId: revealIdentifier
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - name: identifierId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, justification]
+              properties:
+                purpose: { $ref: '#/components/schemas/Purpose' }
+                justification: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [system, value]
+                properties:
+                  system: { type: string }
+                  value: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/timeline:
+    get:
+      tags: [timeline]
+      summary: Linha do tempo do cidadão (filtrada por perfil/finalidade no servidor)
+      operationId: getTimeline
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: domain
+          in: query
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/Domain' }
+          style: form
+          explode: false
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TimelineEvent' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/summary:
+    get:
+      tags: [timeline]
+      summary: Resumo operacional (JOR-008) — sem dado clínico além do mínimo
+      operationId: getCitizenSummary
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CitizenOperationalSummary' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases:
+    get:
+      tags: [mpi]
+      summary: Fila de revisão de duplicidades/conflitos
+      operationId: listMergeCases
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MergeCaseStatus' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MergeCase' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}:
+    get:
+      tags: [mpi]
+      operationId: getMergeCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}/merge:
+    post:
+      tags: [mpi]
+      summary: Fundir (MPI-007) — exige justificativa; registra auditoria e evento
+      operationId: mergeCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [surviving_citizen_id, reason]
+              properties:
+                surviving_citizen_id: { type: string }
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}/reject:
+    post:
+      tags: [mpi]
+      summary: Rejeitar correspondência (não são a mesma pessoa)
+      operationId: rejectCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/merges/{mergeId}/unmerge:
+    post:
+      tags: [mpi]
+      summary: Reverter fusão (MPI-007)
+      operationId: unmerge
+      parameters:
+        - name: mergeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/appointments:
+    get:
+      tags: [appointments]
+      summary: Agenda consolidada da rede
+      operationId: listAppointments
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AppointmentStatus' }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Appointment' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [appointments]
+      summary: Registrar agendamento vindo de um sistema de origem
+      operationId: registerAppointment
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentRegistration' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '200':
+          description: Atualizado (mesmo source_record_id)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/appointments/duplicates:
+    get:
+      tags: [appointments]
+      summary: Duplicidades detectadas (AGE-004)
+      operationId: listAppointmentDuplicates
+      parameters:
+        - name: window_hours
+          in: query
+          schema: { type: integer, default: 72 }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AppointmentDuplicate' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaskStatus' }
+        - name: task_type
+          in: query
+          schema: { type: string }
+        - name: assignee_kind
+          in: query
+          schema: { type: string, enum: [user, team, health_unit, queue] }
+        - name: assignee_id
+          in: query
+          schema: { type: string }
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: overdue
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks/{taskId}:
+    get:
+      tags: [tasks]
+      operationId: getTask
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks/{taskId}/transition:
+    post:
+      tags: [tasks]
+      summary: Transição de estado (assign, start, complete, cancel, escalate)
+      operationId: transitionTask
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [assign, start, complete, cancel, escalate] }
+                assignee: { $ref: '#/components/schemas/Assignee' }
+                outcome: { type: string }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/connectors:
+    get:
+      tags: [integration]
+      operationId: listConnectors
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ConnectorStatus' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages:
+    get:
+      tags: [integration]
+      operationId: listIntegrationMessages
+      parameters:
+        - name: connector_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/IntegrationMessage' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages/{messageId}:
+    get:
+      tags: [integration]
+      operationId: getIntegrationMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationMessage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages/{messageId}/reprocess:
+    post:
+      tags: [integration]
+      summary: Reprocessar mensagem (idempotente; efeitos externos suprimidos — KAF-012)
+      operationId: reprocessMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Aceito
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/dlq:
+    get:
+      tags: [integration]
+      operationId: listDeadLetters
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeadLetter' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/reconciliation:
+    get:
+      tags: [integration]
+      operationId: listReconciliation
+      parameters:
+        - name: connector_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReconciliationEntry' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/terminology/{system}/codes:
+    get:
+      tags: [terminology]
+      summary: Consulta de códigos (SIGTAP, CID10, CIAP2, CBO) por competência
+      operationId: searchCodes
+      parameters:
+        - name: system
+          in: path
+          required: true
+          schema: { type: string, enum: [SIGTAP, CID10, CIAP2, CBO] }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: competence
+          in: query
+          description: AAAAMM
+          schema: { type: string, pattern: '^[0-9]{6}$' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Code' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/reference/health-units:
+    get:
+      tags: [reference]
+      operationId: listHealthUnits
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HealthUnit' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/audit/access:
+    get:
+      tags: [audit]
+      summary: Trilha de acessos (DPO)
+      operationId: listAccessLog
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AccessLogEntry' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/admin/rules:
+    get:
+      tags: [admin]
+      summary: Conjuntos de regras versionados (SLA, MPI, protocolos)
+      operationId: listRuleSets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RuleSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    purpose:
+      name: X-Purpose-Of-Use
+      in: header
+      required: true
+      description: Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log.
+      schema: { $ref: '#/components/schemas/Purpose' }
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    citizenId:
+      name: citizenId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^cit_[0-9A-HJKMNP-TV-Z]{26}$' }
+    caseId:
+      name: caseId
+      in: path
+      required: true
+      schema: { type: string }
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: Erro (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Purpose:
+      type: string
+      enum: [care_coordination, regulation, scheduling, identity_management, production_audit, public_health_surveillance, management_analytics, integration_operations, security_audit]
+
+    Domain:
+      type: string
+      enum: [identity, aps, schedule, regulation, exam, hospital, careplan, task, production, communication]
+
+    RegistrationState:
+      type: string
+      enum: [validated, divergent, incomplete, duplicate, pending]
+
+    IdentifierSystem:
+      type: string
+      enum: [CNS, CPF, PEC, SISREG, ESUS_REGULACAO, HIS, AIH, APAC, LOCAL]
+
+    MaskedIdentifier:
+      type: object
+      required: [id, system, value_masked, status, source_system]
+      properties:
+        id: { type: string }
+        system: { $ref: '#/components/schemas/IdentifierSystem' }
+        value_masked: { type: string }
+        status: { type: string, enum: [active, deprecated, invalid] }
+        source_system: { type: string }
+        valid_from: { type: string, format: date-time }
+
+    Provenance:
+      type: object
+      required: [source_system, received_at]
+      properties:
+        source_system: { type: string }
+        source_record_id: { type: string }
+        received_at: { type: string, format: date-time }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    CitizenSummary:
+      type: object
+      required: [id, display_name, registration_state, identifiers]
+      properties:
+        id: { type: string }
+        display_name: { type: string, description: Nome social quando existir }
+        birthdate: { type: string, format: date }
+        sex: { type: string, enum: [female, male, unknown] }
+        mother_name_masked: { type: string }
+        registration_state: { $ref: '#/components/schemas/RegistrationState' }
+        identifiers:
+          type: array
+          items: { $ref: '#/components/schemas/MaskedIdentifier' }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        microarea: { type: string }
+        identity_confidence: { type: string, enum: [confirmed, probable, pending, divergent] }
+
+    CitizenDetail:
+      allOf:
+        - $ref: '#/components/schemas/CitizenSummary'
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer }
+            legal_name: { type: string }
+            social_name: { type: string }
+            mother_name: { type: string }
+            address:
+              type: object
+              properties:
+                street: { type: string }
+                number: { type: string }
+                complement: { type: string }
+                district: { type: string }
+                city_ibge: { type: string }
+                postal_code: { type: string }
+            contacts:
+              type: array
+              items:
+                type: object
+                properties:
+                  kind: { type: string, enum: [phone, mobile, email] }
+                  value_masked: { type: string }
+                  preferred: { type: boolean }
+            attribute_provenance:
+              type: object
+              additionalProperties: { $ref: '#/components/schemas/Provenance' }
+            data_quality_issues:
+              type: array
+              items:
+                type: object
+                properties:
+                  rule: { type: string }
+                  field: { type: string }
+                  message: { type: string }
+
+    CitizenRegistration:
+      type: object
+      required: [source, demographics]
+      properties:
+        source:
+          type: object
+          required: [system, connector, source_record_id]
+          properties:
+            system: { type: string }
+            connector: { type: string }
+            source_record_id: { type: string }
+            source_record_version: { type: string }
+            cnes: { type: string }
+        identifiers:
+          type: array
+          items:
+            type: object
+            required: [system, value]
+            properties:
+              system: { $ref: '#/components/schemas/IdentifierSystem' }
+              value: { type: string }
+        demographics:
+          type: object
+          required: [legal_name, birthdate]
+          properties:
+            legal_name: { type: string }
+            social_name: { type: string }
+            mother_name: { type: string }
+            father_name: { type: string }
+            birthdate: { type: string, format: date }
+            sex: { type: string, enum: [female, male, unknown] }
+            race_color: { type: string }
+            nationality: { type: string }
+            deceased: { type: boolean }
+            deceased_at: { type: string, format: date }
+        address:
+          type: object
+          properties:
+            street: { type: string }
+            number: { type: string }
+            complement: { type: string }
+            district: { type: string }
+            city_ibge: { type: string }
+            postal_code: { type: string }
+        contacts:
+          type: array
+          items:
+            type: object
+            required: [kind, value]
+            properties:
+              kind: { type: string, enum: [phone, mobile, email] }
+              value: { type: string }
+        territory:
+          type: object
+          properties:
+            health_unit_cnes: { type: string }
+            team_ine: { type: string }
+            microarea: { type: string }
+
+    IdentityResolution:
+      type: object
+      required: [municipal_citizen_id, classification, method]
+      properties:
+        municipal_citizen_id: { type: string }
+        classification: { type: string, enum: [confirmed, probable, pending, rejected, new] }
+        method: { type: string }
+        score: { type: number }
+        rule_version: { type: string }
+        merge_case_id: { type: string }
+        registration_state: { $ref: '#/components/schemas/RegistrationState' }
+
+    MergeCaseStatus:
+      type: string
+      enum: [open, in_review, merged, rejected, unmerged]
+
+    MergeCase:
+      type: object
+      required: [id, status, candidates, opened_at]
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/MergeCaseStatus' }
+        reason: { type: string }
+        score: { type: number }
+        rule_version: { type: string }
+        candidates:
+          type: array
+          minItems: 2
+          items: { $ref: '#/components/schemas/CitizenSummary' }
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              attribute: { type: string }
+              comparison: { type: string }
+              agreement: { type: string, enum: [agree, disagree, missing] }
+              weight: { type: number }
+        conflicts:
+          type: array
+          description: Divergências relevantes (CNS, CPF, data de nascimento) que impedem fusão automática
+          items: { type: string }
+        opened_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string }
+        decision_reason: { type: string }
+        merge_id: { type: string }
+
+    AppointmentStatus:
+      type: string
+      enum: [proposed, booked, confirmed, arrived, fulfilled, cancelled, noshow, waitlist]
+
+    Appointment:
+      type: object
+      required: [id, citizen_id, status, kind, scheduled_start, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        kind: { type: string, enum: [direct, regulated, walk_in, block, waitlist, return] }
+        service_code: { type: string }
+        code_system: { type: string }
+        service_description: { type: string }
+        health_unit_cnes: { type: string }
+        professional_id: { type: string }
+        scheduled_start: { type: string, format: date-time }
+        scheduled_end: { type: string, format: date-time }
+        regulation_request_id: { type: string }
+        exam_order_id: { type: string }
+        care_line: { type: string }
+        cancellation_reason: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/AppointmentStatus' }
+              occurred_at: { type: string, format: date-time }
+              reason: { type: string }
+
+    AppointmentRegistration:
+      type: object
+      required: [source, citizen_ref, status, kind, scheduled_start]
+      properties:
+        source:
+          type: object
+          required: [system, connector, source_record_id]
+          properties:
+            system: { type: string }
+            connector: { type: string }
+            source_record_id: { type: string }
+            source_record_version: { type: string }
+            cnes: { type: string }
+        citizen_ref:
+          type: object
+          description: municipal_citizen_id OU identificador de origem para resolução
+          properties:
+            municipal_citizen_id: { type: string }
+            identifier_system: { $ref: '#/components/schemas/IdentifierSystem' }
+            identifier_value: { type: string }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        kind: { type: string, enum: [direct, regulated, walk_in, block, waitlist, return] }
+        service_code: { type: string }
+        code_system: { type: string }
+        health_unit_cnes: { type: string }
+        professional_id: { type: string }
+        scheduled_start: { type: string, format: date-time }
+        scheduled_end: { type: string, format: date-time }
+        occurred_at: { type: string, format: date-time }
+        regulation_request_id: { type: string }
+        exam_order_id: { type: string }
+        cancellation_reason: { type: string }
+
+    AppointmentDuplicate:
+      type: object
+      required: [citizen_id, appointments, detected_at]
+      properties:
+        citizen_id: { type: string }
+        service_code: { type: string }
+        appointments:
+          type: array
+          items: { $ref: '#/components/schemas/Appointment' }
+        detected_at: { type: string, format: date-time }
+
+    TaskStatus:
+      type: string
+      enum: [open, assigned, in_progress, completed, cancelled, escalated]
+
+    Assignee:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [user, team, health_unit, queue] }
+        id: { type: string }
+
+    Task:
+      type: object
+      required: [id, task_type, status, priority, created_at]
+      properties:
+        id: { type: string }
+        task_type: { type: string }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        title: { type: string }
+        description: { type: string }
+        citizen_id: { type: string }
+        assignee: { $ref: '#/components/schemas/Assignee' }
+        due_at: { type: string, format: date-time }
+        sla_policy_id: { type: string }
+        overdue: { type: boolean }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [workflow, agent, user, rule, connector] }
+            id: { type: string }
+            version: { type: string }
+        outcome: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+
+    TaskCreate:
+      type: object
+      required: [task_type, priority, title]
+      properties:
+        task_type: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        title: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        citizen_id: { type: string }
+        assignee: { $ref: '#/components/schemas/Assignee' }
+        due_at: { type: string, format: date-time }
+        sla_policy_id: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [workflow, agent, user, rule, connector] }
+            id: { type: string }
+            version: { type: string }
+
+    ConnectorStatus:
+      type: object
+      required: [connector_id, connector_version, source_system, health]
+      properties:
+        connector_id: { type: string }
+        connector_version: { type: string }
+        source_system: { type: string }
+        health: { type: string, enum: [healthy, degraded, down, unknown] }
+        last_message_at: { type: string, format: date-time }
+        received_24h: { type: integer }
+        failed_24h: { type: integer }
+        dlq_open: { type: integer }
+        reconciliation_gap: { type: integer }
+
+    IntegrationMessageStatus:
+      type: string
+      enum: [received, transformed, validated, published, processed, failed, dead_lettered, reprocessing]
+
+    IntegrationMessage:
+      type: object
+      required: [id, connector_id, source_system, status, received_at]
+      properties:
+        id: { type: string }
+        connector_id: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        entity_type: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        raw_ref: { type: string, description: Referência à raw zone (object storage) }
+        raw_sha256: { type: string }
+        correlation_id: { type: string }
+        received_at: { type: string, format: date-time }
+        processed_at: { type: string, format: date-time }
+        attempts: { type: integer }
+        last_error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            stage: { type: string }
+            occurred_at: { type: string, format: date-time }
+
+    DeadLetter:
+      type: object
+      required: [id, message_id, reason, attempts, created_at]
+      properties:
+        id: { type: string }
+        message_id: { type: string }
+        topic: { type: string }
+        reason: { type: string }
+        stage: { type: string }
+        attempts: { type: integer }
+        owner: { type: string }
+        payload_ref: { type: string }
+        created_at: { type: string, format: date-time }
+        triaged_at: { type: string, format: date-time }
+
+    ReconciliationEntry:
+      type: object
+      required: [connector_id, entity_type, period_start, period_end, source_count, bus_count, gap]
+      properties:
+        connector_id: { type: string }
+        entity_type: { type: string }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        source_count: { type: integer }
+        bus_count: { type: integer }
+        gap: { type: integer }
+        checked_at: { type: string, format: date-time }
+
+    Code:
+      type: object
+      required: [system, code, display]
+      properties:
+        system: { type: string }
+        code: { type: string }
+        display: { type: string }
+        competence_from: { type: string }
+        competence_to: { type: string }
+        attributes:
+          type: object
+          additionalProperties: true
+
+    HealthUnit:
+      type: object
+      required: [id, cnes, name]
+      properties:
+        id: { type: string }
+        cnes: { type: string }
+        name: { type: string }
+        kind_code: { type: string }
+        kind_description: { type: string }
+        address: { type: string }
+        active: { type: boolean }
+
+    TimelineEvent:
+      type: object
+      required: [id, citizen_id, domain, event_type, occurred_at, recorded_at, source_system, status]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        domain: { $ref: '#/components/schemas/Domain' }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        recorded_at: { type: string, format: date-time }
+        source_system: { type: string }
+        cnes: { type: string }
+        health_unit_name: { type: string }
+        professional_ref: { type: string }
+        status: { type: string }
+        confidence: { type: string, enum: [confirmed, pending, divergent, unsynced] }
+        sensitivity: { type: string, enum: [public, internal, restricted, highly_restricted] }
+        summary: { type: string }
+        detail_ref: { type: string }
+        correlation_chain:
+          type: array
+          items: { type: string }
+
+    CitizenOperationalSummary:
+      type: object
+      required: [citizen_id]
+      properties:
+        citizen_id: { type: string }
+        last_aps_encounter_at: { type: string, format: date-time }
+        next_appointment_at: { type: string, format: date-time }
+        open_tasks: { type: integer }
+        open_regulation_requests: { type: integer }
+        pending_exams: { type: integer }
+        last_hospital_discharge_at: { type: string, format: date-time }
+        care_lines: { type: array, items: { type: string } }
+        care_gaps: { type: integer }
+        contact_valid: { type: boolean }
+
+    AccessLogEntry:
+      type: object
+      required: [id, actor_id, action, resource_type, occurred_at, purpose]
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        actor_roles: { type: array, items: { type: string } }
+        action: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        citizen_id: { type: string }
+        purpose: { $ref: '#/components/schemas/Purpose' }
+        decision: { type: string, enum: [allow, deny] }
+        break_glass: { type: boolean }
+        correlation_id: { type: string }
+        occurred_at: { type: string, format: date-time }
+
+    RuleSet:
+      type: object
+      required: [id, name, current_version, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        current_version: { type: string }
+        status: { type: string, enum: [draft, in_review, approved, active, revoked] }
+        effective_from: { type: string, format: date-time }
+        approved_by: { type: string }
