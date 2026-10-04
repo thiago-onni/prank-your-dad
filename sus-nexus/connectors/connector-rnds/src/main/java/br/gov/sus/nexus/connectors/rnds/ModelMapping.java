@@ -17,14 +17,18 @@ public record ModelMapping(
     BundleSpec bundle,
     CompositionSpec composition,
     IdentifierSystems identifierSystems,
+    TargetSystems targetSystems,
     Map<String, String> codeSystems,
+    ObservationSpec observation,
+    ReplacementSpec replacement,
     Map<String, ResourceSpec> resources,
     StripSpec strip,
     List<RequiredRule> required) {
 
   public static final Set<String> BUNDLE_TYPES = Set.of("document", "transaction");
   public static final Set<String> CHECKS =
-      Set.of("present", "cnes", "cns_or_cpf", "datetime", "one_of", "min_count");
+      Set.of("present", "cnes", "cns", "cpf", "cns_or_cpf", "datetime", "one_of", "min_count");
+  public static final Set<String> IDENTIFIER_VALUES = Set.of("source_id", "source_id_version");
   public static final Set<String> MODES = Set.of("entry", "logical", "omit");
 
   public ModelMapping {
@@ -34,8 +38,17 @@ public record ModelMapping(
     strip = strip == null ? new StripSpec(List.of(), List.of(), List.of()) : strip;
   }
 
-  /** Forma do Bundle. {@code identifierSystem} aceita o marcador {@code {solicitante}}. */
-  public record BundleSpec(String type, String profile, String identifierSystem) {}
+  /**
+   * Forma do Bundle. {@code identifierSystem} aceita o marcador {@code {solicitante}}; {@code
+   * identifierValue}: {@code source_id} (id canônico do registro — o MESMO em envio e substituição,
+   * como exige o guia da RNDS) ou {@code source_id_version} ({@code <id>-v<versionId>}).
+   */
+  public record BundleSpec(
+      String type, String profile, String identifierSystem, String identifierValue) {
+    public String identifierValueOrDefault() {
+      return identifierValue == null ? "source_id" : identifierValue;
+    }
+  }
 
   /** Composition (apenas Bundle {@code document}). */
   public record CompositionSpec(
@@ -43,8 +56,48 @@ public record ModelMapping(
 
   public record CodingSpec(String system, String code, String display) {}
 
-  /** NamingSystems nacionais. */
+  /** NamingSystems dos identificadores nos recursos LIDOS do fhir-gateway (origem). */
   public record IdentifierSystems(String cns, String cpf, String cnes) {}
+
+  /**
+   * Sistemas de identificador usados nas referências lógicas DENTRO do Bundle enviado (destino).
+   * Ausente = mesmos de {@link IdentifierSystems}; campo nulo = identificador não permitido pelo
+   * perfil (ex.: CPF do paciente no REL).
+   */
+  public record TargetSystems(String patientCns, String patientCpf, String cnes) {}
+
+  /**
+   * Observation do REL ({@code BRDiagnosticoLaboratorioClinico}): construída só com os elementos
+   * permitidos pelo perfil.
+   *
+   * @param status status enviado (o EHR exige {@code final}: EHR-ERR924)
+   * @param categorySystem CodeSystem de {@code category} (BRSubgrupoTabelaSUS)
+   * @param categoryFromSystem sistema do código SIGTAP de onde se deriva o subgrupo (4 dígitos)
+   * @param defaultCategory subgrupo quando não há código SIGTAP (nulo = pré-validação reprova)
+   * @param codeSystemMap sistema de origem → sistema do código do exame no Bundle
+   * @param qualitativeSystem CodeSystem de resultado qualitativo/interpretação
+   * @param specimenTypeSystems sistemas aceitos em {@code Specimen.type}
+   */
+  public record ObservationSpec(
+      String status,
+      String categorySystem,
+      String categoryFromSystem,
+      String defaultCategory,
+      Map<String, String> codeSystemMap,
+      String qualitativeSystem,
+      List<String> specimenTypeSystems) {
+    public ObservationSpec {
+      codeSystemMap = codeSystemMap == null ? Map.of() : Map.copyOf(codeSystemMap);
+      specimenTypeSystems =
+          specimenTypeSystems == null ? List.of() : List.copyOf(specimenTypeSystems);
+    }
+  }
+
+  /**
+   * Substituição de documento já aceito: {@code Composition.relatesTo.code} e a referência ao
+   * documento substituído ({@code {protocolo}} = id atribuído pela RNDS, header Location).
+   */
+  public record ReplacementSpec(String code, String targetReference) {}
 
   /**
    * Tratamento de cada tipo de recurso: {@code entry} (incluído no Bundle com {@code profile}),
@@ -77,6 +130,23 @@ public record ModelMapping(
     }
   }
 
+  /** Sistema do CNS do paciente no Bundle (destino). */
+  public String targetPatientCns() {
+    return targetSystems == null ? identifierSystems.cns() : targetSystems.patientCns();
+  }
+
+  /** Sistema do CPF do paciente no Bundle; nulo = CPF não permitido pelo perfil. */
+  public String targetPatientCpf() {
+    return targetSystems == null ? identifierSystems.cpf() : targetSystems.patientCpf();
+  }
+
+  /** Sistema do CNES (estabelecimento) no Bundle. */
+  public String targetCnes() {
+    return targetSystems == null || targetSystems.cnes() == null
+        ? identifierSystems.cnes()
+        : targetSystems.cnes();
+  }
+
   public ResourceSpec resource(String type) {
     ResourceSpec spec = resources.get(type);
     return spec == null ? new ResourceSpec("omit", null) : spec;
@@ -89,6 +159,10 @@ public record ModelMapping(
     if (bundle == null || !BUNDLE_TYPES.contains(bundle.type())) {
       throw new IllegalStateException(
           "mapping " + model + ": bundle.type deve ser um de " + BUNDLE_TYPES);
+    }
+    if (!IDENTIFIER_VALUES.contains(bundle.identifierValueOrDefault())) {
+      throw new IllegalStateException(
+          "mapping " + model + ": bundle.identifier_value deve ser um de " + IDENTIFIER_VALUES);
     }
     if (identifierSystems == null
         || identifierSystems.cns() == null

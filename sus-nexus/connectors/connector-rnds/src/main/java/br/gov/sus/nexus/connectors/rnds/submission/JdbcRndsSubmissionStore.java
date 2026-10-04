@@ -88,6 +88,29 @@ public class JdbcRndsSubmissionStore implements RndsSubmissionStore {
   }
 
   @Override
+  public Optional<RndsSubmission> findLatestAccepted(
+      String model, String sourceId, String exceptEventId) {
+    try (Connection c = dataSource.getConnection();
+        PreparedStatement ps =
+            c.prepareStatement(
+                "SELECT "
+                    + COLUMNS
+                    + " FROM rnds_submission WHERE model = ? AND source_id = ? AND status = ?"
+                    + " AND event_id <> ? ORDER BY updated_at DESC")) {
+      ps.setString(1, model);
+      ps.setString(2, sourceId);
+      ps.setString(3, RndsSubmissionStatus.ACCEPTED.name());
+      ps.setString(4, exceptEventId == null ? "" : exceptEventId);
+      ps.setMaxRows(1);
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? Optional.of(read(rs)) : Optional.empty();
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("falha ao ler rnds_submission", e);
+    }
+  }
+
+  @Override
   public RndsSubmission save(RndsSubmission s) {
     try (Connection c = dataSource.getConnection()) {
       try (PreparedStatement ps =

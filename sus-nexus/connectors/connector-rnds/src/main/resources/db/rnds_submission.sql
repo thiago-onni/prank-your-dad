@@ -16,3 +16,4 @@ CREATE TABLE IF NOT EXISTS rnds_submission (
   submitted_at           TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS ix_rnds_submission_model_created ON rnds_submission (model, created_at);
+CREATE INDEX IF NOT EXISTS ix_rnds_submission_source ON rnds_submission (model, source_id);

@@ -53,7 +53,6 @@ import org.awaitility.Awaitility;
 import org.hl7.fhir.r4.formats.JsonParser;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Composition;
-import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Observation;
 import org.jboss.logmanager.ExtLogRecord;
 import org.junit.jupiter.api.AfterEach;
@@ -67,8 +66,9 @@ class RndsConnectorTest {
   private static final String EHR = "/rnds-ehr/api/fhir/r4/Bundle";
   private static final String AUTH = "/rnds-auth/api/token";
   private static final String MESSAGES = "/api/v1/integration/messages";
+  private static final String RNDS_ID = "eb4fc099-e5e2-4895-9d3b-23a6de2d7324-r3x7";
   private static final String LOCATION =
-      "https://ehr-services.exemplo/api/fhir/r4/Bundle/9b7c2d1e-protocolo-rnds";
+      "https://ehr-services.hmg.saude.gov.br/api/fhir/r4/Bundle/" + RNDS_ID;
 
   @Inject RndsDispatcher dispatcher;
   @Inject RndsSubmissionStore submissions;
@@ -105,12 +105,16 @@ class RndsConnectorTest {
     fhir("Observation/" + Fixtures.DR_ID + "-obs-2", "/fhir/observation-2.json");
     fhir("ServiceRequest/01JE28JT97KB6CQ643DZVMXXQK", "/fhir/service-request.json");
     fhir("Patient/" + Fixtures.PATIENT_ID, "/fhir/patient.json");
+    fhir("Specimen/" + Fixtures.SPECIMEN_ID, "/fhir/specimen.json");
     // Core: ledger espelho, heartbeat e reconciliação
     wm().stubFor(post(urlPathMatching("/api/v1/integration/.*")).willReturn(json(200, "{}")));
     // RNDS: autenticação (HTTPS + certificado de cliente) e EHR
     wm().stubFor(
             get(urlEqualTo(AUTH))
-                .willReturn(json(200, "{\"access_token\":\"rnds-tok\",\"expires_in\":1800}")));
+                .willReturn(
+                    json(
+                        200,
+                        "{\"access_token\":\"rnds-tok\",\"scope\":\"read write\",\"token_type\":\"jwt\",\"expires_in\":1800000}")));
     wm().stubFor(
             post(urlEqualTo(EHR))
                 .willReturn(aResponse().withStatus(201).withHeader("Location", LOCATION)));
@@ -199,56 +203,45 @@ class RndsConnectorTest {
             getRequestedFor(urlEqualTo("/fhir/r4/DiagnosticReport/" + Fixtures.DR_ID))
                 .withHeader("Authorization", equalTo("Bearer kc-token"))
                 .withHeader("X-Tenant-Id", equalTo("ibge_3143302")));
-    // envio à RNDS: token da autenticação mTLS + CPF do solicitante
+    // envio à RNDS: token da autenticação mTLS + CNS do profissional requisitante
     assertThat(ehrPosts()).hasSize(1);
     LoggedRequest post = ehrPosts().get(0);
     assertThat(post.getHeader("X-Authorization-Server")).isEqualTo("Bearer rnds-tok");
-    assertThat(post.getHeader("Authorization")).isEqualTo("52998224725");
+    assertThat(post.getHeader("Authorization")).isEqualTo(Fixtures.REQUESTER_CNS);
     assertThat(post.getHeader("Content-Type")).startsWith("application/fhir+json");
+    wm().verify(getRequestedFor(urlEqualTo("/fhir/r4/Specimen/" + Fixtures.SPECIMEN_ID)));
 
     Bundle bundle = postedBundle();
     assertThat(bundle.getType()).isEqualTo(Bundle.BundleType.DOCUMENT);
     assertThat(bundle.getIdentifier().getSystem())
-        .isEqualTo("http://www.saude.gov.br/fhir/r4/NamingSystem/BRRNDS-2222222");
-    assertThat(bundle.getIdentifier().getValue()).isEqualTo(Fixtures.EXR + "-v2");
-    assertThat(bundle.getEntry()).hasSize(4); // Composition + DiagnosticReport + 2 Observations
+        .isEqualTo("http://www.saude.gov.br/fhir/r4/NamingSystem/BRRNDS-99");
+    assertThat(bundle.getIdentifier().getValue()).isEqualTo(Fixtures.EXR);
+    // Composition + Observation + Specimen + Observation (modelo computacional do REL)
+    assertThat(bundle.getEntry())
+        .extracting(e -> e.getResource().fhirType())
+        .containsExactly("Composition", "Observation", "Specimen", "Observation");
     assertThat(bundle.getEntry()).allMatch(e -> e.getFullUrl().startsWith("urn:uuid:"));
 
     Composition composition = (Composition) bundle.getEntryFirstRep().getResource();
     assertThat(composition.getMeta().getProfile().get(0).getValue())
-        .contains("BRResultadoExameLaboratorial");
+        .endsWith("/BRResultadoExameLaboratorial-1.1");
     assertThat(composition.getSubject().getIdentifier().getSystem())
-        .isEqualTo("http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns");
+        .isEqualTo("http://www.saude.gov.br/fhir/r4/StructureDefinition/BRIndividuo-1.0");
+    assertThat(composition.getSubject().getIdentifier().getValue()).isEqualTo(Fixtures.CNS);
     assertThat(composition.getAuthorFirstRep().getIdentifier().getValue()).isEqualTo("2222222");
-    String reportUrl = bundle.getEntry().get(1).getFullUrl();
     assertThat(composition.getSectionFirstRep().getEntryFirstRep().getReference())
-        .isEqualTo(reportUrl);
+        .isEqualTo(bundle.getEntry().get(1).getFullUrl());
 
-    DiagnosticReport report = (DiagnosticReport) bundle.getEntry().get(1).getResource();
-    assertThat(report.getMeta().getProfile()).hasSize(1);
-    assertThat(report.getMeta().getProfile().get(0).getValue())
-        .contains("BRDiagnosticoLaboratorioClinico");
-    assertThat(report.getStatus()).isEqualTo(DiagnosticReport.DiagnosticReportStatus.FINAL);
-    assertThat(report.getCode().getCodingFirstRep().getCode()).isEqualTo("0202010473");
-    assertThat(report.getSubject().getIdentifier().getValue()).isEqualTo(Fixtures.CNS);
-    assertThat(report.getSubject().hasReference()).isFalse();
-    assertThat(report.getPerformerFirstRep().getIdentifier().getSystem())
-        .isEqualTo("http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes");
-    assertThat(report.getPerformerFirstRep().getIdentifier().getValue()).isEqualTo("1234567");
-    assertThat(report.getResult())
-        .extracting(r -> r.getReference())
-        .containsExactly(
-            bundle.getEntry().get(2).getFullUrl(), bundle.getEntry().get(3).getFullUrl());
-    // nada local: extensões/identificadores do SUS Nexus, basedOn, presentedForm (Binary interno)
-    assertThat(report.getExtension()).isEmpty();
-    assertThat(report.getIdentifier()).isEmpty();
-    assertThat(report.hasBasedOn()).isFalse();
-    assertThat(report.hasPresentedForm()).isFalse();
-    assertThat(report.hasText()).isFalse();
+    Observation obs1 = (Observation) bundle.getEntry().get(1).getResource();
+    assertThat(obs1.getMeta().getProfile().get(0).getValue())
+        .endsWith("/BRDiagnosticoLaboratorioClinico-1.0");
+    assertThat(obs1.getSubject().getIdentifier().getValue()).isEqualTo(Fixtures.CNS);
+    assertThat(obs1.getSubject().hasReference()).isFalse();
+    assertThat(obs1.getPerformerFirstRep().getIdentifier().getValue()).isEqualTo("1234567");
     Observation obs2 = (Observation) bundle.getEntry().get(3).getResource();
     assertThat(obs2.getExtension()).isEmpty();
     assertThat(obs2.hasEncounter()).isFalse();
-    assertThat(obs2.getMeta().getProfile().get(0).getValue()).contains("BRResultadoExame");
+    assertThat(obs2.getSpecimen().getReference()).isEqualTo(bundle.getEntry().get(2).getFullUrl());
     // minimização: nome, nascimento e endereço do paciente nunca vão no Bundle
     String body = ehrPosts().get(0).getBodyAsString();
     assertThat(body)
@@ -260,7 +253,7 @@ class RndsConnectorTest {
 
     RndsSubmission s = submission(eventId);
     assertThat(s.status()).isEqualTo(RndsSubmissionStatus.ACCEPTED);
-    assertThat(s.protocol()).isEqualTo(LOCATION);
+    assertThat(s.protocol()).isEqualTo(RNDS_ID); // id após a última "/" do Location
     assertThat(s.httpStatus()).isEqualTo(201);
     assertThat(s.attempts()).isEqualTo(1);
     assertThat(s.bundleSha256()).hasSize(64);
@@ -292,14 +285,14 @@ class RndsConnectorTest {
     RndsSubmission s = submission(eventId);
     assertThat(s.status()).isEqualTo(RndsSubmissionStatus.INVALID);
     assertThat(s.attempts()).isZero();
-    assertThat(s.outcomeSummary()).contains("patient_identifier").contains("sem CNS nem CPF");
+    assertThat(s.outcomeSummary()).contains("patient_cns").contains("CNS ausente");
     assertThat(ledger.findById(s.integrationMessageId()).orElseThrow().status())
         .isEqualTo(IntegrationMessageStatus.DEAD_LETTERED);
     wm().verify(
             postRequestedFor(urlEqualTo(MESSAGES))
                 .withRequestBody(matchingJsonPath("$.status", equalTo("dead_lettered")))
                 .withRequestBody(
-                    matchingJsonPath("$.dead_letter.reason", containing("patient_identifier"))));
+                    matchingJsonPath("$.dead_letter.reason", containing("patient_cns"))));
   }
 
   @Test
@@ -310,6 +303,10 @@ class RndsConnectorTest {
 
     assertThat(first).isEqualTo("rnds-tok").isEqualTo(second);
     wm().verify(1, getRequestedFor(urlEqualTo(AUTH)));
+    // expires_in=1800000 (ms, Manual v1.2) → válido por ~30 min, não 20 dias
+    assertThat(auth.expiresAt())
+        .isAfter(Instant.now().plus(Duration.ofMinutes(25)))
+        .isBefore(Instant.now().plus(Duration.ofMinutes(31)));
     LoggedRequest req = wm().findAll(getRequestedFor(urlEqualTo(AUTH))).get(0);
     assertThat(req.getAbsoluteUrl()).startsWith("https://");
     assertThat(connector.authenticate().authenticated()).isTrue();
@@ -416,6 +413,116 @@ class RndsConnectorTest {
     // mesmo evento → mesmo Bundle (urn:uuid determinísticos)
     assertThat(ehrPosts().get(0).getBodyAsString().replaceAll("\"timestamp\":\"[^\"]+\"", ""))
         .isEqualTo(ehrPosts().get(1).getBodyAsString().replaceAll("\"timestamp\":\"[^\"]+\"", ""));
+  }
+
+  @Test
+  void resultadoRetificadoSubstituiDocumentoAceitoComRelatesTo() throws IOException {
+    String first = nextEventId();
+    assertThat(
+            dispatcher.handle(
+                "resultado-exame", Fixtures.examResultEvent(first, "available", "final")))
+        .isEqualTo(Outcome.ACCEPTED);
+    assertThat(submission(first).protocol()).isEqualTo(RNDS_ID);
+    Bundle original = postedBundle();
+    assertThat(((Composition) original.getEntryFirstRep().getResource()).hasRelatesTo()).isFalse();
+
+    String amended = nextEventId();
+    Outcome outcome =
+        dispatcher.handle(
+            "resultado-exame", Fixtures.examResultEvent(amended, "available", "amended"));
+
+    assertThat(outcome).isEqualTo(Outcome.ACCEPTED);
+    assertThat(ehrPosts()).hasSize(2);
+    Bundle replacement = postedBundle();
+    // guia "Alterar resultado": mesmo Bundle.identifier + relatesTo replaces Composition/<id RNDS>
+    assertThat(replacement.getIdentifier().getValue())
+        .isEqualTo(original.getIdentifier().getValue());
+    Composition c = (Composition) replacement.getEntryFirstRep().getResource();
+    assertThat(c.getRelatesToFirstRep().getCode())
+        .isEqualTo(Composition.DocumentRelationshipType.REPLACES);
+    assertThat(c.getRelatesToFirstRep().getTargetReference().getReference())
+        .isEqualTo("Composition/" + RNDS_ID);
+    assertThat(((Observation) replacement.getEntry().get(1).getResource()).getStatus())
+        .isEqualTo(Observation.ObservationStatus.FINAL); // EHR-ERR924
+  }
+
+  @Test
+  void retentativaCom422IdentifierRepetidoContaComoAceito() {
+    wm().stubFor(
+            post(urlEqualTo(EHR))
+                .inScenario("perdida")
+                .whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(aResponse().withStatus(504))
+                .willSetStateTo("duplicado"));
+    wm().stubFor(
+            post(urlEqualTo(EHR))
+                .inScenario("perdida")
+                .whenScenarioStateIs("duplicado")
+                .willReturn(
+                    json(
+                        422,
+                        """
+                        {"resourceType":"OperationOutcome","issue":[{"severity":"error",
+                         "code":"processing","diagnostics":"(EHR-ERR866) O identifier informado \
+                        já foi utilizado para cadastrar outro documento e não pode ser repetido."}]}
+                        """)));
+    String eventId = nextEventId();
+
+    Outcome outcome =
+        dispatcher.handle(
+            "resultado-exame", Fixtures.examResultEvent(eventId, "available", "final"));
+
+    assertThat(outcome).isEqualTo(Outcome.ACCEPTED);
+    assertThat(ehrPosts()).hasSize(2);
+    RndsSubmission s = submission(eventId);
+    assertThat(s.status()).isEqualTo(RndsSubmissionStatus.ACCEPTED);
+    assertThat(s.protocol()).isNull();
+    assertThat(s.outcomeSummary()).contains("EHR-ERR866");
+  }
+
+  @Test
+  void identifierRepetidoNaPrimeiraTentativaERejeicao() {
+    wm().stubFor(
+            post(urlEqualTo(EHR))
+                .willReturn(
+                    json(
+                        422,
+                        "{\"resourceType\":\"OperationOutcome\",\"issue\":[{\"severity\":\"error\","
+                            + "\"code\":\"processing\",\"diagnostics\":\"(EHR-ERR866) repetido\"}]}")));
+    String eventId = nextEventId();
+
+    assertThat(
+            dispatcher.handle(
+                "resultado-exame", Fixtures.examResultEvent(eventId, "available", "final")))
+        .isEqualTo(Outcome.DEAD_LETTERED);
+    assertThat(submission(eventId).status()).isEqualTo(RndsSubmissionStatus.REJECTED);
+  }
+
+  @Test
+  void tokenExpiradoNoEhr401RenovaTokenERetenta() {
+    wm().stubFor(
+            post(urlEqualTo(EHR))
+                .inScenario("expirado")
+                .whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(
+                    json(
+                        401,
+                        "{\"resourceType\":\"OperationOutcome\",\"issue\":[{\"severity\":\"error\","
+                            + "\"code\":\"security\",\"diagnostics\":\"(EHR-ERR882) JWT expired\"}]}"))
+                .willSetStateTo("renovado"));
+    wm().stubFor(
+            post(urlEqualTo(EHR))
+                .inScenario("expirado")
+                .whenScenarioStateIs("renovado")
+                .willReturn(aResponse().withStatus(201).withHeader("Location", LOCATION)));
+    String eventId = nextEventId();
+
+    assertThat(
+            dispatcher.handle(
+                "resultado-exame", Fixtures.examResultEvent(eventId, "available", "final")))
+        .isEqualTo(Outcome.ACCEPTED);
+    wm().verify(2, getRequestedFor(urlEqualTo(AUTH)));
+    assertThat(submission(eventId).protocol()).isEqualTo(RNDS_ID);
   }
 
   @Test

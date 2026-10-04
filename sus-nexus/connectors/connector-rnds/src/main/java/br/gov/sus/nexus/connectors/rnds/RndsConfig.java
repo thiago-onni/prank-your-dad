@@ -9,32 +9,53 @@ import java.util.Optional;
 /**
  * Configuração do conector RNDS (prefixo {@code rnds.*}).
  *
- * <p><b>Todos os endereços, cabeçalhos e perfis são parametrizáveis</b>: dependem da documentação
- * oficial vigente da RNDS e da habilitação do município. Os valores em {@code
- * application.properties} são exemplos <i>a confirmar na homologação</i>.
+ * <p>Endereços, cabeçalhos e formato do token seguem o Guia de Integração da RNDS
+ * (rnds-guia.saude.gov.br) e o Manual de Integração do DATASUS v1.2 — fontes e o que ainda depende
+ * de homologação estão no README e em {@code application.properties}.
  */
 @ConfigMapping(prefix = "rnds")
 public interface RndsConfig {
 
-  /** Serviço de autenticação da RNDS (token obtido com o certificado ICP-Brasil via mTLS). */
-  String authUrl();
+  /**
+   * Ambiente da RNDS: {@code homologacao} (único para o Brasil) ou {@code producao} (EHR por UF).
+   * Seleciona {@code endpoints.<ambiente>}.
+   */
+  @WithDefault("homologacao")
+  String environment();
 
-  /** Base do serviço EHR da RNDS (o caminho do recurso vem de {@code models.<m>.ehr-path}). */
-  String ehrUrl();
+  /**
+   * UF (sigla minúscula, ex.: {@code mg}) dos estabelecimentos credenciados: em produção o EHR é
+   * {@code https://<uf>-ehr-services.saude.gov.br/api} e a credencial só vale para essa UF.
+   */
+  Optional<String> uf();
 
-  /** CPF do profissional responsável (solicitante), enviado em {@link Headers#requester()}. */
-  Optional<String> requesterCpf();
+  /** Endereços oficiais por ambiente (chave = {@link #environment()}). */
+  Map<String, Endpoint> endpoints();
 
-  /** CNES do estabelecimento solicitante (autor do documento / identificador do Bundle). */
+  /** Sobrescreve o endereço do token do ambiente (testes/proxy). */
+  Optional<String> authUrl();
+
+  /** Sobrescreve a base do EHR do ambiente (testes/proxy). */
+  Optional<String> ehrUrl();
+
+  /**
+   * CNS do profissional de saúde, lotado no estabelecimento credenciado, em nome do qual as
+   * requisições são feitas — enviado em {@link Headers#requester()} ({@code Authorization}).
+   */
+  Optional<String> requesterCns();
+
+  /** CNES do estabelecimento (autor da Composition). */
   Optional<String> cnesSolicitante();
 
   /**
-   * Identificador do solicitante usado no sistema do identificador do Bundle ({@code {solicitante}}
-   * em {@code bundle.identifier_system}); padrão = {@link #cnesSolicitante()}.
+   * Identificador do solicitante atribuído pela RNDS na aprovação da solicitação de acesso (Portal
+   * de Serviços do DATASUS) — {@code {solicitante}} em {@code BRRNDS-{solicitante}}. Não é o CNES.
    */
   Optional<String> solicitanteId();
 
-  @WithDefault("RNDS (versão da documentação oficial a confirmar na homologação)")
+  @WithDefault(
+      "RNDS: Guia de Integração (rnds-guia.saude.gov.br) + Manual de Integração DATASUS v1.2;"
+          + " REL BRResultadoExameLaboratorial-1.1")
   String sourceVersion();
 
   Auth auth();
@@ -58,8 +79,18 @@ public interface RndsConfig {
 
   Reconciliation reconciliation();
 
+  /** Endereços de um ambiente; {@code {uf}} em {@code ehr-url} é trocado por {@link #uf()}. */
+  interface Endpoint {
+    String authUrl();
+
+    String ehrUrl();
+  }
+
   interface Auth {
-    /** Método HTTP do endpoint de token ({@code GET} ou {@code POST}). */
+    /**
+     * Método HTTP do endpoint de token: {@code GET /api/token} (guia e coleção Postman oficial; o
+     * Manual v1.2 cita POST, que responde 405).
+     */
     @WithDefault("GET")
     String method();
 
@@ -67,13 +98,24 @@ public interface RndsConfig {
     @WithDefault("access_token")
     String tokenField();
 
-    /** Campo JSON com a validade em segundos (quando ausente usa {@link #defaultTtl()}). */
+    /** Campo JSON com a validade (quando ausente usa {@link #defaultTtl()}). */
     @WithDefault("expires_in")
     String expiresInField();
 
+    /**
+     * Unidade de {@link #expiresInField()} ({@link java.time.temporal.ChronoUnit}): o Manual v1.2
+     * documenta {@code "expires_in": 1800000} para um token de 30 minutos → {@code MILLIS}.
+     */
+    @WithDefault("MILLIS")
+    String expiresInUnit();
+
     /** Validade assumida quando a resposta não informa expiração. */
-    @WithDefault("PT25M")
+    @WithDefault("PT30M")
     Duration defaultTtl();
+
+    /** Teto da validade (o token da RNDS vale 30 minutos), contra unidade/valor inesperado. */
+    @WithDefault("PT30M")
+    Duration maxTtl();
 
     /** Folga antes da expiração para renovar o token. */
     @WithDefault("PT60S")
@@ -89,7 +131,7 @@ public interface RndsConfig {
     @WithDefault("Bearer")
     String tokenScheme();
 
-    /** Cabeçalho que leva o CPF do solicitante. */
+    /** Cabeçalho que leva o CNS do profissional requisitante. */
     @WithDefault("Authorization")
     String requester();
 

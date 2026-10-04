@@ -40,6 +40,12 @@ class JdbcRndsSubmissionStoreTest {
     assertThat(read.integrationMessageId()).isEqualTo("msg_1");
     assertThat(store.list("resultado-exame", Period.last(Duration.ofMinutes(5)))).hasSize(1);
     assertThat(store.list("sumario-alta", null)).isEmpty();
+    // substituição: último aceito do mesmo registro, de outro evento
+    assertThat(store.findLatestAccepted("resultado-exame", Fixtures.EXR, "evt_2"))
+        .map(RndsSubmission::protocol)
+        .contains("loc-1");
+    assertThat(store.findLatestAccepted("resultado-exame", Fixtures.EXR, "evt_1")).isEmpty();
+    assertThat(store.findLatestAccepted("sumario-alta", Fixtures.EXR, "evt_2")).isEmpty();
     store.clear();
     assertThat(store.findByEventId("evt_1")).isEmpty();
   }

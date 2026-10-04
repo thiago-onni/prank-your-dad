@@ -12,15 +12,30 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 /**
- * Envio do Bundle ao serviço EHR da RNDS: {@code POST {rnds.ehr-url}{ehr-path}} com o token no
- * cabeçalho {@code rnds.headers.token} e o CPF do solicitante em {@code rnds.headers.requester}
- * (nomes a confirmar na homologação). Falhas de rede/timeout viram erro transitório.
+ * Envio do Bundle ao serviço EHR da RNDS: {@code POST <ehr>/api/fhir/r4/Bundle} com {@code
+ * X-Authorization-Server: Bearer <access_token>} e {@code Authorization: <CNS do profissional>}
+ * (Guia de Integração, "Conheça os serviços"; coleção Postman oficial do DATASUS v4). Aceite = 201
+ * com o id atribuído pela RNDS no header {@code Location}/{@code Content-Location} ({@code
+ * .../r4/Bundle/<id>}). Falhas de rede/timeout viram erro transitório.
  */
 @ApplicationScoped
 public class RndsEhrClient {
 
   /** Resposta crua do EHR (corpo pode ser {@code OperationOutcome}). */
-  public record EhrResponse(int status, Optional<String> location, String body) {}
+  public record EhrResponse(int status, Optional<String> location, String body) {
+
+    /**
+     * Id atribuído pela RNDS ao documento: segmento após a última "/" do {@code Location} (guia,
+     * "Homologar": {@code .../r4/Bundle/eb4fc099-...-r3x7}).
+     */
+    public Optional<String> rndsId() {
+      return location
+          .map(String::trim)
+          .map(l -> l.endsWith("/") ? l.substring(0, l.length() - 1) : l)
+          .map(l -> l.substring(l.lastIndexOf('/') + 1))
+          .filter(id -> !id.isBlank());
+    }
+  }
 
   private final RndsConfig config;
   private final RndsAuthClient auth;
@@ -34,18 +49,18 @@ public class RndsEhrClient {
   public EhrResponse post(String ehrPath, String bundleJson) {
     String requester =
         config
-            .requesterCpf()
+            .requesterCns()
             .map(Documents::digits)
             .filter(c -> !c.isBlank())
             .orElseThrow(
                 () ->
                     ConnectorException.transientError(
-                        "publish", "rnds.requester-cpf não configurado", null));
+                        "publish", "rnds.requester-cns não configurado", null));
     String token = auth.token();
     String scheme = config.headers().tokenScheme();
     String tokenValue = scheme == null || scheme.isBlank() ? token : scheme.trim() + " " + token;
     HttpRequest request =
-        HttpRequest.newBuilder(URI.create(join(config.ehrUrl(), ehrPath)))
+        HttpRequest.newBuilder(URI.create(join(RndsEndpoints.ehrUrl(config), ehrPath)))
             .timeout(config.timeout())
             .header("Content-Type", config.headers().contentType())
             .header("Accept", "application/fhir+json, application/json")
@@ -61,7 +76,7 @@ public class RndsEhrClient {
           response
               .headers()
               .firstValue("Location")
-              .or(() -> response.headers().firstValue("location")),
+              .or(() -> response.headers().firstValue("Content-Location")),
           response.body() == null ? "" : response.body());
     } catch (IOException e) {
       throw ConnectorException.transientError(

@@ -15,6 +15,10 @@ final class Fixtures {
   static final String HEP = "hep_01JSSZ5AWSH8VHTPRE95B9EE0Z";
   static final String CNS = "700123456789010";
   static final String CPF = "12345678909";
+  static final String SPECIMEN_ID = "01JM9S346Q3D25VT4F5V37E3S3-spc-1";
+
+  /** CNS do profissional requisitante (%test.rnds.requester-cns). */
+  static final String REQUESTER_CNS = "700000000000005";
 
   private Fixtures() {}
 

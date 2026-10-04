@@ -4,41 +4,87 @@
   "meta": {
     "versionId": "2",
     "lastUpdated": "2026-09-30T14:05:00.000-03:00",
-    "profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusDiagnosticReport"]
+    "profile": [
+      "http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusDiagnosticReport"
+    ]
   },
-  "text": { "status": "generated", "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Laudo de MARIA DA SILVA TESTE</div>" },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Laudo de MARIA DA SILVA TESTE</div>"
+  },
   "extension": [
-    { "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/exam-result-status", "valueCode": "final" },
-    { "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/care-line", "valueString": "diabetes" }
+    {
+      "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/exam-result-status",
+      "valueCode": "final"
+    },
+    {
+      "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/care-line",
+      "valueString": "diabetes"
+    }
   ],
   "identifier": [
-    { "system": "http://sus-nexus.gov.br/fhir/NamingSystem/municipal-exam-result-id", "value": "exr_01JM9S346Q3D25VT4F5V37E3S3" }
+    {
+      "system": "http://sus-nexus.gov.br/fhir/NamingSystem/municipal-exam-result-id",
+      "value": "exr_01JM9S346Q3D25VT4F5V37E3S3"
+    }
   ],
-  "basedOn": [ { "reference": "ServiceRequest/01JE28JT97KB6CQ643DZVMXXQK" } ],
+  "basedOn": [
+    {
+      "reference": "ServiceRequest/01JE28JT97KB6CQ643DZVMXXQK"
+    }
+  ],
   "status": "final",
   "category": [
-    { "coding": [ { "system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "LAB" } ] }
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+          "code": "LAB"
+        }
+      ]
+    }
   ],
   "code": {
     "coding": [
-      { "system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS", "code": "0202010473", "display": "DOSAGEM DE GLICOSE" }
+      {
+        "system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS",
+        "code": "0202010473",
+        "display": "DOSAGEM DE GLICOSE"
+      }
     ]
   },
-  "subject": { "reference": "Patient/01JFBF5KZNWJ47TAN9ZT24MNPZ" },
+  "subject": {
+    "reference": "Patient/01JFBF5KZNWJ47TAN9ZT24MNPZ"
+  },
   "effectiveDateTime": "2026-09-30T08:10:00-03:00",
   "issued": "2026-09-30T14:00:00.000-03:00",
   "performer": [
     {
       "type": "Organization",
-      "identifier": { "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes", "value": "1234567" },
+      "identifier": {
+        "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes",
+        "value": "1234567"
+      },
       "display": "CNES 1234567"
     }
   ],
   "result": [
-    { "reference": "Observation/01JM9S346Q3D25VT4F5V37E3S3-obs-1" },
-    { "reference": "Observation/01JM9S346Q3D25VT4F5V37E3S3-obs-2" }
+    {
+      "reference": "Observation/01JM9S346Q3D25VT4F5V37E3S3-obs-1"
+    },
+    {
+      "reference": "Observation/01JM9S346Q3D25VT4F5V37E3S3-obs-2"
+    }
   ],
   "presentedForm": [
-    { "contentType": "application/pdf", "url": "http://fhir-gateway:8081/fhir/r4/Binary/bin_01JX45HY43KWJRP1XPA7Z3DJ8F" }
+    {
+      "contentType": "application/pdf",
+      "url": "http://fhir-gateway:8081/fhir/r4/Binary/bin_01JX45HY43KWJRP1XPA7Z3DJ8F"
+    }
+  ],
+  "specimen": [
+    {
+      "reference": "Specimen/01JM9S346Q3D25VT4F5V37E3S3-spc-1"
+    }
   ]
 }

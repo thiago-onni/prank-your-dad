@@ -13,12 +13,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.jboss.logging.Logger;
 
 /**
- * Token da RNDS obtido no serviço de autenticação com o certificado digital ICP-Brasil (e-CNPJ)
- * apresentado via mTLS. O token fica em cache até expirar (menos {@code rnds.auth.refresh-skew}). O
- * mesmo {@link HttpClient} (com o certificado) é usado no envio ao EHR.
+ * Token da RNDS: {@code GET <auth>/api/token} com o certificado digital ICP-Brasil (e-CNPJ ou
+ * e-CPF) apresentado via mTLS ("two-way SSL"). Resposta oficial (Manual DATASUS v1.2, cap. 7):
+ * {@code {"access_token": "...", "scope": "read write", "token_type": "jwt", "expires_in":
+ * 1800000}} — 30 minutos (expires_in em milissegundos). O token fica em cache até expirar (menos
+ * {@code rnds.auth.refresh-skew}); o certificado só é exigido aqui, mas o mesmo {@link HttpClient}
+ * é usado no EHR.
  */
 @ApplicationScoped
 public class RndsAuthClient {
@@ -65,7 +69,7 @@ public class RndsAuthClient {
   public synchronized String token() {
     if (token != null && Instant.now().isBefore(expiresAt)) return token;
     HttpRequest.Builder builder =
-        HttpRequest.newBuilder(URI.create(config.authUrl()))
+        HttpRequest.newBuilder(URI.create(RndsEndpoints.authUrl(config)))
             .timeout(config.timeout())
             .header("Accept", "application/json");
     if ("POST".equalsIgnoreCase(config.auth().method())) {
@@ -102,8 +106,11 @@ public class RndsAuthClient {
       }
       Duration ttl =
           body.hasNonNull(config.auth().expiresInField())
-              ? Duration.ofSeconds(body.path(config.auth().expiresInField()).asLong())
+              ? Duration.of(
+                  body.path(config.auth().expiresInField()).asLong(),
+                  ChronoUnit.valueOf(config.auth().expiresInUnit().trim().toUpperCase()))
               : config.auth().defaultTtl();
+      if (ttl.compareTo(config.auth().maxTtl()) > 0) ttl = config.auth().maxTtl();
       Duration effective = ttl.minus(config.auth().refreshSkew());
       if (effective.isNegative() || effective.isZero()) effective = Duration.ofSeconds(5);
       token = access;
@@ -119,6 +126,11 @@ public class RndsAuthClient {
   public synchronized void invalidate() {
     token = null;
     expiresAt = Instant.EPOCH;
+  }
+
+  /** Instante em que o token em cache deixa de ser usado (diagnóstico/testes). */
+  public Instant expiresAt() {
+    return expiresAt;
   }
 
   public boolean hasValidToken() {

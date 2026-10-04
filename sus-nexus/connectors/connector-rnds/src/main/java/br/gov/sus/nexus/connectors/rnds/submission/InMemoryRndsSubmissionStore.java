@@ -1,6 +1,7 @@
 package br.gov.sus.nexus.connectors.rnds.submission;
 
 import br.gov.sus.nexus.connectors.sdk.api.Period;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +20,16 @@ public class InMemoryRndsSubmissionStore implements RndsSubmissionStore {
   @Override
   public Optional<RndsSubmission> findByEventId(String eventId) {
     return Optional.ofNullable(byEvent.get(eventId));
+  }
+
+  @Override
+  public Optional<RndsSubmission> findLatestAccepted(
+      String model, String sourceId, String exceptEventId) {
+    return byEvent.values().stream()
+        .filter(s -> s.status() == RndsSubmissionStatus.ACCEPTED)
+        .filter(s -> model.equals(s.model()) && sourceId != null && sourceId.equals(s.sourceId()))
+        .filter(s -> !s.eventId().equals(exceptEventId))
+        .max(Comparator.comparing(RndsSubmission::updatedAt));
   }
 
   @Override

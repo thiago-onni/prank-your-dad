@@ -40,6 +40,16 @@ public final class PreValidator {
         if (v == null) return "CNES ausente";
         return Documents.validCnes(v) ? null : "CNES deve ter 7 dígitos";
       }
+      case "cns" -> {
+        String v = a.fact(rule.facts().get(0));
+        if (v == null) return "CNS ausente";
+        return Documents.validCns(v) ? null : "CNS com dígito verificador inválido";
+      }
+      case "cpf" -> {
+        String v = a.fact(rule.facts().get(0));
+        if (v == null) return "CPF ausente";
+        return Documents.validCpf(v) ? null : "CPF com dígito verificador inválido";
+      }
       case "cns_or_cpf" -> {
         boolean any = false;
         for (String f : rule.facts()) {

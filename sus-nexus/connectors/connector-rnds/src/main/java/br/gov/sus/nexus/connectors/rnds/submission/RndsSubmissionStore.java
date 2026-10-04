@@ -12,6 +12,13 @@ public interface RndsSubmissionStore {
 
   Optional<RndsSubmission> findByEventId(String eventId);
 
+  /**
+   * Última submissão {@code accepted} do mesmo registro de origem ({@code model} + {@code
+   * source_id}) de OUTRO evento: usada para reenviar um resultado retificado como substituição
+   * ({@code Composition.relatesTo} {@code replaces} {@code Composition/<protocolo RNDS>}).
+   */
+  Optional<RndsSubmission> findLatestAccepted(String model, String sourceId, String exceptEventId);
+
   /** Upsert por {@code event_id}. */
   RndsSubmission save(RndsSubmission submission);
 

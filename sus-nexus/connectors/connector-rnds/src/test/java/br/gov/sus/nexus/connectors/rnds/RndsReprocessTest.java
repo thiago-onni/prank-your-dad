@@ -77,10 +77,11 @@ class RndsReprocessTest {
     fhir("Observation/" + Fixtures.DR_ID + "-obs-2", "/fhir/observation-2.json");
     fhir("ServiceRequest/01JE28JT97KB6CQ643DZVMXXQK", "/fhir/service-request.json");
     fhir("Patient/" + Fixtures.PATIENT_ID, "/fhir/patient.json");
+    fhir("Specimen/" + Fixtures.SPECIMEN_ID, "/fhir/specimen.json");
     wm().stubFor(post(urlPathMatching("/api/v1/integration/.*")).willReturn(json(200, "{}")));
     wm().stubFor(
             get(urlEqualTo("/rnds-auth/api/token"))
-                .willReturn(json(200, "{\"access_token\":\"rnds-tok\",\"expires_in\":1800}")));
+                .willReturn(json(200, "{\"access_token\":\"rnds-tok\",\"expires_in\":1800000}")));
   }
 
   private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder json(
@@ -176,7 +177,7 @@ class RndsReprocessTest {
                     .map(s -> s.status() == RndsSubmissionStatus.ACCEPTED)
                     .orElse(false));
     RndsSubmission s = submissions.findByEventId(eventId).orElseThrow();
-    assertThat(s.protocol()).isEqualTo("https://ehr.exemplo/Bundle/prot-reprocesso");
+    assertThat(s.protocol()).isEqualTo("prot-reprocesso"); // id após a última "/" do Location
     assertThat(s.integrationMessageId()).isEqualTo(messageId);
     assertThat(ehrPosts()).isEqualTo(postsBefore + 1);
     assertThat(((InMemoryIntegrationMessageLedger) ledger).all()).hasSize(1);

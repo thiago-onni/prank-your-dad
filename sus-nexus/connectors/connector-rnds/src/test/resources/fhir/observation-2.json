@@ -1,12 +1,56 @@
 {
   "resourceType": "Observation",
   "id": "01JM9S346Q3D25VT4F5V37E3S3-obs-2",
-  "meta": { "versionId": "1" },
-  "extension": [ { "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/exam-result-critical", "valueBoolean": false } ],
+  "meta": {
+    "versionId": "1"
+  },
+  "extension": [
+    {
+      "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/exam-result-critical",
+      "valueBoolean": false
+    }
+  ],
   "status": "final",
-  "code": { "coding": [ { "system": "http://loinc.org", "code": "4548-4", "display": "Hemoglobin A1c" } ] },
-  "subject": { "reference": "Patient/01JFBF5KZNWJ47TAN9ZT24MNPZ" },
-  "encounter": { "reference": "Encounter/01JSSZ5AWSH8VHTPRE95B9EE0Z" },
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "4548-4",
+        "display": "Hemoglobin A1c"
+      }
+    ]
+  },
+  "subject": {
+    "reference": "Patient/01JFBF5KZNWJ47TAN9ZT24MNPZ"
+  },
+  "encounter": {
+    "reference": "Encounter/01JSSZ5AWSH8VHTPRE95B9EE0Z"
+  },
   "effectiveDateTime": "2026-09-30T08:10:00-03:00",
-  "valueQuantity": { "value": 5.6, "unit": "%", "system": "http://unitsofmeasure.org", "code": "%" }
+  "valueQuantity": {
+    "value": 5.6,
+    "unit": "%",
+    "system": "http://unitsofmeasure.org",
+    "code": "%"
+  },
+  "method": {
+    "coding": [
+      {
+        "display": "Cromatografia líquida de alta eficiência (HPLC)"
+      }
+    ]
+  },
+  "referenceRange": [
+    {
+      "text": "4,0 a 5,6 %"
+    }
+  ],
+  "specimen": {
+    "reference": "Specimen/01JM9S346Q3D25VT4F5V37E3S3-spc-1"
+  },
+  "note": [
+    {
+      "text": "Amostra hemolisada leve"
+    }
+  ]
 }

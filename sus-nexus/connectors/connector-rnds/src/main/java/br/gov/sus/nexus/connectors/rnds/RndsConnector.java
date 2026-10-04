@@ -46,8 +46,9 @@ import org.jboss.logging.Logger;
  *   <li>{@link #transform}: lê os recursos no fhir-gateway e monta o Bundle do modelo ({@link
  *       BundleAssembler} + YAML versionado);
  *   <li>{@link #validate}: pré-validação declarativa (falha → DLQ, nenhuma chamada à RNDS);
- *   <li>{@link #publish}: token mTLS + POST ao EHR; 2xx aceito (protocolo), 4xx rejeitado ({@code
- *       OperationOutcome} armazenado, DLQ sem retry), 5xx/timeout transitório (retry exponencial).
+ *   <li>{@link #publish}: token mTLS + POST ao EHR; 201 aceito (id RNDS do header Location), 4xx
+ *       rejeitado ({@code OperationOutcome} armazenado, DLQ sem retry), 401/5xx/timeout transitório
+ *       (retry exponencial); 422 EHR-ERR866 numa retentativa = já aceito antes.
  * </ul>
  */
 @ApplicationScoped
@@ -58,6 +59,12 @@ public class RndsConnector extends AbstractConnector {
   public static final String META_MODEL = "model";
   static final String ASSEMBLED = "assembled";
   private static final int MAX_OUTCOME_CHARS = 32_000;
+
+  /**
+   * "(EHR-ERR866) O identifier informado já foi utilizado para cadastrar outro documento e não pode
+   * ser repetido." — HTTP 422 (Guia de Integração, "Erros").
+   */
+  static final String ERR_DUPLICATE = "EHR-ERR866";
 
   private static final Logger LOG = Logger.getLogger(RndsConnector.class);
 
@@ -134,8 +141,8 @@ public class RndsConnector extends AbstractConnector {
                     "kafka:9092",
                     "fhir-gateway (" + config.fhir().baseUrl() + ")",
                     "core-municipal:8080",
-                    "RNDS auth (" + config.authUrl() + ")",
-                    "RNDS EHR (" + config.ehrUrl() + ")"))
+                    "RNDS auth (" + safe(() -> RndsEndpoints.authUrl(config)) + ")",
+                    "RNDS EHR (" + safe(() -> RndsEndpoints.ehrUrl(config)) + ")"))
             .dataClassification(ConnectorDescriptor.DataClassification.HIGHLY_RESTRICTED)
             .pollingOrEventMode(ConnectorDescriptor.IngestionMode.EVENT)
             .retryPolicy(retryPolicy.toSpec())
@@ -146,6 +153,14 @@ public class RndsConnector extends AbstractConnector {
             .supportSla(
                 new ConnectorDescriptor.SupportSla("gold", Duration.ofHours(2), Duration.ofDays(1)))
             .build();
+  }
+
+  private static String safe(java.util.function.Supplier<String> s) {
+    try {
+      return s.get();
+    } catch (IllegalStateException e) {
+      return "não configurado: " + e.getMessage();
+    }
   }
 
   public static String entityType(String model) {
@@ -185,7 +200,9 @@ public class RndsConnector extends AbstractConnector {
     Map<String, String> details = new LinkedHashMap<>();
     List<String> enabled = mappings.keySet().stream().filter(this::enabled).toList();
     details.put("models_enabled", enabled.isEmpty() ? "nenhum" : String.join(",", enabled));
-    details.put("requester_configured", String.valueOf(config.requesterCpf().isPresent()));
+    details.put("requester_configured", String.valueOf(config.requesterCns().isPresent()));
+    details.put("solicitante_configured", String.valueOf(config.solicitanteId().isPresent()));
+    details.put("environment", config.environment());
     Optional<MtlsSupport.CertificateInfo> cert = MtlsSupport.describe(config.certificate());
     cert.ifPresent(
         c -> {
@@ -201,8 +218,18 @@ public class RndsConnector extends AbstractConnector {
       details.put("reason", "certificado expira em menos de 30 dias");
       return new HealthStatus(HealthStatus.State.DEGRADED, details);
     }
-    if (config.requesterCpf().isEmpty()) {
-      details.put("reason", "rnds.requester-cpf não configurado");
+    try {
+      details.put("ehr_url", RndsEndpoints.ehrUrl(config));
+    } catch (IllegalStateException e) {
+      details.put("reason", e.getMessage());
+      return new HealthStatus(HealthStatus.State.DOWN, details);
+    }
+    if (config.requesterCns().isEmpty()) {
+      details.put("reason", "rnds.requester-cns não configurado");
+      return new HealthStatus(HealthStatus.State.DEGRADED, details);
+    }
+    if (config.solicitanteId().isEmpty()) {
+      details.put("reason", "rnds.solicitante-id não configurado");
       return new HealthStatus(HealthStatus.State.DEGRADED, details);
     }
     return new HealthStatus(HealthStatus.State.HEALTHY, details);
@@ -233,6 +260,24 @@ public class RndsConnector extends AbstractConnector {
           case BundleAssembler.SUMARIO_ALTA -> fetcher.discharge(stableId, eventData, cnesSystem);
           default -> throw ConnectorException.permanent("transform", "modelo sem busca", null);
         };
+    // Mesmo registro já aceito pela RNDS (outro evento, ex.: resultado retificado/amended): o novo
+    // documento SUBSTITUI o anterior — mesmo Bundle.identifier + relatesTo replaces
+    // Composition/<id>
+    // (guia, "Alterar resultado"). Sem o id da RNDS não há como substituir → DLQ (sem envio).
+    Optional<RndsSubmission> previous =
+        submissions.findLatestAccepted(model, stableId, raw.sourceRecordId());
+    if (previous.isPresent() && mapping.replacement() != null) {
+      String protocol = previous.get().protocol();
+      if (protocol == null || protocol.isBlank()) {
+        throw ConnectorException.permanent(
+            "transform",
+            "substituição exige o id RNDS do documento anterior (evento "
+                + previous.get().eventId()
+                + " aceito sem protocolo)",
+            null);
+      }
+      src = src.replacing(protocol);
+    }
     BundleAssembler.Context ctx =
         new BundleAssembler.Context(
             raw.sourceRecordId(),
@@ -360,7 +405,7 @@ public class RndsConnector extends AbstractConnector {
     }
     int status = response.status();
     if (status / 100 == 2) {
-      String protocol = response.location().orElseGet(() -> idFromBody(response.body()));
+      String protocol = response.rndsId().orElseGet(() -> idFromBody(response.body()));
       submissions.save(
           submission.withResponse(
               RndsSubmissionStatus.ACCEPTED, status, protocol, "aceito HTTP " + status, null));
@@ -370,6 +415,11 @@ public class RndsConnector extends AbstractConnector {
           eventId, model, status, submission.attempts());
       return protocol == null ? "" : protocol;
     }
+    // Códigos documentados pela RNDS (guia "Erros"/"Homologar", Manual v1.2, Postman oficial):
+    //  201 + Location → aceito; 401 (EHR-ERR882, token expirado) → novo token e nova tentativa;
+    //  422 → regra de negócio/perfil (EHR-ERR866 identifier repetido, EHR-ERR924 status≠final).
+    // NÃO documentados (tratamento conservador): 408/429/5xx → transitório (retry exponencial);
+    //  400/403/404/409/412 e demais 4xx → rejeição definitiva (DLQ sem retry).
     if (status == 401) {
       auth.invalidate();
     }
@@ -379,6 +429,18 @@ public class RndsConnector extends AbstractConnector {
           submission.withResponse(RndsSubmissionStatus.RETRYING, status, null, summary, null));
       rndsMetrics.submission(model, "retry");
       throw ConnectorException.transientError("publish", "RNDS respondeu " + status, null);
+    }
+    if (status == 422 && submission.attempts() > 1 && response.body().contains(ERR_DUPLICATE)) {
+      // Retentativa após falha de rede/5xx: o identifier do Bundle já foi registrado → o documento
+      // foi aceito numa tentativa anterior cuja resposta se perdeu (EHR-ERR866, guia "Erros").
+      String summary = "aceito em tentativa anterior (HTTP 422 " + ERR_DUPLICATE + ")";
+      submissions.save(
+          submission.withResponse(RndsSubmissionStatus.ACCEPTED, status, null, summary, null));
+      rndsMetrics.submission(model, "accepted");
+      LOG.warnf(
+          "evento %s (%s): %s — id RNDS desconhecido (substituição futura exigirá conciliação)",
+          eventId, model, summary);
+      return "";
     }
     String summary = "HTTP " + status + ": " + outcomeSummary(response.body());
     String outcome = Pii.maskText(truncate(response.body(), MAX_OUTCOME_CHARS));

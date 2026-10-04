@@ -17,6 +17,8 @@
     <!-- Mesma versão das bibliotecas HL7 usadas pelo fhir-gateway (ADR-003: só como biblioteca) -->
     <hl7.core.version>6.10.4</hl7.core.version>
     <hapi-fhir-base.version>8.10.0</hapi-fhir-base.version>
+    <!-- Definições base FHIR 4.0.1 para o validador nos testes (mesma versão do fhir-gateway) -->
+    <hl7.validation-resources.version>8.12.1</hl7.validation-resources.version>
   </properties>
 
   <!-- O quarkus-camel-bom gerencia ca.uhn.hapi.fhir:* (camel-fhir) em outras versões; fixamos as
@@ -32,6 +34,22 @@
         <groupId>ca.uhn.hapi.fhir</groupId>
         <artifactId>hapi-fhir-base</artifactId>
         <version>${hapi-fhir-base.version}</version>
+      </dependency>
+      <!-- Validador HL7 (somente testes): mesma linha 6.10.4 do fhir-gateway -->
+      <dependency>
+        <groupId>ca.uhn.hapi.fhir</groupId>
+        <artifactId>org.hl7.fhir.r5</artifactId>
+        <version>${hl7.core.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ca.uhn.hapi.fhir</groupId>
+        <artifactId>org.hl7.fhir.convertors</artifactId>
+        <version>${hl7.core.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ca.uhn.hapi.fhir</groupId>
+        <artifactId>org.hl7.fhir.validation</artifactId>
+        <version>${hl7.core.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -75,6 +93,53 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5</artifactId>
       <scope>test</scope>
+    </dependency>
+    <!-- Validação dos Bundles gerados contra os perfis oficiais da RNDS (RndsProfileValidationTest),
+         offline: InstanceValidator HL7 + definições base FHIR 4.0.1 + src/test/resources/rnds-definicoes -->
+    <dependency>
+      <groupId>ca.uhn.hapi.fhir</groupId>
+      <artifactId>org.hl7.fhir.validation</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>ca.uhn.hapi.fhir</groupId>
+          <artifactId>org.hl7.fhir.dstu2</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ca.uhn.hapi.fhir</groupId>
+          <artifactId>org.hl7.fhir.dstu2016may</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ca.uhn.hapi.fhir</groupId>
+          <artifactId>org.hl7.fhir.dstu3</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>logback-classic</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.fhir</groupId>
+      <artifactId>ucum</artifactId>
+      <version>1.0.10</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>ca.uhn.hapi.fhir</groupId>
+      <artifactId>hapi-fhir-validation-resources-r4</artifactId>
+      <version>${hl7.validation-resources.version}</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.smallrye.reactive</groupId>

@@ -17,12 +17,14 @@ import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.ServiceRequest;
+import org.hl7.fhir.r4.model.Specimen;
 
 /**
  * Busca no fhir-gateway os recursos de um modelo: {@code resultado-exame} → DiagnosticReport (id =
  * {@code exam_result_id} sem prefixo), Observations de {@code result}, ServiceRequest de {@code
- * basedOn}, Patient de {@code subject}, Organization/Practitioner referenciados literalmente;
- * {@code sumario-alta} → Encounter ({@code hospital_episode_id}), Patient e Organization.
+ * basedOn}, Specimens de {@code Observation.specimen}/{@code DiagnosticReport.specimen}, Patient de
+ * {@code subject}, Organization/Practitioner referenciados literalmente; {@code sumario-alta} →
+ * Encounter ({@code hospital_episode_id}), Patient e Organization.
  */
 @ApplicationScoped
 public class ResourceFetcher {
@@ -66,6 +68,11 @@ public class ResourceFetcher {
         practitioners.add(as(fhir.read("Practitioner", parts[1]), Practitioner.class));
       }
     }
+    Map<String, Specimen> specimens = new LinkedHashMap<>();
+    for (Reference ref : report.getSpecimen()) readSpecimen(ref, specimens);
+    for (Observation o : observations) {
+      if (o.hasSpecimen()) readSpecimen(o.getSpecimen(), specimens);
+    }
     Map<String, String> orgCnes = new LinkedHashMap<>();
     for (Reference ref : report.getPerformer()) resolveOrganization(ref, cnesSystem, orgCnes);
     for (Observation o : observations) {
@@ -81,7 +88,15 @@ public class ResourceFetcher {
         practitioners,
         null,
         orgCnes,
-        eventData);
+        eventData,
+        specimens,
+        null);
+  }
+
+  private void readSpecimen(Reference ref, Map<String, Specimen> out) {
+    String[] parts = literal(ref, "Specimen");
+    if (parts == null || out.containsKey("Specimen/" + parts[1])) return;
+    out.put("Specimen/" + parts[1], as(fhir.read("Specimen", parts[1]), Specimen.class));
   }
 
   public SourceResources discharge(
