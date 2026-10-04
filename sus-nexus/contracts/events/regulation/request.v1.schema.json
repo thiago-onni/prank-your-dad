@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/regulation/request/1.0.0",
+  "title": "sus.regulation.request.* — data",
+  "description": "Solicitação regulatória (REG-001/002). Nunca inclui justificativa clínica em texto livre.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "regulation_request_id", "kind", "status", "requested_service_code", "code_system", "requested_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "updated", "returned", "cancelled"] },
+    "regulation_request_id": { "type": "string", "pattern": "^reg_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "kind": { "type": "string", "enum": ["consultation", "exam", "procedure", "surgery", "admission"] },
+    "status": { "type": "string", "enum": ["requested", "pending_documents", "returned", "under_review", "authorized", "denied", "scheduled", "cancelled", "no_show", "performed", "expired"] },
+    "priority": { "type": "string", "enum": ["elective", "priority", "urgent", "emergency"] },
+    "requested_service_code": { "type": "string" },
+    "code_system": { "type": "string", "enum": ["SIGTAP", "LOCAL"] },
+    "specialty": { "type": "string" },
+    "requested_at": { "type": "string", "format": "date-time" },
+    "requesting_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "requesting_professional_id": { "type": "string" },
+    "provider_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "justification_present": { "type": "boolean" },
+    "attached_documents_count": { "type": "integer", "minimum": 0 },
+    "sla_due_at": { "type": "string", "format": "date-time" },
+    "reason": { "type": "string", "maxLength": 500 }
+  }
+}

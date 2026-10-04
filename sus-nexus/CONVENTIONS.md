@@ -20,6 +20,7 @@ sus-nexus/
 ## Identidade e tenancy
 
 - IDs internos: **ULID** prefixado por tipo. Prefixos: `cit_` cidadão, `cid_` identificador de cidadão, `org_`, `hu_` unidade, `loc_`, `prof_`, `team_`, `apt_` agendamento, `enc_` atendimento, `reg_` regulação, `exo_` pedido de exame, `hep_` episódio hospitalar, `cp_` plano de cuidado, `task_`, `prod_` produção, `msg_` integration_message, `evt_` evento, `case_` merge case, `rule_`, `agent_`, `run_` execução de agente.
+- `exr_` resultado de exame, `exo_` pedido de exame.
 - `tenant_id` = `ibge_<código IBGE 7 dígitos>` (ex.: `ibge_3143302`). Toda tabela de domínio tem `tenant_id text NOT NULL` com **RLS** (`current_setting('app.tenant_id', true)`).
 - Claim no token Keycloak: `municipality_id`. Header interno entre serviços: `X-Tenant-Id`.
 

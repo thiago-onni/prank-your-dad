@@ -17,6 +17,8 @@ tags:
   - name: appointments
   - name: tasks
   - name: integration
+  - name: regulation
+  - name: exams
   - name: terminology
   - name: reference
   - name: audit
@@ -860,6 +862,369 @@ paths:
                   next_cursor: { type: [string, 'null'] }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/regulation/requests:
+    get:
+      tags: [regulation]
+      summary: Fila regulatória (REG-004)
+      operationId: listRegulationRequests
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/RegulationStatus' }
+        - name: priority
+          in: query
+          schema: { $ref: '#/components/schemas/RegulationPriority' }
+        - name: service_code
+          in: query
+          schema: { type: string }
+        - name: specialty
+          in: query
+          schema: { type: string }
+        - name: requesting_cnes
+          in: query
+          schema: { type: string }
+        - name: provider_cnes
+          in: query
+          schema: { type: string }
+        - name: territory
+          in: query
+          schema: { type: string }
+        - name: issue
+          in: query
+          description: Pendências (REG-005)
+          schema: { type: string, enum: [incomplete, returned, expired, duplicate, no_capacity, sla_breached] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [waiting_time_desc, priority_desc, created_at_asc], default: waiting_time_desc }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegulationRequest' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [regulation]
+      summary: Registrar solicitação vinda do sistema oficial de regulação (porta única; não decide)
+      operationId: registerRegulationRequest
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationRequestRegistration' }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        '200':
+          description: Atualizada (mesmo source_record_id)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}:
+    get:
+      tags: [regulation]
+      operationId: getRegulationRequest
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}/status:
+    post:
+      tags: [regulation]
+      summary: Registrar mudança de status recebida do sistema oficial (decisão, agendamento, devolução, realização, falta)
+      operationId: registerRegulationStatus
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}/issues:
+    post:
+      tags: [regulation]
+      summary: Registrar pendência documental/administrativa (humano ou agente com aprovação)
+      operationId: addRegulationIssue
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, description]
+              properties:
+                kind: { type: string, enum: [missing_document, missing_field, clinical_justification, duplicate, other] }
+                description: { type: string, maxLength: 1000 }
+                origin:
+                  type: object
+                  properties:
+                    kind: { type: string, enum: [user, agent, rule] }
+                    id: { type: string }
+                    version: { type: string }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/capacity:
+    get:
+      tags: [regulation]
+      summary: Oferta/capacidade por prestador e serviço (REG-006)
+      operationId: listProviderCapacity
+      parameters:
+        - name: provider_cnes
+          in: query
+          schema: { type: string }
+        - name: service_code
+          in: query
+          schema: { type: string }
+        - name: competence
+          in: query
+          schema: { type: string, pattern: '^[0-9]{6}$' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProviderCapacity' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [regulation]
+      operationId: upsertProviderCapacity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: '#/components/schemas/ProviderCapacity' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/queues/summary:
+    get:
+      tags: [regulation]
+      summary: Indicadores da fila por especialidade/procedimento (tempo de espera, SLA, pendências)
+      operationId: getRegulationQueueSummary
+      parameters:
+        - name: group_by
+          in: query
+          schema: { type: string, enum: [service_code, specialty, provider_cnes, requesting_cnes, priority], default: specialty }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegulationQueueItem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders:
+    get:
+      tags: [exams]
+      summary: Pedidos de exame (ciclo pedido → agendamento → realização → laudo → retorno)
+      operationId: listExamOrders
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ExamOrderStatus' }
+        - name: issue
+          in: query
+          schema: { type: string, enum: [not_scheduled, no_result_followup, result_pending, integration_failure, inconclusive, critical] }
+        - name: requesting_cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ExamOrder' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [exams]
+      summary: Registrar pedido de exame vindo de um sistema de origem
+      operationId: registerExamOrder
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamOrderRegistration' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        '200':
+          description: Atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}:
+    get:
+      tags: [exams]
+      operationId: getExamOrder
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/status:
+    post:
+      tags: [exams]
+      summary: Registrar mudança de status (EXA-002)
+      operationId: registerExamOrderStatus
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/results:
+    post:
+      tags: [exams]
+      summary: Registrar resultado/laudo (metadados e referência segura; EXA-006/007)
+      operationId: registerExamResult
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamResultRegistration' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/results/{resultId}/document:
+    get:
+      tags: [exams]
+      summary: Obter referência segura (URL assinada, curta) ao laudo — gera access_log
+      operationId: getExamResultDocument
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - name: resultId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+                  content_type: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/admin/rules:
     get:
       tags: [admin]
@@ -920,6 +1285,16 @@ components:
       schema: { type: string }
     taskId:
       name: taskId
+      in: path
+      required: true
+      schema: { type: string }
+    requestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string }
+    orderId:
+      name: orderId
       in: path
       required: true
       schema: { type: string }
@@ -1567,3 +1942,292 @@ components:
         status: { type: string, enum: [draft, in_review, approved, active, revoked] }
         effective_from: { type: string, format: date-time }
         approved_by: { type: string }
+
+    RegulationStatus:
+      type: string
+      enum: [requested, pending_documents, returned, under_review, authorized, denied, scheduled, cancelled, no_show, performed, expired]
+
+    RegulationPriority:
+      type: string
+      enum: [elective, priority, urgent, emergency]
+
+    RegulationKind:
+      type: string
+      enum: [consultation, exam, procedure, surgery, admission]
+
+    SourceRefInput:
+      type: object
+      required: [system, connector, source_record_id]
+      properties:
+        system: { type: string }
+        connector: { type: string }
+        source_record_id: { type: string }
+        source_record_version: { type: string }
+        cnes: { type: string }
+
+    CitizenRef:
+      type: object
+      description: municipal_citizen_id OU identificador de origem para resolução
+      properties:
+        municipal_citizen_id: { type: string }
+        identifier_system: { $ref: '#/components/schemas/IdentifierSystem' }
+        identifier_value: { type: string }
+
+    RegulationRequestRegistration:
+      type: object
+      required: [source, citizen_ref, kind, status, requested_at, requested_service_code]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        kind: { $ref: '#/components/schemas/RegulationKind' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        requested_at: { type: string, format: date-time }
+        requested_service_code: { type: string }
+        code_system: { type: string, enum: [SIGTAP, LOCAL], default: SIGTAP }
+        specialty: { type: string }
+        requesting_cnes: { type: string }
+        requesting_professional_id: { type: string }
+        requesting_professional_cbo: { type: string }
+        justification_present: { type: boolean, description: Indica se há justificativa clínica (o texto permanece no sistema oficial) }
+        attached_documents_count: { type: integer, minimum: 0 }
+        cid_code: { type: string, description: Somente quando a finalidade permitir; omitido para condições highly_restricted }
+        provider_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        regulator_id: { type: string }
+        decision_reason: { type: string, maxLength: 500 }
+        occurred_at: { type: string, format: date-time }
+
+    RegulationStatusChange:
+      type: object
+      required: [source, status, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        occurred_at: { type: string, format: date-time }
+        provider_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_source_record_id: { type: string }
+        regulator_id: { type: string }
+        reason: { type: string, maxLength: 500 }
+        return_to_origin: { type: boolean }
+
+    RegulationIssue:
+      type: object
+      required: [id, kind, status, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [missing_document, missing_field, clinical_justification, duplicate, other, sla_breached, no_capacity, expired] }
+        status: { type: string, enum: [open, resolved] }
+        description: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [user, agent, rule, workflow, connector] }
+            id: { type: string }
+            version: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+
+    RegulationRequest:
+      type: object
+      required: [id, citizen_id, kind, status, requested_at, requested_service_code, source_system, waiting_days]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        kind: { $ref: '#/components/schemas/RegulationKind' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        requested_at: { type: string, format: date-time }
+        requested_service_code: { type: string }
+        code_system: { type: string }
+        service_description: { type: string }
+        specialty: { type: string }
+        requesting_cnes: { type: string }
+        requesting_unit_name: { type: string }
+        requesting_professional_id: { type: string }
+        provider_cnes: { type: string }
+        provider_name: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_id: { type: string }
+        regulator_id: { type: string }
+        decision_reason: { type: string }
+        justification_present: { type: boolean }
+        attached_documents_count: { type: integer }
+        waiting_days: { type: integer }
+        sla_due_at: { type: string, format: date-time }
+        sla_breached: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/RegulationIssue' }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/RegulationStatus' }
+              occurred_at: { type: string, format: date-time }
+              actor: { type: string }
+              reason: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    ProviderCapacity:
+      type: object
+      required: [provider_cnes, service_code, competence, offered]
+      properties:
+        provider_cnes: { type: string }
+        provider_name: { type: string }
+        service_code: { type: string }
+        code_system: { type: string, default: SIGTAP }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        offered: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        available: { type: integer }
+        source_system: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    RegulationQueueItem:
+      type: object
+      required: [group_key, open_requests]
+      properties:
+        group_key: { type: string }
+        group_label: { type: string }
+        open_requests: { type: integer }
+        by_priority:
+          type: object
+          additionalProperties: { type: integer }
+        avg_waiting_days: { type: number }
+        p90_waiting_days: { type: number }
+        sla_breached: { type: integer }
+        with_issues: { type: integer }
+        scheduled_30d: { type: integer }
+        no_show_30d: { type: integer }
+        capacity_available: { type: integer }
+
+    ExamOrderStatus:
+      type: string
+      enum: [requested, authorized, scheduled, collected, performed, reported, cancelled, not_performed]
+
+    ExamOrderRegistration:
+      type: object
+      required: [source, citizen_ref, status, requested_at, exam_code]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        requested_at: { type: string, format: date-time }
+        exam_code: { type: string }
+        code_system: { type: string, enum: [SIGTAP, LOINC, LOCAL], default: SIGTAP }
+        exam_description: { type: string }
+        category: { type: string, enum: [laboratory, imaging, other] }
+        requesting_cnes: { type: string }
+        requesting_professional_id: { type: string }
+        regulation_source_record_id: { type: string }
+        appointment_source_record_id: { type: string }
+        care_line: { type: string }
+        priority: { type: string, enum: [routine, priority, urgent] }
+        occurred_at: { type: string, format: date-time }
+
+    ExamStatusChange:
+      type: object
+      required: [source, status, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        occurred_at: { type: string, format: date-time }
+        performer_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_source_record_id: { type: string }
+        reason: { type: string, maxLength: 500 }
+
+    ExamResultRegistration:
+      type: object
+      required: [source, reported_at, status]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        reported_at: { type: string, format: date-time }
+        status: { type: string, enum: [final, preliminary, amended, inconclusive, cancelled] }
+        critical: { type: boolean, description: Marcado conforme mensagem de origem (EXA-007) }
+        performer_cnes: { type: string }
+        document_ref: { type: string, description: Referência segura no object storage ou no sistema de origem; nunca o conteúdo }
+        document_content_type: { type: string }
+        document_sha256: { type: string }
+        observations:
+          type: array
+          description: Resultados estruturados mínimos (sem texto livre), quando autorizados
+          items:
+            type: object
+            required: [code, code_system]
+            properties:
+              code: { type: string }
+              code_system: { type: string, enum: [LOINC, SIGTAP, LOCAL] }
+              value: { type: number }
+              unit: { type: string }
+              value_text_masked: { type: string }
+              abnormal: { type: boolean }
+
+    ExamResult:
+      type: object
+      required: [id, reported_at, status, source_system]
+      properties:
+        id: { type: string }
+        reported_at: { type: string, format: date-time }
+        status: { type: string, enum: [final, preliminary, amended, inconclusive, cancelled] }
+        critical: { type: boolean }
+        performer_cnes: { type: string }
+        has_document: { type: boolean }
+        observations_count: { type: integer }
+        followup_task_id: { type: string }
+        source_system: { type: string }
+
+    ExamOrder:
+      type: object
+      required: [id, citizen_id, status, requested_at, exam_code, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        requested_at: { type: string, format: date-time }
+        exam_code: { type: string }
+        code_system: { type: string }
+        exam_description: { type: string }
+        category: { type: string }
+        priority: { type: string }
+        requesting_cnes: { type: string }
+        requesting_unit_name: { type: string }
+        requesting_professional_id: { type: string }
+        performer_cnes: { type: string }
+        regulation_request_id: { type: string }
+        appointment_id: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        performed_at: { type: string, format: date-time }
+        reported_at: { type: string, format: date-time }
+        care_line: { type: string }
+        issues:
+          type: array
+          items: { type: string, enum: [not_scheduled, no_result_followup, result_pending, integration_failure, inconclusive, critical] }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ExamResult' }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/ExamOrderStatus' }
+              occurred_at: { type: string, format: date-time }
+              reason: { type: string }
+        cycle_times:
+          type: object
+          description: EXA-010 (em horas)
+          properties:
+            request_to_schedule: { type: number }
+            schedule_to_perform: { type: number }
+            perform_to_report: { type: number }
+            report_to_followup: { type: number }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }

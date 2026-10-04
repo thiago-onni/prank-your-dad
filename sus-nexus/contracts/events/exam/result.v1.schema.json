@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/exam/result/1.0.0",
+  "title": "sus.exam.result.* — data",
+  "description": "Resultado/laudo disponível (EXA-006/007). Só metadados: o conteúdo fica por referência segura (data_ref) e nunca trafega no evento.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "exam_order_id", "exam_result_id", "result_status", "reported_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["available", "critical_flagged"] },
+    "exam_order_id": { "type": "string", "pattern": "^exo_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "exam_result_id": { "type": "string", "pattern": "^exr_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "result_status": { "type": "string", "enum": ["final", "preliminary", "amended", "inconclusive", "cancelled"] },
+    "critical": { "type": "boolean" },
+    "reported_at": { "type": "string", "format": "date-time" },
+    "performer_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "has_document": { "type": "boolean" },
+    "observations_count": { "type": "integer", "minimum": 0 },
+    "requesting_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "care_line": { "type": "string" }
+  }
+}

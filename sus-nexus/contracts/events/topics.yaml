@@ -28,6 +28,18 @@ topics:
     key: source.source_record_id
     partitions: 3
     retention_days: 7
+  - name: sus.ingest.regulation.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.exam.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.hl7.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
 
   # ---- identidade ----
   - name: sus.identity.citizen.v1
@@ -72,6 +84,7 @@ topics:
   - name: sus.exam.result.v1
     class: domain
     events: [available, critical_flagged]
+    # payload mínimo; laudo sempre por data_ref (KAF-009)
 
   # ---- hospital ----
   - name: sus.hospital.adt.v1
