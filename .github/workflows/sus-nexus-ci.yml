@@ -372,6 +372,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_SUMMARY: "true"
+          GITLEAKS_ENABLE_COMMENTS: "false"
       - name: trivy fs (vulnerabilidades, segredos, misconfig)
         uses: aquasecurity/trivy-action@master
         with:
@@ -384,8 +385,9 @@ jobs:
           output: trivy-fs.sarif
           exit-code: "0"
       - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('trivy-fs.sarif') != ''
         with: { sarif_file: trivy-fs.sarif, category: trivy-fs }
+
       - name: semgrep
         uses: semgrep/semgrep-action@v1
         with:
@@ -403,7 +405,7 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
       - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('semgrep.sarif') != ''
         with: { sarif_file: semgrep.sarif, category: semgrep }
       - name: checkov (IaC)
         uses: bridgecrewio/checkov-action@v12
@@ -415,7 +417,7 @@ jobs:
           output_format: sarif
           output_file_path: checkov
       - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('checkov/results_sarif.sarif') != ''
         with: { sarif_file: checkov/results_sarif.sarif, category: checkov }
 
   # ------------------------------------------------------------------------------------------------
