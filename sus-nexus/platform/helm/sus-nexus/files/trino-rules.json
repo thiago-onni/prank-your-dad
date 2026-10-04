@@ -1,0 +1,510 @@
+{
+  "catalogs": [
+    {
+      "group": "admins",
+      "catalog": ".*",
+      "allow": "all"
+    },
+    {
+      "group": "pipeline",
+      "catalog": "postgresql",
+      "allow": "read-only"
+    },
+    {
+      "group": "pipeline",
+      "catalog": "iceberg",
+      "allow": "all"
+    },
+    {
+      "group": "analysts|analytics_identified|bi|gestor_.*",
+      "catalog": "iceberg",
+      "allow": "read-only"
+    },
+    {
+      "catalog": "system",
+      "allow": "read-only"
+    },
+    {
+      "catalog": ".*",
+      "allow": "none"
+    }
+  ],
+  "schemas": [
+    {
+      "group": "admins",
+      "schema": ".*",
+      "owner": true
+    },
+    {
+      "group": "pipeline",
+      "catalog": "iceberg",
+      "schema": ".*",
+      "owner": true
+    },
+    {
+      "group": "pipeline",
+      "catalog": "postgresql",
+      "schema": "reference",
+      "owner": false
+    },
+    {
+      "schema": ".*",
+      "owner": false
+    }
+  ],
+  "tables": [
+    {
+      "group": "admins",
+      "privileges": [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+        "UPDATE",
+        "OWNERSHIP",
+        "GRANT_SELECT"
+      ]
+    },
+    {
+      "group": "pipeline",
+      "catalog": "iceberg",
+      "privileges": [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+        "UPDATE",
+        "OWNERSHIP"
+      ]
+    },
+    {
+      "group": "pipeline",
+      "catalog": "postgresql",
+      "schema": "reference",
+      "table": "health_unit|care_team|territory|microarea|organization",
+      "privileges": [
+        "SELECT"
+      ],
+      "columns": [
+        {
+          "name": "address",
+          "allow": false
+        }
+      ]
+    },
+    {
+      "group": "pipeline",
+      "catalog": "postgresql",
+      "privileges": []
+    },
+    {
+      "group": "analytics_identified",
+      "catalog": "iceberg",
+      "schema": "marts_identified",
+      "privileges": [
+        "SELECT"
+      ]
+    },
+    {
+      "group": "gestor_ibge_3143302",
+      "catalog": "iceberg",
+      "schema": "marts|marts_aggregated|reference",
+      "privileges": [
+        "SELECT"
+      ],
+      "filter": "tenant_id = 'ibge_3143302'",
+      "columns": [
+        {
+          "name": "municipal_citizen_id",
+          "allow": false
+        },
+        {
+          "name": "citizen_id",
+          "allow": false
+        },
+        {
+          "name": "cns",
+          "allow": false
+        },
+        {
+          "name": "cpf",
+          "allow": false
+        },
+        {
+          "name": "nome",
+          "allow": false
+        },
+        {
+          "name": "name",
+          "allow": false
+        },
+        {
+          "name": "social_name",
+          "allow": false
+        },
+        {
+          "name": "mother_name",
+          "allow": false
+        },
+        {
+          "name": "nome_mae",
+          "allow": false
+        },
+        {
+          "name": "birthdate",
+          "allow": false
+        },
+        {
+          "name": "data_nascimento",
+          "allow": false
+        },
+        {
+          "name": "phone",
+          "allow": false
+        },
+        {
+          "name": "telefone",
+          "allow": false
+        },
+        {
+          "name": "email",
+          "allow": false
+        },
+        {
+          "name": "address",
+          "allow": false
+        },
+        {
+          "name": "endereco",
+          "allow": false
+        },
+        {
+          "name": "subject",
+          "allow": false
+        },
+        {
+          "name": "identifiers",
+          "allow": false
+        },
+        {
+          "name": "value_hash",
+          "allow": false
+        },
+        {
+          "name": "value_masked",
+          "allow": false
+        },
+        {
+          "name": "data",
+          "allow": false
+        },
+        {
+          "name": "data_ref",
+          "allow": false
+        }
+      ]
+    },
+    {
+      "group": "analysts|analytics_identified",
+      "catalog": "iceberg",
+      "schema": "marts|marts_aggregated|reference",
+      "privileges": [
+        "SELECT"
+      ],
+      "columns": [
+        {
+          "name": "municipal_citizen_id",
+          "allow": false
+        },
+        {
+          "name": "citizen_id",
+          "allow": false
+        },
+        {
+          "name": "cns",
+          "allow": false
+        },
+        {
+          "name": "cpf",
+          "allow": false
+        },
+        {
+          "name": "nome",
+          "allow": false
+        },
+        {
+          "name": "name",
+          "allow": false
+        },
+        {
+          "name": "social_name",
+          "allow": false
+        },
+        {
+          "name": "mother_name",
+          "allow": false
+        },
+        {
+          "name": "nome_mae",
+          "allow": false
+        },
+        {
+          "name": "birthdate",
+          "allow": false
+        },
+        {
+          "name": "data_nascimento",
+          "allow": false
+        },
+        {
+          "name": "phone",
+          "allow": false
+        },
+        {
+          "name": "telefone",
+          "allow": false
+        },
+        {
+          "name": "email",
+          "allow": false
+        },
+        {
+          "name": "address",
+          "allow": false
+        },
+        {
+          "name": "endereco",
+          "allow": false
+        },
+        {
+          "name": "subject",
+          "allow": false
+        },
+        {
+          "name": "identifiers",
+          "allow": false
+        },
+        {
+          "name": "value_hash",
+          "allow": false
+        },
+        {
+          "name": "value_masked",
+          "allow": false
+        },
+        {
+          "name": "data",
+          "allow": false
+        },
+        {
+          "name": "data_ref",
+          "allow": false
+        }
+      ]
+    },
+    {
+      "group": "bi",
+      "catalog": "iceberg",
+      "schema": "marts",
+      "table": "dim_.*",
+      "privileges": [
+        "SELECT"
+      ],
+      "columns": [
+        {
+          "name": "municipal_citizen_id",
+          "allow": false
+        },
+        {
+          "name": "citizen_id",
+          "allow": false
+        },
+        {
+          "name": "cns",
+          "allow": false
+        },
+        {
+          "name": "cpf",
+          "allow": false
+        },
+        {
+          "name": "nome",
+          "allow": false
+        },
+        {
+          "name": "name",
+          "allow": false
+        },
+        {
+          "name": "social_name",
+          "allow": false
+        },
+        {
+          "name": "mother_name",
+          "allow": false
+        },
+        {
+          "name": "nome_mae",
+          "allow": false
+        },
+        {
+          "name": "birthdate",
+          "allow": false
+        },
+        {
+          "name": "data_nascimento",
+          "allow": false
+        },
+        {
+          "name": "phone",
+          "allow": false
+        },
+        {
+          "name": "telefone",
+          "allow": false
+        },
+        {
+          "name": "email",
+          "allow": false
+        },
+        {
+          "name": "address",
+          "allow": false
+        },
+        {
+          "name": "endereco",
+          "allow": false
+        },
+        {
+          "name": "subject",
+          "allow": false
+        },
+        {
+          "name": "identifiers",
+          "allow": false
+        },
+        {
+          "name": "value_hash",
+          "allow": false
+        },
+        {
+          "name": "value_masked",
+          "allow": false
+        },
+        {
+          "name": "data",
+          "allow": false
+        },
+        {
+          "name": "data_ref",
+          "allow": false
+        }
+      ]
+    },
+    {
+      "group": "bi",
+      "catalog": "iceberg",
+      "schema": "marts_aggregated|reference",
+      "privileges": [
+        "SELECT"
+      ],
+      "columns": [
+        {
+          "name": "municipal_citizen_id",
+          "allow": false
+        },
+        {
+          "name": "citizen_id",
+          "allow": false
+        },
+        {
+          "name": "cns",
+          "allow": false
+        },
+        {
+          "name": "cpf",
+          "allow": false
+        },
+        {
+          "name": "nome",
+          "allow": false
+        },
+        {
+          "name": "name",
+          "allow": false
+        },
+        {
+          "name": "social_name",
+          "allow": false
+        },
+        {
+          "name": "mother_name",
+          "allow": false
+        },
+        {
+          "name": "nome_mae",
+          "allow": false
+        },
+        {
+          "name": "birthdate",
+          "allow": false
+        },
+        {
+          "name": "data_nascimento",
+          "allow": false
+        },
+        {
+          "name": "phone",
+          "allow": false
+        },
+        {
+          "name": "telefone",
+          "allow": false
+        },
+        {
+          "name": "email",
+          "allow": false
+        },
+        {
+          "name": "address",
+          "allow": false
+        },
+        {
+          "name": "endereco",
+          "allow": false
+        },
+        {
+          "name": "subject",
+          "allow": false
+        },
+        {
+          "name": "identifiers",
+          "allow": false
+        },
+        {
+          "name": "value_hash",
+          "allow": false
+        },
+        {
+          "name": "value_masked",
+          "allow": false
+        },
+        {
+          "name": "data",
+          "allow": false
+        },
+        {
+          "name": "data_ref",
+          "allow": false
+        }
+      ]
+    },
+    {
+      "catalog": "system",
+      "privileges": [
+        "SELECT"
+      ]
+    },
+    {
+      "privileges": []
+    }
+  ]
+}

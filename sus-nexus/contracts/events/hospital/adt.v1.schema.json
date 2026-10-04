@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/hospital/adt/1.0.0",
+  "title": "sus.hospital.adt.* — data",
+  "description": "Movimentação hospitalar (HOS-001). Sem conteúdo clínico detalhado; diagnóstico principal só como código e somente quando a finalidade permitir.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "hospital_episode_id", "hospital_cnes", "episode_class", "status", "occurred_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["admitted", "transferred", "bed_changed", "discharged", "deceased"] },
+    "hospital_episode_id": { "type": "string", "pattern": "^hep_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "hospital_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "episode_class": { "type": "string", "enum": ["inpatient", "emergency", "observation", "day_hospital"] },
+    "status": { "type": "string", "enum": ["admitted", "in_progress", "transferred", "discharged", "deceased", "cancelled"] },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "admitted_at": { "type": "string", "format": "date-time" },
+    "ward": { "type": "string" },
+    "bed": { "type": "string" },
+    "previous_ward": { "type": "string" },
+    "attending_professional_id": { "type": "string" },
+    "principal_diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "code"],
+      "properties": {
+        "system": { "type": "string", "enum": ["CID10"] },
+        "code": { "type": "string" }
+      }
+    },
+    "admission_source": { "type": "string", "enum": ["emergency", "regulation", "transfer", "elective", "other"] },
+    "regulation_request_id": { "type": "string" },
+    "aih_number": { "type": "string", "description": "Número da AIH quando disponível (HOS-007); sem valor financeiro." },
+    "reason": { "type": "string", "maxLength": 500 }
+  }
+}

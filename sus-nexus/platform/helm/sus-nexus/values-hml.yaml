@@ -1,0 +1,159 @@
+# hml — homologação, testes de carga e aceite. Espelho reduzido de produção: HA real (3 brokers,
+# CNPG 3 instâncias no core), dados sintéticos/mascarados (nunca reais), MFA obrigatório.
+global:
+  environment: hml
+  domain: hml.sus-nexus.local
+  imageRegistry: harbor.sus-nexus.local/sus-nexus
+  keycloakUrl: https://auth.hml.sus-nexus.local
+  multiZone: false
+
+core:
+  enabled: true
+  replicaCount: 2
+  hpa: { enabled: true, minReplicas: 2, maxReplicas: 4 }
+  rollout: { enabled: true }
+  apisix:
+    canary: { stableWeight: 90, canaryWeight: 10 }
+fhir:
+  enabled: true
+  replicaCount: 2
+  rollout: { enabled: true }
+web:
+  enabled: true
+  replicaCount: 2
+ai:
+  enabled: true
+  replicaCount: 1
+  hpa: { enabled: true, minReplicas: 1, maxReplicas: 2 }
+connector-pec:
+  enabled: true
+connector-agenda:
+  enabled: true
+connector-sisreg:
+  enabled: true
+connector-cnes:
+  enabled: true
+connector-esus-regulacao:
+  enabled: true
+connector-lis:
+  enabled: true
+  connector:
+    mllp:
+      serviceType: LoadBalancer
+      serviceAnnotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external         # NLB (AWS LB Controller)
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internal       # só rede/VPN municipal
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        # IP de origem preservado → NetworkPolicy (ipBlock) avalia a faixa real do laboratório
+        service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=true
+      allowedSourceCidrs: ["172.20.10.0/24"]   # rede de homologação dos laboratórios (ajuste)
+# HIS/RIS em homologação: agentes de borda no hospital piloto (só KafkaUser/ACL no cluster).
+connector-his:
+  enabled: true
+  connector: { edgeAgent: true }
+connector-ris:
+  enabled: true
+  connector: { edgeAgent: true }
+# Produção SIA/SIH: retornos oficiais com layout "A CONFIRMAR" — homologar com o faturamento municipal.
+connector-sia:
+  enabled: true
+
+cnpg:
+  enabled: true
+  defaults:
+    instances: 2
+    storageClass: fast-nvme
+    storageSize: 50Gi
+  backup:
+    enabled: true
+    retentionPolicy: 14d
+  clusters:
+    core-db:
+      instances: 3
+      storageSize: 200Gi
+      synchronous: true
+      resources:
+        requests: { cpu: "1", memory: 4Gi }
+        limits: { cpu: "4", memory: 8Gi }
+      sharedBuffers: 2GB
+      effectiveCacheSize: 6GB
+    fhir-db: { instances: 2, storageSize: 100Gi }
+    temporal-db: { instances: 2, storageSize: 50Gi }
+
+strimzi:
+  enabled: true
+  topicReplication: 3
+  topicMinInsyncReplicas: 2
+  partitionFactor: 0.5
+  nodePool:
+    replicas: 3
+    storageClass: fast-nvme
+    storageSize: 200Gi
+    resources:
+      requests: { cpu: "1", memory: 4Gi }
+      limits: { cpu: "2", memory: 8Gi }
+    jvm: { xms: 2g, xmx: 2g }
+  rack: null
+  cruiseControl: { enabled: true }
+
+kafkaConnect:
+  enabled: true
+  replicas: 2
+
+apicurio:
+  enabled: true
+
+minio:
+  enabled: true
+  servers: 4
+  volumesPerServer: 2
+  volumeSize: 200Gi
+  auditArchive:
+    lockMode: COMPLIANCE
+    retentionDays: 365
+
+redis:
+  enabled: true
+  maxmemory: 512mb
+
+keycloak:
+  enabled: true
+  instances: 2
+  hostname: auth.hml.sus-nexus.local
+  tls: { issuerName: letsencrypt-prod }
+  adminAllowCidrs: ["10.0.0.0/8"]
+  importDevUsers: false
+  realmOverrides:
+    displayName: SUS Nexus (homologação)
+    sslRequired: all
+    bruteForceProtected: true
+    # MFA obrigatório (PLANO 4.2.4): CONFIGURE_TOTP com defaultAction=true → todo usuário novo configura
+    # TOTP no primeiro login; usuários existentes recebem a required action via admin API/migração.
+    requiredActions:
+      - alias: CONFIGURE_TOTP
+        name: Configure OTP
+        providerId: CONFIGURE_TOTP
+        enabled: true
+        defaultAction: true
+        priority: 10
+    otpPolicyType: totp
+    otpPolicyAlgorithm: HmacSHA256
+    otpPolicyDigits: 6
+    otpPolicyPeriod: 30
+    otpPolicyLookAheadWindow: 1
+    webAuthnPolicyRpId: auth.hml.sus-nexus.local
+    attributes:
+      frontendUrl: https://auth.hml.sus-nexus.local
+      _dev_note_mfa: ""
+
+opa:
+  enabled: true
+  bundle:
+    resource: harbor.sus-nexus.local/sus-nexus/policies:hml
+
+temporal:
+  enabled: true
+  server:
+    replicaCount: 2
+    config:
+      numHistoryShards: 512

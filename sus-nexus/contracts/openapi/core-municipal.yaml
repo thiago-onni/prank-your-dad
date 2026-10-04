@@ -1,0 +1,3784 @@
+openapi: 3.1.0
+info:
+  title: SUS Nexus — Core Municipal API
+  version: 1.0.0
+  description: |
+    API interna do core municipal (Fases 1–4). Contract-first: o backend implementa e o frontend gera cliente a partir deste arquivo.
+    Autenticação Bearer JWT (Keycloak). Erros em RFC 9457 (application/problem+json). Paginação por cursor.
+servers:
+  - url: http://localhost:8080
+    description: dev local
+security:
+  - bearerAuth: []
+tags:
+  - name: citizens
+  - name: mpi
+  - name: timeline
+  - name: appointments
+  - name: tasks
+  - name: integration
+  - name: regulation
+  - name: exams
+  - name: hospital
+  - name: careplan
+  - name: production
+  - name: terminology
+  - name: reference
+  - name: audit
+  - name: admin
+
+paths:
+  /api/v1/citizens:
+    get:
+      tags: [citizens]
+      summary: Busca de cidadãos
+      operationId: searchCitizens
+      parameters:
+        - name: q
+          in: query
+          description: Nome, nome social ou nome da mãe (busca textual normalizada)
+          schema: { type: string }
+        - name: identifier
+          in: query
+          description: "system|value, ex.: CNS|898001234567890 ou CPF|12345678909"
+          schema: { type: string }
+        - name: birthdate
+          in: query
+          schema: { type: string, format: date }
+        - name: registration_state
+          in: query
+          schema: { $ref: '#/components/schemas/RegistrationState' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: Página de resultados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CitizenSummary' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [citizens]
+      summary: Registrar cidadão vindo de um sistema de origem (porta única de entrada — resolve identidade)
+      operationId: registerCitizen
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CitizenRegistration' }
+      responses:
+        '200':
+          description: Cidadão resolvido (vinculado a existente)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        '201':
+          description: Cidadão criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        '202':
+          description: Correspondência pendente — caso de revisão aberto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdentityResolution' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}:
+    get:
+      tags: [citizens]
+      summary: Detalhe do cidadão (dados por perfil; identificadores mascarados por padrão)
+      operationId: getCitizen
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CitizenDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/identifiers/{identifierId}/reveal:
+    post:
+      tags: [citizens]
+      summary: Revelar identificador em claro (gera access_log com finalidade; exige papel)
+      operationId: revealIdentifier
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - name: identifierId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, justification]
+              properties:
+                purpose: { $ref: '#/components/schemas/Purpose' }
+                justification: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [system, value]
+                properties:
+                  system: { type: string }
+                  value: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/timeline:
+    get:
+      tags: [timeline]
+      summary: Linha do tempo do cidadão (filtrada por perfil/finalidade no servidor)
+      operationId: getTimeline
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: domain
+          in: query
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/Domain' }
+          style: form
+          explode: false
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TimelineEvent' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/citizens/{citizenId}/summary:
+    get:
+      tags: [timeline]
+      summary: Resumo operacional (JOR-008) — sem dado clínico além do mínimo
+      operationId: getCitizenSummary
+      parameters:
+        - $ref: '#/components/parameters/citizenId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CitizenOperationalSummary' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases:
+    get:
+      tags: [mpi]
+      summary: Fila de revisão de duplicidades/conflitos
+      operationId: listMergeCases
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MergeCaseStatus' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MergeCase' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}:
+    get:
+      tags: [mpi]
+      operationId: getMergeCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}/merge:
+    post:
+      tags: [mpi]
+      summary: Fundir (MPI-007) — exige justificativa; registra auditoria e evento
+      operationId: mergeCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [surviving_citizen_id, reason]
+              properties:
+                surviving_citizen_id: { type: string }
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/cases/{caseId}/reject:
+    post:
+      tags: [mpi]
+      summary: Rejeitar correspondência (não são a mesma pessoa)
+      operationId: rejectCase
+      parameters:
+        - $ref: '#/components/parameters/caseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/mpi/merges/{mergeId}/unmerge:
+    post:
+      tags: [mpi]
+      summary: Reverter fusão (MPI-007)
+      operationId: unmerge
+      parameters:
+        - name: mergeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MergeCase' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/appointments:
+    get:
+      tags: [appointments]
+      summary: Agenda consolidada da rede
+      operationId: listAppointments
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AppointmentStatus' }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Appointment' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [appointments]
+      summary: Registrar agendamento vindo de um sistema de origem
+      operationId: registerAppointment
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentRegistration' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '200':
+          description: Atualizado (mesmo source_record_id)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/appointments/{appointmentId}:
+    get:
+      tags: [appointments]
+      operationId: getAppointment
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/appointments/duplicates:
+    get:
+      tags: [appointments]
+      summary: Duplicidades detectadas (AGE-004)
+      operationId: listAppointmentDuplicates
+      parameters:
+        - name: window_hours
+          in: query
+          schema: { type: integer, default: 72 }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AppointmentDuplicate' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaskStatus' }
+        - name: task_type
+          in: query
+          schema: { type: string }
+        - name: assignee_kind
+          in: query
+          schema: { type: string, enum: [user, team, health_unit, queue] }
+        - name: assignee_id
+          in: query
+          schema: { type: string }
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: overdue
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks/{taskId}:
+    get:
+      tags: [tasks]
+      operationId: getTask
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/tasks/{taskId}/transition:
+    post:
+      tags: [tasks]
+      summary: Transição de estado (assign, start, complete, cancel, escalate)
+      operationId: transitionTask
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [assign, start, complete, cancel, escalate] }
+                assignee: { $ref: '#/components/schemas/Assignee' }
+                outcome: { type: string }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/connectors:
+    get:
+      tags: [integration]
+      operationId: listConnectors
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ConnectorStatus' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/connectors/{connectorId}/heartbeat:
+    post:
+      tags: [integration]
+      summary: Heartbeat/registro do conector (cliente técnico do conector)
+      operationId: connectorHeartbeat
+      parameters:
+        - name: connectorId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectorHeartbeat' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorStatus' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages:
+    post:
+      tags: [integration]
+      summary: Escrita no ledger espelho pelos conectores (upsert por id; nunca carrega o payload)
+      operationId: recordIntegrationMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntegrationMessageWrite' }
+      responses:
+        '200':
+          description: Registrado/atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationMessage' }
+        default: { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [integration]
+      operationId: listIntegrationMessages
+      parameters:
+        - name: connector_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/IntegrationMessage' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages/{messageId}:
+    get:
+      tags: [integration]
+      operationId: getIntegrationMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationMessage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/messages/{messageId}/reprocess:
+    post:
+      tags: [integration]
+      summary: Reprocessar mensagem (idempotente; efeitos externos suprimidos — KAF-012)
+      operationId: reprocessMessage
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '202':
+          description: Aceito — comando publicado em sus.integration.command.v1 (sus.integration.reprocess.requested)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id: { type: string }
+                  event_id: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/dlq:
+    get:
+      tags: [integration]
+      operationId: listDeadLetters
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeadLetter' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/integration/reconciliation:
+    post:
+      tags: [integration]
+      summary: Relatório de reconciliação enviado pelo conector (cliente técnico)
+      operationId: recordReconciliation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReconciliationEntry' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationEntry' }
+        default: { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [integration]
+      operationId: listReconciliation
+      parameters:
+        - name: connector_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReconciliationEntry' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/terminology/{system}/codes:
+    get:
+      tags: [terminology]
+      summary: Consulta de códigos (SIGTAP, CID10, CIAP2, CBO) por competência
+      operationId: searchCodes
+      parameters:
+        - name: system
+          in: path
+          required: true
+          schema: { type: string, enum: [SIGTAP, CID10, CIAP2, CBO] }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: competence
+          in: query
+          description: AAAAMM
+          schema: { type: string, pattern: '^[0-9]{6}$' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Code' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/terminology/{system}/codes/upsert:
+    post:
+      tags: [terminology]
+      summary: Upsert em lote de códigos de um sistema (SIGTAP, CID10, CBO, CIAP2) por competência
+      operationId: upsertCodes
+      parameters:
+        - name: system
+          in: path
+          required: true
+          schema: { type: string, enum: [SIGTAP, CID10, CBO, CIAP2] }
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/reference/health-units/upsert:
+    post:
+      tags: [reference]
+      summary: Upsert em lote de unidades de saúde (chave natural = cnes)
+      operationId: upsertHealthUnits
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthUnitUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/reference/health-units:
+    get:
+      tags: [reference]
+      operationId: listHealthUnits
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HealthUnit' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/audit/access:
+    get:
+      tags: [audit]
+      summary: Trilha de acessos (DPO)
+      operationId: listAccessLog
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AccessLogEntry' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests:
+    get:
+      tags: [regulation]
+      summary: Fila regulatória (REG-004)
+      operationId: listRegulationRequests
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/RegulationStatus' }
+        - name: priority
+          in: query
+          schema: { $ref: '#/components/schemas/RegulationPriority' }
+        - name: service_code
+          in: query
+          schema: { type: string }
+        - name: specialty
+          in: query
+          schema: { type: string }
+        - name: requesting_cnes
+          in: query
+          schema: { type: string }
+        - name: provider_cnes
+          in: query
+          schema: { type: string }
+        - name: territory
+          in: query
+          schema: { type: string }
+        - name: issue
+          in: query
+          description: Pendências (REG-005)
+          schema: { type: string, enum: [incomplete, returned, expired, duplicate, no_capacity, sla_breached] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [waiting_time_desc, priority_desc, created_at_asc], default: waiting_time_desc }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegulationRequest' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [regulation]
+      summary: Registrar solicitação vinda do sistema oficial de regulação (porta única; não decide)
+      operationId: registerRegulationRequest
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationRequestRegistration' }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        '200':
+          description: Atualizada (mesmo source_record_id)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}:
+    get:
+      tags: [regulation]
+      operationId: getRegulationRequest
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}/status:
+    post:
+      tags: [regulation]
+      summary: Registrar mudança de status recebida do sistema oficial (decisão, agendamento, devolução, realização, falta)
+      operationId: registerRegulationStatus
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/by-source/{system}/{sourceRecordId}/status:
+    post:
+      tags: [regulation]
+      summary: Registrar mudança de status identificando o pedido pelo registro de origem (conectores sem id interno)
+      description: |
+        Equivalente a `POST /regulation/requests/{requestId}/status`, mas o pedido é localizado por
+        (`source.system`, `source.source_record_id`) do registro já ingerido via `POST /regulation/requests`.
+        Usado por conectores (SISREG, e-SUS Regulação) que recebem eventos de status sem conhecer o id interno.
+        404 quando nenhum pedido com esse registro de origem existe no tenant.
+      operationId: registerRegulationStatusBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/requests/{requestId}/issues:
+    post:
+      tags: [regulation]
+      summary: Registrar pendência documental/administrativa (humano ou agente com aprovação)
+      operationId: addRegulationIssue
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, description]
+              properties:
+                kind: { type: string, enum: [missing_document, missing_field, clinical_justification, duplicate, other] }
+                description: { type: string, maxLength: 1000 }
+                origin:
+                  type: object
+                  properties:
+                    kind: { type: string, enum: [user, agent, rule] }
+                    id: { type: string }
+                    version: { type: string }
+      responses:
+        '201':
+          description: Criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/capacity:
+    get:
+      tags: [regulation]
+      summary: Oferta/capacidade por prestador e serviço (REG-006)
+      operationId: listProviderCapacity
+      parameters:
+        - name: provider_cnes
+          in: query
+          schema: { type: string }
+        - name: service_code
+          in: query
+          schema: { type: string }
+        - name: competence
+          in: query
+          schema: { type: string, pattern: '^[0-9]{6}$' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProviderCapacity' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [regulation]
+      operationId: upsertProviderCapacity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: '#/components/schemas/ProviderCapacity' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/regulation/queues/summary:
+    get:
+      tags: [regulation]
+      summary: Indicadores da fila por especialidade/procedimento (tempo de espera, SLA, pendências)
+      operationId: getRegulationQueueSummary
+      parameters:
+        - name: group_by
+          in: query
+          schema: { type: string, enum: [service_code, specialty, provider_cnes, requesting_cnes, priority], default: specialty }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegulationQueueItem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders:
+    get:
+      tags: [exams]
+      summary: Pedidos de exame (ciclo pedido → agendamento → realização → laudo → retorno)
+      operationId: listExamOrders
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ExamOrderStatus' }
+        - name: issue
+          in: query
+          schema: { type: string, enum: [not_scheduled, no_result_followup, result_pending, integration_failure, inconclusive, critical] }
+        - name: requesting_cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ExamOrder' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [exams]
+      summary: Registrar pedido de exame vindo de um sistema de origem
+      operationId: registerExamOrder
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamOrderRegistration' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        '200':
+          description: Atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}:
+    get:
+      tags: [exams]
+      operationId: getExamOrder
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/status:
+    post:
+      tags: [exams]
+      summary: Registrar mudança de status (EXA-002)
+      operationId: registerExamOrderStatus
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/results:
+    post:
+      tags: [exams]
+      summary: Registrar resultado/laudo (metadados e referência segura; EXA-006/007)
+      operationId: registerExamResult
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamResultRegistration' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/by-source/{system}/{sourceRecordId}/results:
+    post:
+      tags: [exams]
+      summary: Registrar resultado/laudo identificando o pedido pelo registro de origem (LIS via HL7 ORU sem id interno)
+      description: |
+        Equivalente a `POST /exams/orders/{orderId}/results`, mas o pedido é localizado por
+        (`source.system`, `source.source_record_id`) do pedido já ingerido via `POST /exams/orders`
+        (ex.: número de pedido ORC-2/ORC-3 do HL7 ORM). 404 quando o pedido de origem não existe no tenant.
+      operationId: registerExamResultBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamResultRegistration' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/exams/orders/{orderId}/results/{resultId}/document:
+    get:
+      tags: [exams]
+      summary: Obter referência segura (URL assinada, curta) ao laudo — gera access_log
+      operationId: getExamResultDocument
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+        - name: resultId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+                  content_type: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes:
+    get:
+      tags: [hospital]
+      summary: Internações e passagens por urgência (HOS-006)
+      operationId: listHospitalEpisodes
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: hospital_cnes
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/HospitalEpisodeStatus' }
+        - name: discharged_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: discharged_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: reference_cnes
+          in: query
+          description: UBS de referência do cidadão (para a APS acompanhar sua população)
+          schema: { type: string }
+        - name: followup_status
+          in: query
+          schema: { type: string, enum: [pending, contacted, scheduled, closed, escalated] }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HospitalEpisode' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [hospital]
+      summary: Registrar movimentação ADT vinda do HIS (admissão, transferência, leito, alta, óbito)
+      operationId: registerHospitalMovement
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HospitalMovementRegistration' }
+      responses:
+        '201':
+          description: Episódio criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        '200':
+          description: Episódio atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}:
+    get:
+      tags: [hospital]
+      operationId: getHospitalEpisode
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/discharge:
+    post:
+      tags: [hospital]
+      summary: Registrar alta/sumário de alta (metadados) e disparar o fluxo pós-alta (HOS-003/004)
+      operationId: registerDischarge
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DischargeRegistration' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/counter-referral:
+    post:
+      tags: [hospital]
+      summary: Registrar contrarreferência recebida (HOS-008) — metadados e referência segura
+      operationId: registerCounterReferral
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CounterReferralRegistration' }
+      responses:
+        '201':
+          description: Registrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/{episodeId}/followup:
+    post:
+      tags: [hospital]
+      summary: Registrar resultado da tentativa de contato pós-alta (CUI-006)
+      operationId: registerDischargeFollowup
+      parameters:
+        - $ref: '#/components/parameters/episodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [contact_made, appointment_scheduled, deceased, moved, refused, not_found] }
+                note: { type: string, maxLength: 500 }
+                contacted_at: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/hospital/episodes/by-source/{system}/{sourceRecordId}/discharge:
+    post:
+      tags: [hospital]
+      summary: Alta por identificador de origem (uso dos conectores)
+      operationId: registerDischargeBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DischargeRegistration' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HospitalEpisode' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans:
+    get:
+      tags: [careplan]
+      operationId: listCarePlans
+      parameters:
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, on_hold, completed, cancelled] }
+        - name: team_ine
+          in: query
+          schema: { type: string }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CarePlan' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [careplan]
+      summary: Criar plano de cuidado a partir de um protocolo vigente (CUI-001)
+      operationId: createCarePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarePlanCreate' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}:
+    get:
+      tags: [careplan]
+      operationId: getCarePlan
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}/items/{itemId}:
+    post:
+      tags: [careplan]
+      summary: Registrar realização/desfecho de um item previsto (CUI-002)
+      operationId: updateCarePlanItem
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [planned, scheduled, done, missed, cancelled] }
+                performed_at: { type: string, format: date-time }
+                evidence_ref: { type: string, description: Referência ao evento/atendimento/exame que comprova }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/careplans/{carePlanId}/close:
+    post:
+      tags: [careplan]
+      operationId: closeCarePlan
+      parameters:
+        - $ref: '#/components/parameters/carePlanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [completed, cancelled] }
+                reason: { type: string, minLength: 5, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarePlan' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/caregaps:
+    get:
+      tags: [careplan]
+      summary: Lacunas de cuidado / lista de busca ativa (CUI-003/004)
+      operationId: listCareGaps
+      parameters:
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: gap_kind
+          in: query
+          schema: { $ref: '#/components/schemas/CareGapKind' }
+        - name: cnes
+          in: query
+          schema: { type: string }
+        - name: team_ine
+          in: query
+          schema: { type: string }
+        - name: microarea
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, resolved], default: open }
+        - name: min_days_overdue
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CareGap' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/caregaps/{careGapId}/resolve:
+    post:
+      tags: [careplan]
+      summary: Registrar desfecho da busca ativa (CUI-006)
+      operationId: resolveCareGap
+      parameters:
+        - name: careGapId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution: { type: string, enum: [performed, scheduled, contact_made, refused, moved, deceased, not_found, cancelled] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareGap' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/protocols:
+    get:
+      tags: [careplan]
+      summary: Protocolos de linha de cuidado (configuráveis, versionados — CUI-009)
+      operationId: listProtocols
+      parameters:
+        - name: care_line
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, in_review, approved, active, revoked] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [careplan]
+      summary: Criar nova versão de protocolo (rascunho)
+      operationId: createProtocolVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolCreate' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/protocols/{protocolId}/versions/{version}/transition:
+    post:
+      tags: [careplan]
+      summary: Ciclo de aprovação (draft → in_review → approved → active → revoked) com responsável e testes anexados
+      operationId: transitionProtocolVersion
+      parameters:
+        - name: protocolId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [submit, approve, activate, revoke] }
+                justification: { type: string, maxLength: 500 }
+                effective_from: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records:
+    get:
+      tags: [production]
+      summary: Registros de produção com status de pré-auditoria (PRO-001..004)
+      description: |
+        Papéis: auditor (tudo), gestor, operador_integracao e admin_municipal (leitura). Dado administrativo de
+        faturamento — não aparece na timeline do cidadão. CNS/CPF só mascarados.
+      operationId: listProductionRecords
+      parameters:
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionKind' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionRecordStatus' }
+        - name: procedure_code
+          in: query
+          schema: { type: string }
+        - name: citizen_id
+          in: query
+          schema: { type: string }
+        - name: batch_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionRecord' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [production]
+      summary: Registrar produção vinda de fonte (upsert por vínculo de origem) e pré-auditar
+      description: |
+        Upsert por `(tenant, source.system, source.source_record_id)`. A pré-auditoria roda na hora com o
+        conjunto de regras vigente `production-validation` (platform.rule_set): sem erro → `validated`;
+        com erro → `pending` + tarefa `production_issue` na fila `auditoria`. Reenvio idêntico devolve 200
+        sem alteração; atualização de registro já exportado/transmitido → 409 (corrigir no sistema oficial).
+        Papéis: operador_integracao (conectores), auditor.
+      operationId: registerProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionRecordRegistration' }
+      responses:
+        '201':
+          description: Registro criado e pré-auditado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        '200':
+          description: Registro atualizado (ou inalterado) e pré-auditado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/{recordId}:
+    get:
+      tags: [production]
+      operationId: getProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/by-source/{system}/{sourceRecordId}:
+    get:
+      tags: [production]
+      summary: Registro de produção pelo identificador de origem (uso dos conectores)
+      operationId: getProductionRecordBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/purpose'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/records/{recordId}/corrections:
+    post:
+      tags: [production]
+      summary: Corrigir registro com justificativa e revalidar (PRO-006)
+      description: |
+        Somente humano com papel `auditor` (agente de IA → 403, PRO-010). Justificativa obrigatória
+        (≥ 10 caracteres); alterações e justificativa vão para `production_record_history` e `audit_log`.
+        Permitida em `pending`, `validated` (fora de lote aprovado) e `rejected` (reapresentação). Avisos
+        podem ser dispensados (`waive_issue_ids`); erros não. Sinaliza o `ProductionPreAuditWorkflow`.
+      operationId: correctProductionRecord
+      parameters:
+        - $ref: '#/components/parameters/recordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionCorrection' }
+      responses:
+        '200':
+          description: Corrigido e revalidado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/issues:
+    get:
+      tags: [production]
+      summary: Pendências de pré-auditoria (fila do auditor; leitura permitida ao agente de IA)
+      operationId: listProductionIssues
+      parameters:
+        - name: severity
+          in: query
+          schema: { type: string, enum: [error, warning] }
+        - name: rule
+          in: query
+          description: rule_id (ex. `cbo_incompatible`)
+          schema: { type: string }
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: kind
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionKind' }
+        - name: status
+          in: query
+          description: padrão `open`
+          schema: { type: string, enum: [open, resolved, waived] }
+        - name: record_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionIssue' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches:
+    get:
+      tags: [production]
+      operationId: listProductionBatches
+      parameters:
+        - name: competence
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ProductionBatchStatus' }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionBatch' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [production]
+      summary: Gerar lote (rascunho) de uma competência/CNES/tipo — somente registros `validated` (PRO-005)
+      description: |
+        Inclui todos os registros `validated` da competência/CNES/tipo que não estão em outro lote. Sem
+        registros elegíveis → 422. Papel: auditor. O lote nasce `draft` e só pode ser exportado após
+        aprovação humana (`/approve`).
+      operationId: createProductionBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchCreate' }
+      responses:
+        '201':
+          description: Lote gerado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}:
+    get:
+      tags: [production]
+      operationId: getProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}/approve:
+    post:
+      tags: [production]
+      summary: Aprovação humana obrigatória do lote (PRO-010)
+      description: |
+        Papéis `auditor` ou `gestor`, com justificativa (≥ 10 caracteres). Agente de IA → 403 mesmo que o
+        token carregue outro papel. **Quatro olhos**: quem gerou o lote (`created_by`) não pode aprová-lo →
+        403 `urn:sus-nexus:problem:four-eyes` (no serviço e na política OPA `sus.production`, ação
+        `approve_batch` com `resource.created_by`). Lote fora de `draft` → 409. Registrado em `audit_log`.
+      operationId: approveProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchApproval' }
+      responses:
+        '200':
+          description: Aprovado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/batches/{batchId}/export:
+    post:
+      tags: [production]
+      summary: Exportar lote aprovado em layout configurável (arquivo + sha256); marca registros `exported`
+      description: |
+        Gera o arquivo no armazenamento de exportação (`ExportStorage`: `file` em dev/test ou `s3` — bucket
+        `production-exports` com SSE, chave `<tenant>/<competência>/<lote>/<arquivo>`, sem sobrescrita) e
+        devolve a referência (`file://` ou `s3://`) e o SHA-256. O arquivo contém CNS em claro: acesso ao
+        diretório/bucket restrito à credencial do core.
+        O arquivo contém também os dados nominais do paciente exigidos pelo layout (nome, nascimento, endereço).
+        Layouts: `bpa_mag_v202412` ("Layout de Exportação BPA" do DATASUS/SIA, 12/2024 — cabeçalho `#BPA#`,
+        BPA-C tipo 02 e BPA-I tipo 03, campo de controle; só BPA-C/BPA-I), `apac_mag_v202607` (layout de
+        interface texto APAC/SIA, 07/2026 — registros 01, 14 e 13; só APAC; partes variáveis de laudo e campos
+        de autorização são completados no APAC-Mag/SIA) e `csv_ref_v1` (CSV de referência, qualquer tipo; AIH
+        só neste — layout SISAIH01 não implementado). Fontes e pendências de conferência em
+        `docs/integracoes/layouts-sia-sih.md`. A transmissão oficial continua no sistema oficial (SIA/SIH); o
+        barramento só marca `exported`. Papel: auditor. Agente de IA → 403. Lote não aprovado → 409; layout
+        incompatível com o tipo do lote → 422.
+      operationId: exportProductionBatch
+      parameters:
+        - $ref: '#/components/parameters/batchId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionBatchExportRequest' }
+      responses:
+        '200':
+          description: Exportado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionBatch' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/outcomes:
+    post:
+      tags: [production]
+      summary: Retorno do processamento oficial por registro ou lote (PRO-008)
+      description: |
+        `transmitted`/`received`/`accepted` aceitam escopo de lote (`batch_id`); `rejected` e `paid` exigem
+        registro (`production_record_id` ou `record_source`). `rejected` reabre pendência com o motivo
+        oficial (issue `official_rejection`) e tarefa `production_issue`; `paid` grava o valor. Idempotente
+        por `(source.system, source.source_record_id, outcome, registro/lote)`. Papéis: operador_integracao,
+        auditor. Cada registro afetado publica `sus.production.outcome.<outcome>` (inclusive `transmitted`
+        por lote: um evento por registro, além de `sus.production.submission.transmitted` do lote).
+      operationId: registerProductionOutcome
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionOutcomeRegistration' }
+      responses:
+        '200':
+          description: Aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionOutcomeResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/rules:
+    post:
+      tags: [production]
+      summary: Nova versão da regra de pré-auditoria `production-validation` do tenant
+      description: |
+        "Configuração antes de código" (plano §8.3). Papéis `gestor` ou `admin_municipal` (+ OPA
+        `create_rule_version`); agente de IA → 403. O jsonb é validado contra a gramática restrita do
+        avaliador (`kind=validation_rules`; regras com `id` único, `severity` error|warning, `message`,
+        `field`, `enabled` e condição de violação `when` com `all`/`any`/`not` e
+        `fact`/`op`/`value`; operadores eq, ne, gt, ge, lt, le, in, contains_any, is_true, is_false,
+        present; somente fatos calculados pelo core) e **todos os casos de teste anexados são executados
+        antes de ativar** (`expected` = ids das regras violadas). Qualquer falha → 422 com `errors`, nada é
+        gravado. Sucesso: nova versão (número sequencial) ativa para o tenant, revogando a versão anterior
+        do próprio tenant; a versão global (seed) permanece para os demais. Registrado em `audit_log` com
+        a justificativa. Novas pré-auditorias passam a gravar `rule_version` = `production-validation/<n>`.
+      operationId: createProductionRuleVersion
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductionRuleVersionCreate' }
+      responses:
+        '201':
+          description: Versão validada, testada e ativada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionRuleVersion' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/summary:
+    get:
+      tags: [production]
+      summary: Painel de produção da competência (PRO-009)
+      description: Papéis gestor, auditor, admin_municipal. Contagens por status, valores estimado/pago e perda evitável estimada.
+      operationId: getProductionSummary
+      parameters:
+        - name: competence
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: cnes
+          in: query
+          schema: { type: string, pattern: '^[0-9]{7}$' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductionSummary' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/production/deadlines:
+    get:
+      tags: [production]
+      summary: Competências e prazos de apresentação (PRO-007)
+      description: |
+        Prazo configurável em `production.production_deadline` (seed global: dia 10 do mês seguinte, 23:59
+        America/Sao_Paulo; linha do tenant sobrepõe). Alertas D-5 e D-1 viram tarefas na fila `auditoria`.
+      operationId: listProductionDeadlines
+      parameters:
+        - name: from
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+        - name: to
+          in: query
+          schema: { $ref: '#/components/schemas/Competence' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProductionDeadline' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/admin/rules:
+    get:
+      tags: [admin]
+      summary: Conjuntos de regras versionados (SLA, MPI, protocolos)
+      operationId: listRuleSets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RuleSet' }
+        default: { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    purpose:
+      name: X-Purpose-Of-Use
+      in: header
+      required: true
+      description: Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log.
+      schema: { $ref: '#/components/schemas/Purpose' }
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422.
+      schema: { type: string, maxLength: 128 }
+    correlationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string }
+    citizenId:
+      name: citizenId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^cit_[0-9A-HJKMNP-TV-Z]{26}$' }
+    caseId:
+      name: caseId
+      in: path
+      required: true
+      schema: { type: string }
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string }
+    requestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string }
+    orderId:
+      name: orderId
+      in: path
+      required: true
+      schema: { type: string }
+    episodeId:
+      name: episodeId
+      in: path
+      required: true
+      schema: { type: string }
+    carePlanId:
+      name: carePlanId
+      in: path
+      required: true
+      schema: { type: string }
+    recordId:
+      name: recordId
+      in: path
+      required: true
+      schema: { type: string }
+    batchId:
+      name: batchId
+      in: path
+      required: true
+      schema: { type: string }
+    sourceSystem:
+      name: system
+      in: path
+      required: true
+      description: Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS
+      schema: { type: string, maxLength: 64 }
+    sourceRecordId:
+      name: sourceRecordId
+      in: path
+      required: true
+      description: Identificador do registro no sistema de origem (`source.source_record_id`)
+      schema: { type: string, maxLength: 256 }
+
+  responses:
+    Problem:
+      description: Erro (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Purpose:
+      type: string
+      enum: [care_coordination, regulation, scheduling, identity_management, production_audit, public_health_surveillance, management_analytics, integration_operations, security_audit]
+
+    Domain:
+      type: string
+      enum: [identity, aps, schedule, regulation, exam, hospital, careplan, task, production, communication]
+
+    RegistrationState:
+      type: string
+      enum: [validated, divergent, incomplete, duplicate, pending]
+
+    IdentifierSystem:
+      type: string
+      enum: [CNS, CPF, PEC, SISREG, ESUS_REGULACAO, HIS, AIH, APAC, LOCAL]
+
+    MaskedIdentifier:
+      type: object
+      required: [id, system, value_masked, status, source_system]
+      properties:
+        id: { type: string }
+        system: { $ref: '#/components/schemas/IdentifierSystem' }
+        value_masked: { type: string }
+        status: { type: string, enum: [active, deprecated, invalid] }
+        source_system: { type: string }
+        valid_from: { type: string, format: date-time }
+
+    Provenance:
+      type: object
+      required: [source_system, received_at]
+      properties:
+        source_system: { type: string }
+        source_record_id: { type: string }
+        received_at: { type: string, format: date-time }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    CitizenSummary:
+      type: object
+      required: [id, display_name, registration_state, identifiers]
+      properties:
+        id: { type: string }
+        display_name: { type: string, description: Nome social quando existir }
+        birthdate: { type: string, format: date }
+        sex: { type: string, enum: [female, male, unknown] }
+        mother_name_masked: { type: string }
+        registration_state: { $ref: '#/components/schemas/RegistrationState' }
+        identifiers:
+          type: array
+          items: { $ref: '#/components/schemas/MaskedIdentifier' }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        microarea: { type: string }
+        identity_confidence: { type: string, enum: [confirmed, probable, pending, divergent] }
+
+    CitizenDetail:
+      allOf:
+        - $ref: '#/components/schemas/CitizenSummary'
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer }
+            legal_name: { type: string }
+            social_name: { type: string }
+            mother_name: { type: string }
+            address:
+              type: object
+              properties:
+                street: { type: string }
+                number: { type: string }
+                complement: { type: string }
+                district: { type: string }
+                city_ibge: { type: string }
+                postal_code: { type: string }
+            contacts:
+              type: array
+              items:
+                type: object
+                properties:
+                  kind: { type: string, enum: [phone, mobile, email] }
+                  value_masked: { type: string }
+                  preferred: { type: boolean }
+            attribute_provenance:
+              type: object
+              additionalProperties: { $ref: '#/components/schemas/Provenance' }
+            data_quality_issues:
+              type: array
+              items:
+                type: object
+                properties:
+                  rule: { type: string }
+                  field: { type: string }
+                  message: { type: string }
+
+    CitizenRegistration:
+      type: object
+      required: [source, demographics]
+      properties:
+        source:
+          type: object
+          required: [system, connector, source_record_id]
+          properties:
+            system: { type: string }
+            connector: { type: string }
+            source_record_id: { type: string }
+            source_record_version: { type: string }
+            cnes: { type: string }
+        identifiers:
+          type: array
+          items:
+            type: object
+            required: [system, value]
+            properties:
+              system: { $ref: '#/components/schemas/IdentifierSystem' }
+              value: { type: string }
+        demographics:
+          type: object
+          required: [legal_name, birthdate]
+          properties:
+            legal_name: { type: string }
+            social_name: { type: string }
+            mother_name: { type: string }
+            father_name: { type: string }
+            birthdate: { type: string, format: date }
+            sex: { type: string, enum: [female, male, unknown] }
+            race_color: { type: string }
+            nationality: { type: string }
+            deceased: { type: boolean }
+            deceased_at: { type: string, format: date }
+        address:
+          type: object
+          properties:
+            street: { type: string }
+            number: { type: string }
+            complement: { type: string }
+            district: { type: string }
+            city_ibge: { type: string }
+            postal_code: { type: string }
+        contacts:
+          type: array
+          items:
+            type: object
+            required: [kind, value]
+            properties:
+              kind: { type: string, enum: [phone, mobile, email] }
+              value: { type: string }
+        territory:
+          type: object
+          properties:
+            health_unit_cnes: { type: string }
+            team_ine: { type: string }
+            microarea: { type: string }
+
+    IdentityResolution:
+      type: object
+      required: [municipal_citizen_id, classification, method]
+      properties:
+        municipal_citizen_id: { type: string }
+        classification: { type: string, enum: [confirmed, probable, pending, rejected, new] }
+        method: { type: string }
+        score: { type: number }
+        rule_version: { type: string }
+        merge_case_id: { type: string }
+        registration_state: { $ref: '#/components/schemas/RegistrationState' }
+
+    MergeCaseStatus:
+      type: string
+      enum: [open, in_review, merged, rejected, unmerged]
+
+    MergeCase:
+      type: object
+      required: [id, status, candidates, opened_at]
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/MergeCaseStatus' }
+        reason: { type: string }
+        score: { type: number }
+        rule_version: { type: string }
+        candidates:
+          type: array
+          minItems: 2
+          items: { $ref: '#/components/schemas/CitizenSummary' }
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              attribute: { type: string }
+              comparison: { type: string }
+              agreement: { type: string, enum: [agree, disagree, missing] }
+              weight: { type: number }
+        conflicts:
+          type: array
+          description: Divergências relevantes (CNS, CPF, data de nascimento) que impedem fusão automática
+          items: { type: string }
+        opened_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string }
+        decision_reason: { type: string }
+        merge_id: { type: string }
+
+    AppointmentStatus:
+      type: string
+      enum: [proposed, booked, confirmed, arrived, fulfilled, cancelled, noshow, waitlist]
+
+    Appointment:
+      type: object
+      required: [id, citizen_id, status, kind, scheduled_start, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        kind: { type: string, enum: [direct, regulated, walk_in, block, waitlist, return] }
+        service_code: { type: string }
+        code_system: { type: string }
+        service_description: { type: string }
+        health_unit_cnes: { type: string }
+        professional_id: { type: string }
+        scheduled_start: { type: string, format: date-time }
+        scheduled_end: { type: string, format: date-time }
+        regulation_request_id: { type: string }
+        exam_order_id: { type: string }
+        care_line: { type: string }
+        cancellation_reason: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/AppointmentStatus' }
+              occurred_at: { type: string, format: date-time }
+              reason: { type: string }
+
+    AppointmentRegistration:
+      type: object
+      required: [source, citizen_ref, status, kind, scheduled_start]
+      properties:
+        source:
+          type: object
+          required: [system, connector, source_record_id]
+          properties:
+            system: { type: string }
+            connector: { type: string }
+            source_record_id: { type: string }
+            source_record_version: { type: string }
+            cnes: { type: string }
+        citizen_ref:
+          type: object
+          description: municipal_citizen_id OU identificador de origem para resolução
+          properties:
+            municipal_citizen_id: { type: string }
+            identifier_system: { $ref: '#/components/schemas/IdentifierSystem' }
+            identifier_value: { type: string }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        kind: { type: string, enum: [direct, regulated, walk_in, block, waitlist, return] }
+        service_code: { type: string }
+        code_system: { type: string }
+        health_unit_cnes: { type: string }
+        professional_id: { type: string }
+        scheduled_start: { type: string, format: date-time }
+        scheduled_end: { type: string, format: date-time }
+        occurred_at: { type: string, format: date-time }
+        regulation_request_id: { type: string }
+        exam_order_id: { type: string }
+        care_line: { type: string }
+        cancellation_reason: { type: string }
+
+    AppointmentDuplicate:
+      type: object
+      required: [citizen_id, appointments, detected_at]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        window_hours: { type: integer }
+        service_code: { type: string }
+        appointments:
+          type: array
+          items: { $ref: '#/components/schemas/Appointment' }
+        detected_at: { type: string, format: date-time }
+
+    TaskStatus:
+      type: string
+      enum: [open, assigned, in_progress, completed, cancelled, escalated]
+
+    Assignee:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [user, team, health_unit, queue] }
+        id: { type: string }
+
+    Task:
+      type: object
+      required: [id, task_type, status, priority, created_at]
+      properties:
+        id: { type: string }
+        task_type: { type: string }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        title: { type: string }
+        description: { type: string }
+        citizen_id: { type: string }
+        assignee: { $ref: '#/components/schemas/Assignee' }
+        due_at: { type: string, format: date-time }
+        sla_policy_id: { type: string }
+        overdue: { type: boolean }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [workflow, agent, user, rule, connector] }
+            id: { type: string }
+            version: { type: string }
+        outcome: { type: string }
+        reason: { type: string }
+        sla_breached_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer }
+
+    TaskCreate:
+      type: object
+      required: [task_type, priority, title]
+      properties:
+        task_type: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        title: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        citizen_id: { type: string }
+        assignee: { $ref: '#/components/schemas/Assignee' }
+        due_at: { type: string, format: date-time }
+        sla_policy_id: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [workflow, agent, user, rule, connector] }
+            id: { type: string }
+            version: { type: string }
+
+    ConnectorStatus:
+      type: object
+      required: [connector_id, connector_version, source_system, health]
+      properties:
+        connector_id: { type: string }
+        connector_version: { type: string }
+        source_system: { type: string }
+        health: { type: string, enum: [healthy, degraded, down, unknown] }
+        health_detail: { type: string }
+        last_message_at: { type: string, format: date-time }
+        last_heartbeat_at: { type: string, format: date-time }
+        received_24h: { type: integer }
+        failed_24h: { type: integer }
+        dlq_open: { type: integer }
+        reconciliation_gap: { type: integer }
+
+    IntegrationMessageStatus:
+      type: string
+      enum: [received, transformed, validated, published, processed, failed, dead_lettered, reprocessing]
+
+    IntegrationMessage:
+      type: object
+      required: [id, connector_id, source_system, status, received_at]
+      properties:
+        id: { type: string }
+        connector_id: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        source_record_version: { type: string }
+        entity_type: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        raw_ref: { type: string, description: Referência à raw zone (object storage) }
+        raw_sha256: { type: string }
+        correlation_id: { type: string }
+        received_at: { type: string, format: date-time }
+        processed_at: { type: string, format: date-time }
+        attempts: { type: integer }
+        last_error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            stage: { type: string }
+            occurred_at: { type: string, format: date-time }
+
+    IntegrationMessageWrite:
+      type: object
+      description: Escrita no ledger espelho (sem payload). Upsert por id (msg_<ULID> gerado pelo conector).
+      required: [id, connector_id, source_system, status]
+      properties:
+        id: { type: string, pattern: '^msg_[0-9A-HJKMNP-TV-Z]{26}$' }
+        connector_id: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        source_record_version: { type: string }
+        entity_type: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationMessageStatus' }
+        raw_ref: { type: string }
+        raw_sha256: { type: string }
+        correlation_id: { type: string }
+        received_at: { type: string, format: date-time }
+        processed_at: { type: string, format: date-time }
+        attempts: { type: integer }
+        last_error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            stage: { type: string }
+            occurred_at: { type: string, format: date-time }
+        dead_letter:
+          type: object
+          description: Quando presente, abre/atualiza o dead letter da mensagem
+          required: [reason]
+          properties:
+            topic: { type: string }
+            reason: { type: string }
+            stage: { type: string }
+            owner: { type: string }
+            payload_ref: { type: string }
+
+    ConnectorHeartbeat:
+      type: object
+      required: [connector_version, source_system]
+      properties:
+        connector_version: { type: string }
+        source_system: { type: string }
+        health: { type: string, enum: [healthy, degraded, down, unknown] }
+        detail: { type: string }
+        descriptor: { type: object, additionalProperties: true, description: ConnectorDescriptor do SDK }
+        metrics: { type: object, additionalProperties: true }
+
+    DeadLetter:
+      type: object
+      required: [id, message_id, reason, attempts, created_at]
+      properties:
+        id: { type: string }
+        message_id: { type: string }
+        connector_id: { type: string }
+        topic: { type: string }
+        reason: { type: string }
+        stage: { type: string }
+        attempts: { type: integer }
+        owner: { type: string }
+        payload_ref: { type: string }
+        created_at: { type: string, format: date-time }
+        triaged_at: { type: string, format: date-time }
+
+    ReconciliationEntry:
+      type: object
+      required: [connector_id, entity_type, period_start, period_end, source_count, bus_count, gap]
+      properties:
+        id: { type: string, readOnly: true }
+        connector_id: { type: string }
+        entity_type: { type: string }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        source_count: { type: integer }
+        bus_count: { type: integer }
+        gap: { type: integer }
+        checked_at: { type: string, format: date-time }
+
+    Code:
+      type: object
+      required: [system, code, display]
+      properties:
+        system: { type: string }
+        code: { type: string }
+        display: { type: string }
+        competence_from: { type: string }
+        competence_to: { type: string }
+        attributes:
+          type: object
+          additionalProperties: true
+
+    HealthUnit:
+      type: object
+      required: [id, cnes, name]
+      properties:
+        id: { type: string }
+        cnes: { type: string }
+        name: { type: string }
+        kind_code: { type: string }
+        kind_description: { type: string }
+        address: { type: string }
+        active: { type: boolean }
+
+    SourceRef:
+      type: object
+      required: [system, connector, source_record_id]
+      properties:
+        system: { type: string }
+        connector: { type: string }
+        source_record_id: { type: string, description: Nome do arquivo/lote de origem }
+        source_record_version: { type: string, description: Hash ou versão do arquivo }
+        cnes: { type: string }
+
+    HealthUnitUpsert:
+      type: object
+      required: [cnes, name]
+      properties:
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        name: { type: string }
+        kind_code: { type: string }
+        kind_description: { type: string }
+        address: { type: string }
+        city_ibge: { type: string }
+        active: { type: boolean }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        attributes: { type: object, additionalProperties: true }
+
+    HealthUnitUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/HealthUnitUpsert' }
+
+    CodeUpsert:
+      type: object
+      required: [code, display]
+      properties:
+        code: { type: string }
+        display: { type: string }
+        competence_from: { type: string }
+        competence_to: { type: string }
+        attributes: { type: object, additionalProperties: true }
+
+    CodeUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, description: Competência do arquivo (AAAAMM) }
+        version: { type: string, description: Versão do layout/mapeamento usado }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/CodeUpsert' }
+
+    UpsertResult:
+      type: object
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        rejected: { type: integer }
+
+    TimelineEvent:
+      type: object
+      required: [id, citizen_id, domain, event_type, occurred_at, recorded_at, source_system, status]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        domain: { $ref: '#/components/schemas/Domain' }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        recorded_at: { type: string, format: date-time }
+        source_system: { type: string }
+        cnes: { type: string }
+        health_unit_name: { type: string }
+        professional_ref: { type: string }
+        status: { type: string }
+        confidence: { type: string, enum: [confirmed, pending, divergent, unsynced] }
+        sensitivity: { type: string, enum: [public, internal, restricted, highly_restricted] }
+        summary: { type: string }
+        detail_ref: { type: string }
+        correlation_chain:
+          type: array
+          items: { type: string }
+
+    CitizenOperationalSummary:
+      type: object
+      required: [citizen_id]
+      properties:
+        citizen_id: { type: string }
+        last_aps_encounter_at: { type: string, format: date-time }
+        next_appointment_at: { type: string, format: date-time }
+        open_tasks: { type: integer }
+        open_regulation_requests: { type: integer }
+        pending_exams: { type: integer }
+        last_hospital_discharge_at: { type: string, format: date-time }
+        care_lines: { type: array, items: { type: string } }
+        care_gaps: { type: integer }
+        contact_valid: { type: boolean }
+
+    AccessLogEntry:
+      type: object
+      required: [id, actor_id, action, resource_type, occurred_at, purpose]
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        actor_roles: { type: array, items: { type: string } }
+        action: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        citizen_id: { type: string }
+        purpose: { $ref: '#/components/schemas/Purpose' }
+        decision: { type: string, enum: [allow, deny] }
+        break_glass: { type: boolean }
+        correlation_id: { type: string }
+        occurred_at: { type: string, format: date-time }
+
+    RuleSet:
+      type: object
+      required: [id, name, current_version, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        current_version: { type: string }
+        status: { type: string, enum: [draft, in_review, approved, active, revoked] }
+        effective_from: { type: string, format: date-time }
+        approved_by: { type: string }
+
+    RegulationStatus:
+      type: string
+      enum: [requested, pending_documents, returned, under_review, authorized, denied, scheduled, cancelled, no_show, performed, expired]
+
+    RegulationPriority:
+      type: string
+      enum: [elective, priority, urgent, emergency]
+
+    RegulationKind:
+      type: string
+      enum: [consultation, exam, procedure, surgery, admission]
+
+    SourceRefInput:
+      type: object
+      required: [system, connector, source_record_id]
+      properties:
+        system: { type: string }
+        connector: { type: string }
+        source_record_id: { type: string }
+        source_record_version: { type: string }
+        cnes: { type: string }
+
+    CitizenRef:
+      type: object
+      description: municipal_citizen_id OU identificador de origem para resolução
+      properties:
+        municipal_citizen_id: { type: string }
+        identifier_system: { $ref: '#/components/schemas/IdentifierSystem' }
+        identifier_value: { type: string }
+
+    RegulationRequestRegistration:
+      type: object
+      required: [source, citizen_ref, kind, status, requested_at, requested_service_code]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        kind: { $ref: '#/components/schemas/RegulationKind' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        requested_at: { type: string, format: date-time }
+        requested_service_code: { type: string }
+        code_system: { type: string, enum: [SIGTAP, LOCAL], default: SIGTAP }
+        specialty: { type: string }
+        requesting_cnes: { type: string }
+        requesting_professional_id: { type: string }
+        requesting_professional_cbo: { type: string }
+        justification_present: { type: boolean, description: Indica se há justificativa clínica (o texto permanece no sistema oficial) }
+        attached_documents_count: { type: integer, minimum: 0 }
+        cid_code: { type: string, description: Somente quando a finalidade permitir; omitido para condições highly_restricted }
+        provider_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        regulator_id: { type: string }
+        decision_reason: { type: string, maxLength: 500 }
+        occurred_at: { type: string, format: date-time }
+
+    RegulationStatusChange:
+      type: object
+      required: [source, status, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        occurred_at: { type: string, format: date-time }
+        provider_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_source_record_id: { type: string }
+        regulator_id: { type: string }
+        reason: { type: string, maxLength: 500 }
+        return_to_origin: { type: boolean }
+
+    RegulationIssue:
+      type: object
+      required: [id, kind, status, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [missing_document, missing_field, clinical_justification, duplicate, other, sla_breached, no_capacity, expired] }
+        status: { type: string, enum: [open, resolved] }
+        description: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [user, agent, rule, workflow, connector] }
+            id: { type: string }
+            version: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+
+    RegulationRequest:
+      type: object
+      required: [id, citizen_id, kind, status, requested_at, requested_service_code, source_system, waiting_days]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        kind: { $ref: '#/components/schemas/RegulationKind' }
+        status: { $ref: '#/components/schemas/RegulationStatus' }
+        priority: { $ref: '#/components/schemas/RegulationPriority' }
+        requested_at: { type: string, format: date-time }
+        requested_service_code: { type: string }
+        code_system: { type: string }
+        service_description: { type: string }
+        specialty: { type: string }
+        requesting_cnes: { type: string }
+        requesting_unit_name: { type: string }
+        requesting_professional_id: { type: string }
+        provider_cnes: { type: string }
+        provider_name: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_id: { type: string }
+        regulator_id: { type: string }
+        decision_reason: { type: string }
+        justification_present: { type: boolean }
+        attached_documents_count: { type: integer }
+        waiting_days: { type: integer }
+        sla_due_at: { type: string, format: date-time }
+        sla_breached: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/RegulationIssue' }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/RegulationStatus' }
+              occurred_at: { type: string, format: date-time }
+              actor: { type: string }
+              reason: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    ProviderCapacity:
+      type: object
+      required: [provider_cnes, service_code, competence, offered]
+      properties:
+        provider_cnes: { type: string }
+        provider_name: { type: string }
+        service_code: { type: string }
+        code_system: { type: string, default: SIGTAP }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        offered: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        available: { type: integer }
+        source_system: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    RegulationQueueItem:
+      type: object
+      required: [group_key, open_requests]
+      properties:
+        group_key: { type: string }
+        group_label: { type: string }
+        open_requests: { type: integer }
+        by_priority:
+          type: object
+          additionalProperties: { type: integer }
+        avg_waiting_days: { type: number }
+        p90_waiting_days: { type: number }
+        sla_breached: { type: integer }
+        with_issues: { type: integer }
+        scheduled_30d: { type: integer }
+        no_show_30d: { type: integer }
+        capacity_available: { type: integer }
+
+    ExamOrderStatus:
+      type: string
+      enum: [requested, authorized, scheduled, collected, performed, reported, cancelled, not_performed]
+
+    ExamOrderRegistration:
+      type: object
+      required: [source, citizen_ref, status, requested_at, exam_code]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        requested_at: { type: string, format: date-time }
+        exam_code: { type: string }
+        code_system: { type: string, enum: [SIGTAP, LOINC, LOCAL], default: SIGTAP }
+        exam_description: { type: string }
+        category: { type: string, enum: [laboratory, imaging, other] }
+        requesting_cnes: { type: string }
+        requesting_professional_id: { type: string }
+        regulation_source_record_id: { type: string }
+        appointment_source_record_id: { type: string }
+        care_line: { type: string }
+        priority: { type: string, enum: [routine, priority, urgent] }
+        occurred_at: { type: string, format: date-time }
+
+    ExamStatusChange:
+      type: object
+      required: [source, status, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        occurred_at: { type: string, format: date-time }
+        performer_cnes: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        appointment_source_record_id: { type: string }
+        reason: { type: string, maxLength: 500 }
+
+    ExamResultRegistration:
+      type: object
+      required: [source, reported_at, status]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        reported_at: { type: string, format: date-time }
+        status: { type: string, enum: [final, preliminary, amended, inconclusive, cancelled] }
+        critical: { type: boolean, description: Marcado conforme mensagem de origem (EXA-007) }
+        performer_cnes: { type: string }
+        document_ref: { type: string, description: Referência segura no object storage ou no sistema de origem; nunca o conteúdo }
+        document_content_type: { type: string }
+        document_sha256: { type: string }
+        observations:
+          type: array
+          description: Resultados estruturados mínimos (sem texto livre), quando autorizados
+          items:
+            type: object
+            required: [code, code_system]
+            properties:
+              code: { type: string }
+              code_system: { type: string, enum: [LOINC, SIGTAP, LOCAL] }
+              value: { type: number }
+              unit: { type: string }
+              value_text_masked: { type: string }
+              abnormal: { type: boolean }
+
+    ExamResult:
+      type: object
+      required: [id, reported_at, status, source_system]
+      properties:
+        id: { type: string }
+        reported_at: { type: string, format: date-time }
+        status: { type: string, enum: [final, preliminary, amended, inconclusive, cancelled] }
+        critical: { type: boolean }
+        performer_cnes: { type: string }
+        has_document: { type: boolean }
+        observations_count: { type: integer }
+        followup_task_id: { type: string }
+        source_system: { type: string }
+
+    ExamOrder:
+      type: object
+      required: [id, citizen_id, status, requested_at, exam_code, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        status: { $ref: '#/components/schemas/ExamOrderStatus' }
+        requested_at: { type: string, format: date-time }
+        exam_code: { type: string }
+        code_system: { type: string }
+        exam_description: { type: string }
+        category: { type: string }
+        priority: { type: string }
+        requesting_cnes: { type: string }
+        requesting_unit_name: { type: string }
+        requesting_professional_id: { type: string }
+        performer_cnes: { type: string }
+        regulation_request_id: { type: string }
+        appointment_id: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        performed_at: { type: string, format: date-time }
+        reported_at: { type: string, format: date-time }
+        care_line: { type: string }
+        issues:
+          type: array
+          items: { type: string, enum: [not_scheduled, no_result_followup, result_pending, integration_failure, inconclusive, critical] }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ExamResult' }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/ExamOrderStatus' }
+              occurred_at: { type: string, format: date-time }
+              reason: { type: string }
+        cycle_times:
+          type: object
+          description: EXA-010 (em horas)
+          properties:
+            request_to_schedule: { type: number }
+            schedule_to_perform: { type: number }
+            perform_to_report: { type: number }
+            report_to_followup: { type: number }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    HospitalEpisodeStatus:
+      type: string
+      enum: [admitted, in_progress, transferred, discharged, deceased, cancelled]
+
+    HospitalMovementRegistration:
+      type: object
+      required: [source, citizen_ref, hospital_cnes, episode_class, movement, occurred_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+        hospital_cnes: { type: string }
+        episode_class: { type: string, enum: [inpatient, emergency, observation, day_hospital] }
+        movement: { type: string, enum: [admit, transfer, bed_change, discharge, death, cancel] }
+        occurred_at: { type: string, format: date-time }
+        ward: { type: string }
+        bed: { type: string }
+        attending_professional_id: { type: string }
+        admission_source: { type: string, enum: [emergency, regulation, transfer, elective, other] }
+        regulation_source_record_id: { type: string }
+        principal_diagnosis_cid: { type: string, description: Código CID-10; omitido quando a política classificar como highly_restricted }
+        aih_number: { type: string }
+        reason: { type: string, maxLength: 500 }
+
+    DischargeRegistration:
+      type: object
+      required: [source, discharged_at, disposition]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        discharged_at: { type: string, format: date-time }
+        disposition: { type: string, enum: [home, home_with_care, transfer, against_advice, deceased, other] }
+        principal_diagnosis_cid: { type: string }
+        procedures_count: { type: integer, minimum: 0 }
+        followup_plan_present: { type: boolean }
+        followup_due_days: { type: integer, minimum: 0 }
+        care_lines: { type: array, items: { type: string } }
+        summary_document_ref: { type: string, description: Referência segura ao sumário de alta na origem/object storage (HOS-009/010) }
+        summary_document_sha256: { type: string }
+
+    CounterReferralRegistration:
+      type: object
+      required: [source, received_at]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        received_at: { type: string, format: date-time }
+        target_health_unit_cnes: { type: string }
+        document_ref: { type: string }
+        document_sha256: { type: string }
+        recommendations_count: { type: integer, minimum: 0 }
+
+    HospitalEpisode:
+      type: object
+      required: [id, citizen_id, hospital_cnes, episode_class, status, admitted_at, source_system]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        hospital_cnes: { type: string }
+        hospital_name: { type: string }
+        episode_class: { type: string, enum: [inpatient, emergency, observation, day_hospital] }
+        status: { $ref: '#/components/schemas/HospitalEpisodeStatus' }
+        admitted_at: { type: string, format: date-time }
+        discharged_at: { type: string, format: date-time }
+        length_of_stay_days: { type: integer }
+        disposition: { type: string }
+        ward: { type: string }
+        bed: { type: string }
+        admission_source: { type: string }
+        regulation_request_id: { type: string }
+        principal_diagnosis_cid: { type: string, description: Presente apenas quando a política permitir }
+        aih_number: { type: string }
+        readmission_within_30d: { type: boolean }
+        previous_episode_id: { type: string }
+        reference_health_unit_cnes: { type: string }
+        reference_team_ine: { type: string }
+        risk_level: { type: string, enum: [low, medium, high] }
+        risk_rule_version: { type: string }
+        followup:
+          type: object
+          properties:
+            status: { type: string, enum: [pending, contacted, scheduled, closed, escalated] }
+            task_id: { type: string }
+            due_at: { type: string, format: date-time }
+            outcome: { type: string }
+            contacted_at: { type: string, format: date-time }
+            care_plan_id: { type: string }
+        counter_referral:
+          type: object
+          properties:
+            received_at: { type: string, format: date-time }
+            has_document: { type: boolean }
+            recommendations_count: { type: integer }
+        has_summary_document: { type: boolean }
+        movements:
+          type: array
+          items:
+            type: object
+            properties:
+              movement: { type: string }
+              occurred_at: { type: string, format: date-time }
+              ward: { type: string }
+              bed: { type: string }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    CareGapKind:
+      type: string
+      enum: [consultation_overdue, exam_overdue, vaccine_overdue, return_overdue, no_contact, lost_to_followup, post_discharge_no_contact]
+
+    CarePlanItem:
+      type: object
+      required: [id, kind, title, status]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [consultation, exam, vaccine, return, home_visit, procedure, education, other] }
+        title: { type: string }
+        code: { type: string }
+        code_system: { type: string }
+        expected_by: { type: string, format: date-time }
+        periodicity_days: { type: integer }
+        status: { type: string, enum: [planned, scheduled, done, missed, cancelled] }
+        performed_at: { type: string, format: date-time }
+        evidence_ref: { type: string }
+        overdue: { type: boolean }
+
+    CarePlan:
+      type: object
+      required: [id, citizen_id, care_line, status, protocol_id, protocol_version, items, created_at]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        care_line: { type: string }
+        status: { type: string, enum: [active, on_hold, completed, cancelled] }
+        protocol_id: { type: string }
+        protocol_version: { type: string }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        responsible_professional_id: { type: string }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [professional, rule, workflow, hospital_discharge] }
+            id: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CarePlanItem' }
+        open_gaps: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        closed_reason: { type: string }
+        version: { type: integer }
+
+    CarePlanCreate:
+      type: object
+      required: [citizen_id, protocol_id]
+      properties:
+        citizen_id: { type: string }
+        protocol_id: { type: string }
+        protocol_version: { type: string, description: Omitido = versão vigente }
+        team_ine: { type: string }
+        health_unit_cnes: { type: string }
+        responsible_professional_id: { type: string }
+        start_at: { type: string, format: date-time }
+        origin:
+          type: object
+          properties:
+            kind: { type: string, enum: [professional, rule, workflow, hospital_discharge] }
+            id: { type: string }
+
+    CareGap:
+      type: object
+      required: [id, citizen_id, care_line, gap_kind, status, detected_at, protocol_version]
+      properties:
+        id: { type: string }
+        citizen_id: { type: string }
+        citizen_display_name: { type: string }
+        care_plan_id: { type: string }
+        care_line: { type: string }
+        gap_kind: { $ref: '#/components/schemas/CareGapKind' }
+        status: { type: string, enum: [open, resolved] }
+        expected_by: { type: string, format: date-time }
+        days_overdue: { type: integer }
+        protocol_id: { type: string }
+        protocol_version: { type: string }
+        health_unit_cnes: { type: string }
+        team_ine: { type: string }
+        microarea: { type: string }
+        task_id: { type: string }
+        detected_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolution: { type: string }
+        contact_valid: { type: boolean }
+
+    ProtocolItemRule:
+      type: object
+      required: [kind, title, due_in_days]
+      properties:
+        kind: { type: string, enum: [consultation, exam, vaccine, return, home_visit, procedure, education, other] }
+        title: { type: string }
+        code: { type: string }
+        code_system: { type: string }
+        due_in_days: { type: integer, minimum: 0, description: Prazo a partir do início do plano (ou do item anterior quando periodicity) }
+        periodicity_days: { type: integer }
+        gap_after_days: { type: integer, description: Dias após o prazo para considerar lacuna }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        condition:
+          type: object
+          description: Expressão restrita avaliada sobre atributos do cidadão (ex. idade, sexo, risco) — sem código
+          additionalProperties: true
+
+    Protocol:
+      type: object
+      required: [id, care_line, name, version, status, items]
+      properties:
+        id: { type: string }
+        care_line: { type: string }
+        name: { type: string }
+        version: { type: string }
+        status: { type: string, enum: [draft, in_review, approved, active, revoked] }
+        description: { type: string }
+        eligibility:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProtocolItemRule' }
+        lost_to_followup_days: { type: integer }
+        test_cases_count: { type: integer }
+        approved_by: { type: string }
+        effective_from: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    ProtocolCreate:
+      type: object
+      required: [care_line, name, items]
+      properties:
+        care_line: { type: string }
+        name: { type: string }
+        description: { type: string }
+        base_version: { type: string }
+        eligibility:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ProtocolItemRule' }
+        lost_to_followup_days: { type: integer }
+        test_cases:
+          type: array
+          description: Casos de teste anexados (obrigatórios para aprovação — plano 8.3)
+          items:
+            type: object
+            additionalProperties: true
+
+    Competence:
+      type: string
+      pattern: '^[0-9]{4}(0[1-9]|1[0-2])$'
+      description: Competência AAAAMM
+
+    ProductionKind:
+      type: string
+      enum: [bpa_c, bpa_i, apac, aih]
+      description: Instrumento de registro (BPA consolidado, BPA individualizado, APAC, AIH)
+
+    ProductionRecordStatus:
+      type: string
+      enum: [generated, validated, pending, exported, transmitted, received, rejected, corrected, approved, paid]
+
+    ProductionBatchStatus:
+      type: string
+      enum: [draft, approved, exported, transmitted, processed]
+
+    ExternalRef:
+      type: object
+      description: Referência a registro de outro domínio pelo vínculo de origem
+      required: [source_record_id]
+      properties:
+        system: { type: string }
+        source_record_id: { type: string }
+
+    ProductionRecordRegistration:
+      type: object
+      required: [source, kind, competence, cnes, professional_cbo, procedure_code, quantity, attendance_date]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        professional_cns:
+          type: string
+          writeOnly: true
+          description: CNS do profissional (opcional). Persistido só como hash (HMAC por tenant), máscara e cifra (export); nunca em claro em eventos/respostas/logs.
+        professional_cbo: { type: string, pattern: '^[0-9]{6}$' }
+        procedure_code: { type: string, pattern: '^[0-9]{10}$', description: Código SIGTAP }
+        quantity: { type: integer, minimum: 1, maximum: 999999 }
+        citizen_ref:
+          allOf:
+            - $ref: '#/components/schemas/CitizenRef'
+          description: Obrigatório para bpa_i, apac e aih (ausente → pendência citizen_unresolved). identifier_value (CNS/CPF) é validado (DV) e guardado só como hash/máscara/cifra.
+        cid_code: { type: string, description: CID-10 (opcional) }
+        attendance_date: { type: string, format: date }
+        character_of_care: { type: string, enum: [elective, urgency, work_accident, other], description: Caráter do atendimento }
+        apac_number: { type: string, maxLength: 13 }
+        aih_number: { type: string, maxLength: 13 }
+        encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+        appointment_ref: { $ref: '#/components/schemas/ExternalRef' }
+        hospital_episode_ref: { $ref: '#/components/schemas/ExternalRef' }
+
+    ProductionIssue:
+      type: object
+      required: [id, production_record_id, rule_id, rule_version, severity, message, status, created_at]
+      properties:
+        id: { type: string }
+        production_record_id: { type: string }
+        rule_id: { type: string }
+        rule_version: { type: string, description: 'ex.: production-validation/1' }
+        severity: { type: string, enum: [error, warning] }
+        field: { type: string }
+        message: { type: string }
+        status: { type: string, enum: [open, resolved, waived] }
+        origin: { type: string, enum: [rule, workflow, official_return] }
+        task_id: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolution_note: { type: string }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        procedure_code: { type: string }
+        record_status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+
+    ProductionRecord:
+      type: object
+      required: [id, kind, competence, cnes, procedure_code, quantity, status, attendance_date, source_system, source_record_id]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        health_unit_name: { type: string }
+        professional_cns_masked: { type: string }
+        professional_cbo: { type: string }
+        procedure_code: { type: string }
+        procedure_display: { type: string }
+        quantity: { type: integer }
+        citizen_id: { type: string }
+        citizen_identifier_masked: { type: string }
+        cid_code: { type: string }
+        attendance_date: { type: string, format: date }
+        character_of_care: { type: string }
+        apac_number: { type: string }
+        aih_number: { type: string }
+        appointment_id: { type: string }
+        hospital_episode_id: { type: string }
+        encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+        status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+        rule_version: { type: string }
+        validated_at: { type: string, format: date-time }
+        unit_value: { type: number, description: Valor unitário SIGTAP (atributo `valor`) na competência }
+        estimated_value: { type: number }
+        paid_amount: { type: number }
+        approved_quantity: { type: integer }
+        outcome_reason_code: { type: string }
+        outcome_reason: { type: string }
+        batch_id: { type: string }
+        deadline_at: { type: string, format: date-time }
+        correction_count: { type: integer }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ProductionIssue' }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              action: { type: string }
+              from_status: { type: string }
+              to_status: { type: string }
+              actor_id: { type: string }
+              justification: { type: string }
+              rule_version: { type: string }
+              occurred_at: { type: string, format: date-time }
+        source_system: { type: string }
+        source_record_id: { type: string }
+        version: { type: integer }
+
+    ProductionCorrection:
+      type: object
+      required: [justification, changes]
+      properties:
+        justification: { type: string, minLength: 10, maxLength: 1000 }
+        changes:
+          type: object
+          description: Campos corrigidos (somente os informados mudam)
+          properties:
+            cnes: { type: string, pattern: '^[0-9]{7}$' }
+            professional_cbo: { type: string, pattern: '^[0-9]{6}$' }
+            professional_cns: { type: string, writeOnly: true }
+            procedure_code: { type: string, pattern: '^[0-9]{10}$' }
+            quantity: { type: integer, minimum: 1 }
+            cid_code: { type: string }
+            attendance_date: { type: string, format: date }
+            competence: { $ref: '#/components/schemas/Competence' }
+            character_of_care: { type: string, enum: [elective, urgency, work_accident, other] }
+            apac_number: { type: string }
+            aih_number: { type: string }
+            citizen_ref: { $ref: '#/components/schemas/CitizenRef' }
+            encounter_ref: { $ref: '#/components/schemas/ExternalRef' }
+            appointment_ref: { $ref: '#/components/schemas/ExternalRef' }
+            hospital_episode_ref: { $ref: '#/components/schemas/ExternalRef' }
+        waive_issue_ids:
+          type: array
+          description: Pendências de severidade warning dispensadas com a mesma justificativa (erros não são dispensáveis)
+          items: { type: string }
+
+    ProductionBatchCreate:
+      type: object
+      required: [competence, cnes, kind]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+
+    ProductionBatchApproval:
+      type: object
+      required: [justification]
+      properties:
+        justification: { type: string, minLength: 10, maxLength: 1000 }
+
+    ProductionBatchExportRequest:
+      type: object
+      properties:
+        layout: { type: string, enum: [bpa_mag_v202412, apac_mag_v202607, csv_ref_v1], description: 'Padrão: bpa_mag_v202412 para BPA-C/BPA-I; apac_mag_v202607 para APAC; csv_ref_v1 para AIH' }
+
+    ProductionBatch:
+      type: object
+      required: [id, competence, cnes, kind, status, records_count, created_at]
+      properties:
+        id: { type: string }
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        kind: { $ref: '#/components/schemas/ProductionKind' }
+        status: { $ref: '#/components/schemas/ProductionBatchStatus' }
+        records_count: { type: integer }
+        total_quantity: { type: integer }
+        estimated_value: { type: number }
+        record_ids: { type: array, items: { type: string } }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        approved_by: { type: string }
+        approved_at: { type: string, format: date-time }
+        approval_justification: { type: string }
+        export:
+          type: object
+          properties:
+            layout: { type: string }
+            file_ref: { type: string, description: Referência no armazenamento de exportação (arquivo/object storage) }
+            sha256: { type: string }
+            size_bytes: { type: integer }
+            lines: { type: integer }
+            lines_missing_identifiers: { type: integer, description: Linhas sem CNS cifrado disponível (preenchidas com zeros — revisar antes de transmitir) }
+            exported_by: { type: string }
+            exported_at: { type: string, format: date-time }
+        protocol_number: { type: string }
+        version: { type: integer }
+
+    ProductionRuleVersionCreate:
+      type: object
+      required: [definition, test_cases, justification]
+      properties:
+        definition:
+          type: object
+          description: Definição jsonb (`kind=validation_rules`) — ver descrição da operação
+          required: [kind, rules]
+          properties:
+            kind: { type: string, enum: [validation_rules] }
+            rules:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [id, severity, message, when]
+                properties:
+                  id: { type: string, pattern: '^[a-z][a-z0-9_]{1,63}$' }
+                  severity: { type: string, enum: [error, warning] }
+                  field: { type: string }
+                  message: { type: string }
+                  enabled: { type: boolean }
+                  when: { type: object, description: 'Condição de violação: { all|any: [...] } | { not: {...} } | { fact, op, value }' }
+        test_cases:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [facts, expected]
+            properties:
+              facts: { type: object, additionalProperties: true }
+              expected: { type: array, items: { type: string }, description: Ids das regras que devem ser violadas }
+        justification: { type: string, minLength: 10, maxLength: 1000 }
+
+    ProductionRuleVersion:
+      type: object
+      required: [id, rule_set, version, label, status]
+      properties:
+        id: { type: string, description: 'rv_<ULID>' }
+        rule_set: { type: string, enum: [production-validation] }
+        version: { type: string }
+        label: { type: string, description: 'production-validation/<versão> (gravado em rule_version das pendências)' }
+        status: { type: string, enum: [active] }
+        rules_count: { type: integer }
+        test_cases_count: { type: integer }
+        approved_by: { type: string }
+        effective_from: { type: string, format: date-time }
+        previous_label: { type: string, description: Versão vigente antes da ativação (global ou do tenant) }
+
+    ProductionOutcomeRegistration:
+      type: object
+      required: [source, outcome, processed_at]
+      description: Informe exatamente um entre production_record_id, record_source e batch_id
+      properties:
+        source: { $ref: '#/components/schemas/SourceRefInput' }
+        outcome: { type: string, enum: [transmitted, received, accepted, rejected, paid] }
+        production_record_id: { type: string }
+        record_source: { $ref: '#/components/schemas/ExternalRef' }
+        batch_id: { type: string }
+        processed_at: { type: string, format: date-time }
+        reason_code: { type: string, maxLength: 32 }
+        reason: { type: string, maxLength: 500 }
+        paid_amount: { type: number, minimum: 0 }
+        approved_quantity: { type: integer, minimum: 0 }
+        protocol_number: { type: string, maxLength: 64 }
+
+    ProductionOutcomeResult:
+      type: object
+      required: [outcome, affected]
+      properties:
+        outcome: { type: string }
+        batch_id: { type: string }
+        unchanged: { type: boolean, description: Retorno já aplicado (idempotência) }
+        affected:
+          type: array
+          items:
+            type: object
+            properties:
+              production_record_id: { type: string }
+              status: { $ref: '#/components/schemas/ProductionRecordStatus' }
+
+    ProductionSummary:
+      type: object
+      required: [competence, totals]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        cnes: { type: string }
+        deadline_at: { type: string, format: date-time }
+        days_to_deadline: { type: integer }
+        totals:
+          type: object
+          properties:
+            records: { type: integer }
+            generated: { type: integer }
+            validated: { type: integer }
+            pending: { type: integer }
+            exported: { type: integer }
+            transmitted: { type: integer }
+            received: { type: integer }
+            rejected: { type: integer }
+            corrected: { type: integer, description: Registros com ao menos uma correção humana }
+            approved: { type: integer }
+            paid: { type: integer }
+        values:
+          type: object
+          properties:
+            estimated: { type: number, description: Σ quantidade × valor SIGTAP }
+            validated: { type: number }
+            paid: { type: number }
+            pending: { type: number }
+            rejected: { type: number }
+            avoidable_loss_estimated: { type: number, description: Valor de registros pendentes + rejeitados ainda não corrigidos (perda evitável se tratados no prazo) }
+        issues_by_rule:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id: { type: string }
+              severity: { type: string }
+              open: { type: integer }
+        by_kind:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { $ref: '#/components/schemas/ProductionKind' }
+              records: { type: integer }
+              estimated: { type: number }
+
+    ProductionDeadline:
+      type: object
+      required: [competence, deadline_at, status]
+      properties:
+        competence: { $ref: '#/components/schemas/Competence' }
+        deadline_at: { type: string, format: date-time }
+        status: { type: string, enum: [open, closing, closed], description: closing = até 5 dias do prazo }
+        days_remaining: { type: integer }
+        alert_days: { type: array, items: { type: integer } }
+        configured_by: { type: string, enum: [global, tenant, default] }
+        pending_records: { type: integer }
+        validated_records: { type: integer }

@@ -1,0 +1,300 @@
+# Valores padrão — sus-nexus-web (Next.js shell + BFF, porta 3000). Estrutura idêntica ao sus-nexus-core.
+# Gerado a partir de sus-nexus-core/values.yaml (scripts/gen-component-values.py); edite com cuidado.
+
+global:
+  environment: dev
+  imageRegistry: ''
+  imagePullSecrets: []
+  multiZone: false
+  domain: sus-nexus.local
+  keycloakUrl: https://auth.sus-nexus.local
+  keycloakRealm: sus-nexus
+  namespaces:
+    core: core
+    fhir: fhir
+    connectors: connectors
+    ai: ai
+    web: web
+    data: data
+    security: security
+    workflows: workflows
+    observability: observability
+    gateway: gateway
+nameOverride: ''
+fullnameOverride: web-shell
+namespaceOverride: ''
+component: web-shell
+tier: frontend
+image:
+  registry: ghcr.io
+  repository: sus-nexus/web-shell
+  tag: ''
+  digest: ''
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+replicaCount: 2
+revisionHistoryLimit: 3
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+terminationGracePeriodSeconds: 30
+priorityClassName: ''
+containerPort: 3000
+extraPorts: []
+command: []
+args: []
+service:
+  type: ClusterIP
+  port: 3000
+  annotations: {}
+probes:
+  startup:
+    enabled: true
+    path: /api/health
+    periodSeconds: 5
+    failureThreshold: 30
+    timeoutSeconds: 3
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
+lifecycle:
+  preStop:
+    exec:
+      command:
+      - sh
+      - -c
+      - sleep 5
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: '1'
+    memory: 512Mi
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  privileged: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+    - ALL
+tmpSizeLimit: 512Mi
+writableDirs:
+- name: next-cache
+  mountPath: /app/.next/cache
+  sizeLimit: 256Mi
+extraVolumes: []
+extraVolumeMounts: []
+initContainers: []
+sidecars: []
+podLabels: {}
+podAnnotations:
+  prometheus.io/scrape: 'false'
+extraLabels: {}
+deploymentAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+serviceAccount:
+  create: true
+  automount: false
+  name: ''
+  annotations: {}
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  scaleDownStabilizationSeconds: 300
+  customMetrics: []
+pdb:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: null
+otel:
+  enabled: true
+  endpoint: http://otel-collector.observability.svc.cluster.local:4318
+  protocol: http/protobuf
+config:
+  NODE_ENV: production
+  PORT: '3000'
+  HOSTNAME: 0.0.0.0
+  AUTH_URL: https://app.{{ .Values.global.domain }}
+  NEXT_PUBLIC_APP_URL: https://app.{{ .Values.global.domain }}
+  AUTH_KEYCLOAK_ISSUER: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}'
+  AUTH_KEYCLOAK_ID: web-shell
+  CORE_API_URL: http://core-municipal.core.svc.cluster.local:8080/api/v1
+  FHIR_API_URL: http://fhir-gateway.fhir.svc.cluster.local:8081/fhir/r4
+  AI_SERVICE_URL: http://ai-service.ai.svc.cluster.local:8000
+  NEXT_TELEMETRY_DISABLED: '1'
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4318
+env: []
+envFrom: []
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: openbao
+    kind: ClusterSecretStore
+  targetName: ''
+  dataFrom: []
+  data:
+  - secretKey: AUTH_KEYCLOAK_SECRET
+    remoteRef:
+      key: '{{ .Values.global.environment }}/web-shell/oidc'
+      property: client_secret
+  - secretKey: AUTH_SECRET
+    remoteRef:
+      key: '{{ .Values.global.environment }}/web-shell/session'
+      property: auth_secret
+serviceMonitor:
+  enabled: true
+  namespace: ''
+  path: /api/metrics
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+  metricRelabelings: []
+networkPolicy:
+  enabled: true
+  gatewayNamespace: gateway
+  observabilityNamespace: observability
+  allowDNS: true
+  ingress: []
+  egress:
+  - to:
+    - namespace: core
+    ports:
+    - port: 8080
+  - to:
+    - namespace: fhir
+    ports:
+    - port: 8081
+  - to:
+    - namespace: ai
+    ports:
+    - port: 8000
+  - to:
+    - namespace: security
+    ports:
+    - port: 8080
+    - port: 8443
+apisix:
+  enabled: true
+  annotations: {}
+  priority: 10
+  hosts:
+  - app.{{ .Values.global.domain }}
+  paths:
+  - /*
+  methods: []
+  timeout:
+    connect: 5s
+    send: 30s
+    read: 30s
+  oidc:
+    enabled: false
+    discovery: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}/.well-known/openid-configuration'
+    clientId: core-municipal
+    clientSecret: ''
+    secretRef: core-municipal-apisix-oidc
+    bearerOnly: true
+    scope: openid
+    sslVerify: 'yes'
+    requiredScopes: []
+  rateLimit:
+    enabled: true
+    count: 1200
+    timeWindow: 60
+    key: remote_addr
+    policy: local
+    redisHost: redis.data.svc.cluster.local
+    redisPort: 6379
+    redisClusterNodes: []
+    redisClusterName: ''
+  cors:
+    enabled: false
+    allowOrigins: https://app.sus-nexus.local
+  waf:
+    enabled: true
+    directives: default
+  canary:
+    stableWeight: 100
+    canaryWeight: 0
+  tls:
+    enabled: true
+    secretName: ''
+    certificate:
+      enabled: true
+      issuerName: letsencrypt-prod
+      issuerKind: ClusterIssuer
+  extraPlugins: []
+rollout:
+  enabled: false
+  canary:
+    maxSurge: 25%
+    maxUnavailable: 0
+    steps:
+    - setWeight: 10
+    - pause:
+        duration: 5m
+    - setWeight: 30
+    - pause:
+        duration: 10m
+    - setWeight: 60
+    - pause:
+        duration: 10m
+    trafficRouting: {}
+    analysis:
+      enabled: true
+      startingStep: 1
+      interval: 1m
+      failureLimit: 2
+      minSuccessRate: 0.99
+      maxP99Seconds: 1.0
+      prometheusAddress: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
+migration:
+  enabled: false
+  image: ''
+  command:
+  - java
+  args:
+  - -Dquarkus.flyway.migrate-at-start=true
+  - -Dquarkus.http.host=127.0.0.1
+  - -Dsus.migration-only=true
+  - -jar
+  - /deployments/quarkus-run.jar
+  env:
+  - name: QUARKUS_FLYWAY_MIGRATE_AT_START
+    value: 'true'
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi

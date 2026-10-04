@@ -1,0 +1,601 @@
+# Gold agregada (gestão): supressão de células pequenas via macro suppress_small_cells (n < var small_cell_threshold).
+# meta.indicador = ficha do indicador (código, fórmula, fonte, periodicidade, dono) — ver data/INDICADORES.md.
+version: 2
+models:
+- name: agg_appointments_monthly
+  description: Agendamentos por mês (data agendada) × unidade × canal (AGE-010). Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - health_unit_key
+        - agenda_channel
+  columns:
+  - name: n_scheduled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_realized
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_attended
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_no_show
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_cancelled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_cancelled_reused
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_pending
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: attendance_rate
+    description: Comparecimento = comparecimentos / (comparecimentos + faltas).
+    meta:
+      indicador:
+        codigo: AGE_COMPARECIMENTO
+        formula: n_attended / n_realized
+        fonte: fct_appointments
+        periodicidade: mensal
+        dono: Coordenação da APS
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: no_show_rate
+    description: Absenteísmo = faltas / (comparecimentos + faltas).
+    meta:
+      indicador:
+        codigo: AGE_ABSENTEISMO
+        formula: n_no_show / n_realized
+        fonte: fct_appointments
+        periodicidade: mensal
+        dono: Coordenação da APS
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: cancellation_rate
+    description: Cancelamento = cancelados / agendados.
+    meta:
+      indicador:
+        codigo: AGE_CANCELAMENTO
+        formula: n_cancelled / n_scheduled
+        fonte: fct_appointments
+        periodicidade: mensal
+        dono: Coordenação da APS
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: slot_reuse_rate
+    description: Reaproveitamento = cancelados com vaga reocupada / cancelados.
+    meta:
+      indicador:
+        codigo: AGE_REAPROVEITAMENTO
+        formula: n_cancelled_reused / n_cancelled
+        fonte: fct_appointments
+        periodicidade: mensal
+        dono: Central de agendamento
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+- name: agg_regulation_monthly
+  description: Regulação por mês da solicitação × unidade solicitante × prioridade (PLANO 4.9). Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - requesting_unit_key
+        - priority
+  columns:
+  - name: n_requests
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_scheduled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_performed
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_returned
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_denied
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_cancelled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_open
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: sla_met_rate
+    description: Solicitações dentro do SLA / solicitações com SLA avaliável.
+    meta:
+      indicador:
+        codigo: REG_SLA_CUMPRIDO
+        formula: n_sla_met / n_sla_evaluated
+        fonte: fct_regulation_requests
+        periodicidade: mensal
+        dono: Complexo regulador
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: return_rate
+    description: Solicitações devolvidas ao menos uma vez / solicitações.
+    meta:
+      indicador:
+        codigo: REG_DEVOLUCAO
+        formula: n_returned / n_requests
+        fonte: fct_regulation_requests
+        periodicidade: mensal
+        dono: Complexo regulador
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: performed_rate
+    description: Solicitações realizadas / solicitações do mês.
+    meta:
+      indicador:
+        codigo: REG_REALIZACAO
+        formula: n_performed / n_requests
+        fonte: fct_regulation_requests
+        periodicidade: mensal
+        dono: Complexo regulador
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: wait_days_p50
+    description: Mediana de dias da solicitação ao agendamento (nula se n_scheduled < 5).
+    meta:
+      indicador:
+        codigo: REG_ESPERA_P50_DIAS
+        formula: p50(wait_days_to_schedule)
+        fonte: fct_regulation_requests
+        periodicidade: mensal
+        dono: Complexo regulador
+  - name: wait_days_p90
+    description: Percentil 90 de dias da solicitação ao agendamento.
+    meta:
+      indicador:
+        codigo: REG_ESPERA_P90_DIAS
+        formula: p90(wait_days_to_schedule)
+        fonte: fct_regulation_requests
+        periodicidade: mensal
+        dono: Complexo regulador
+  - name: wait_days_avg
+    description: Média de dias da solicitação ao agendamento.
+- name: agg_regulation_queue_current
+  description: Fila de regulação no momento da execução por especialidade × prioridade × tipo. Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - specialty
+        - priority
+        - request_kind
+  columns:
+  - name: n_open
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_overdue
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_pending_documents
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: days_waiting_p50
+    description: Mediana de dias em espera (pedidos em aberto, ainda sem agendamento).
+    meta:
+      indicador:
+        codigo: REG_ESPERA_P50_DIAS (fila atual)
+        formula: p50(days_waiting_open) na data da execução
+        fonte: fct_regulation_requests
+        periodicidade: diária
+        dono: Complexo regulador
+  - name: days_waiting_p90
+    description: Percentil 90 de dias em espera.
+  - name: as_of
+    description: Momento da foto (execução do dbt).
+- name: agg_exam_cycle_monthly
+  description: Ciclo de exames por mês do pedido × unidade solicitante × categoria (EXA-010). Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - requesting_unit_key
+        - exam_category
+  columns:
+  - name: n_orders
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_scheduled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_performed
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_reported
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_cycle_complete
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_result_without_return
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_cancelled
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_critical
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: cycle_completion_rate
+    description: Pedidos com ciclo completo (retorno) / pedidos.
+    meta:
+      indicador:
+        codigo: EXA_CICLO_COMPLETO
+        formula: n_cycle_complete / n_orders
+        fonte: fct_exam_cycle
+        periodicidade: mensal
+        dono: Coordenação de apoio diagnóstico
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: return_after_result_rate
+    description: Pedidos com retorno / pedidos com laudo.
+    meta:
+      indicador:
+        codigo: EXA_RESULTADO_SEM_RETORNO (complemento)
+        formula: n_cycle_complete / n_reported
+        fonte: fct_exam_cycle
+        periodicidade: mensal
+        dono: Coordenação de apoio diagnóstico
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: days_request_to_result_p50
+    description: Mediana de dias do pedido ao laudo.
+    meta:
+      indicador:
+        codigo: EXA_DIAS_PEDIDO_RESULTADO_P50
+        formula: p50(days_request_to_result)
+        fonte: fct_exam_cycle
+        periodicidade: mensal
+        dono: Coordenação de apoio diagnóstico
+- name: agg_hospital_monthly
+  description: Hospital por mês da alta × hospital × classe do episódio. Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - hospital_unit_key
+        - episode_class
+  columns:
+  - name: n_discharges
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_discharged_alive
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_deaths
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_readmitted_30d
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_contacted_7d
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_with_post_discharge_task
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: readmission_30d_rate
+    description: Altas vivas seguidas de nova internação em ≤ 30 dias / altas vivas.
+    meta:
+      indicador:
+        codigo: HOS_REINTERNACAO_30D
+        formula: n_readmitted_30d / n_discharged_alive
+        fonte: fct_hospital_episodes
+        periodicidade: mensal
+        dono: Diretoria hospitalar
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: post_discharge_contact_7d_rate
+    description: Altas vivas com contato da APS em ≤ 7 dias / altas vivas.
+    meta:
+      indicador:
+        codigo: HOS_CONTATO_POS_ALTA_7D
+        formula: n_contacted_7d / n_discharged_alive
+        fonte: fct_hospital_episodes
+        periodicidade: mensal
+        dono: Coordenação da APS
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: los_avg_days
+    description: Permanência média (dias).
+    meta:
+      indicador:
+        codigo: HOS_PERMANENCIA_MEDIA_DIAS
+        formula: sum(length_of_stay_days) / n_discharges
+        fonte: fct_hospital_episodes
+        periodicidade: mensal
+        dono: Diretoria hospitalar
+  - name: minutes_discharge_to_task_p90
+    description: p90 de minutos da alta à criação da tarefa pós-alta (SLO < 15 min).
+- name: agg_tasks_monthly
+  description: Tarefas por mês de criação × tipo × origem (automação × humano). Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - task_type
+        - origin_group
+        - origin_kind
+  columns:
+  - name: n_created
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_completed
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_open
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_escalated
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_sla_met
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_sla_breached
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: sla_met_rate
+    description: Tarefas no SLA / tarefas com SLA avaliável.
+    meta:
+      indicador:
+        codigo: TAR_SLA_CUMPRIDO
+        formula: n_sla_met / n_sla_evaluated
+        fonte: fct_tasks
+        periodicidade: mensal
+        dono: Gestão operacional
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: completion_rate
+    description: Tarefas concluídas / criadas.
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: hours_to_complete_p50
+    description: Mediana de horas até a conclusão.
+- name: agg_care_gaps_monthly
+  description: Lacunas de cuidado por mês de detecção × território (unidade/equipe) × linha de cuidado. Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - month_start
+        - territory_key
+        - care_line
+  columns:
+  - name: n_detected
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_resolved
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_open
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_with_task
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: resolution_rate
+    description: Lacunas resolvidas / detectadas.
+    meta:
+      indicador:
+        codigo: CUI_LACUNAS_RESOLVIDAS
+        formula: n_resolved / n_detected
+        fonte: fct_care_gaps
+        periodicidade: mensal
+        dono: Coordenação de linhas de cuidado
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+- name: agg_production_monthly
+  description: Produção por competência × unidade × instrumento (kind) — registros, pendências, correções, glosa e pagamento (tolerante). Supressão n<5.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - tenant_id
+        - competence
+        - health_unit_key
+        - production_kind
+  columns:
+  - name: n_records
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_validated
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_with_issue
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_accepted
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_rejected
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_paid
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_pending
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: n_corrected
+    description: Contagem (nula se 0 < n < 5).
+    data_tests:
+    - small_cells_suppressed
+  - name: rejection_rate
+    description: Registros glosados / registros com desfecho.
+    meta:
+      indicador:
+        codigo: PRO_GLOSA
+        formula: n_rejected / n_with_outcome (retorno final accepted/rejected/paid)
+        fonte: fct_production
+        periodicidade: mensal
+        dono: Controle e avaliação
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+  - name: issue_rate
+    description: Registros com inconsistência de validação / registros.
+    data_tests:
+    - dbt_utils.accepted_range:
+        arguments:
+          min_value: 0
+          max_value: 1
+- name: agg_indicadores_mensais
+  description: Indicadores mensais em formato longo (unidade e município) com meta, supressão (n<5) e situação frente à meta.
+    Fonte da Sala de Situação; dicionário em data/INDICADORES.md.
+  data_tests:
+  - no_pii_columns
+  - dbt_utils.unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - indicator_code
+        - tenant_id
+        - month_start
+        - aggregation_level
+        - health_unit_key
+  columns:
+  - name: indicator_code
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('seed_metas_indicadores')
+          field: indicator_code
+  - name: aggregation_level
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - unidade
+          - municipio
+  - name: numerator
+    data_tests:
+    - small_cells_suppressed
+  - name: denominator
+    data_tests:
+    - small_cells_suppressed
+  - name: indicator_value
+    description: Valor (proporção 0–1, dias ou horas — ver indicator_unit). Nulo se denominador < 5.
+  - name: is_suppressed
+    data_tests:
+    - not_null

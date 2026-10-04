@@ -1,0 +1,168 @@
+# Catálogo de tópicos Kafka — fonte única (KAF-010/011).
+# retention_days: retenção; partitions: iniciais; key: chave de partição; class: classe de evento.
+defaults:
+  partitions: 12
+  replication: 3
+  min_insync_replicas: 2
+  retention_days: 30
+  key: subject.municipal_citizen_id
+  schema_compatibility: BACKWARD
+
+topics:
+  # ---- ingestão (conectores → core). Nunca consumidos por projeções. ----
+  - name: sus.ingest.pec.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.agenda.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.cnes.v1
+    class: ingest
+    key: source.source_record_id
+    partitions: 3
+    retention_days: 7
+  - name: sus.ingest.terminology.v1
+    class: ingest
+    key: source.source_record_id
+    partitions: 3
+    retention_days: 7
+  - name: sus.ingest.regulation.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.exam.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  - name: sus.ingest.hospital.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+  # registros de produção (BPA-C/BPA-I/APAC/AIH) e retornos do processamento oficial (SIA/SIH)
+  - name: sus.ingest.production.v1
+    class: ingest
+    key: source.source_record_id
+    retention_days: 7
+
+  # ---- identidade ----
+  - name: sus.identity.citizen.v1
+    class: domain
+    events: [created, linked, updated, registration_state_changed]
+  - name: sus.identity.merge.v1
+    class: domain
+    events: [case_opened, merged, unmerged, rejected]
+
+  # ---- APS ----
+  - name: sus.aps.encounter.v1
+    class: domain
+    events: [created, updated]
+  - name: sus.aps.appointment.v1
+    class: domain
+    events: [created, confirmed, cancelled, rescheduled, attended, no_show]
+  - name: sus.aps.home-visit.v1
+    class: domain
+    events: [created]
+
+  # ---- regulação ----
+  - name: sus.regulation.request.v1
+    class: domain
+    events: [created, updated, returned, cancelled]
+  - name: sus.regulation.status.v1
+    class: domain
+    events: [changed]
+  - name: sus.regulation.queue.v1
+    class: domain
+    key: data.queue_id
+    events: [snapshot]
+
+  # ---- agenda da rede ----
+  - name: sus.schedule.appointment.v1
+    class: domain
+    events: [created, confirmed, cancelled, rescheduled, attended, no_show, duplicate_detected]
+
+  # ---- exames ----
+  - name: sus.exam.order.v1
+    class: domain
+    events: [created, status_changed]
+  - name: sus.exam.result.v1
+    class: domain
+    events: [available, critical_flagged]
+    # payload mínimo; laudo sempre por data_ref (KAF-009)
+
+  # ---- hospital ----
+  - name: sus.hospital.adt.v1
+    class: domain
+    events: [admitted, transferred, bed_changed, discharged, deceased]
+  - name: sus.hospital.discharge.v1
+    class: domain
+    events: [completed, counter_referral_received]
+
+  # ---- cuidado ----
+  - name: sus.careplan.v1
+    class: domain
+    events: [created, updated, closed]
+  - name: sus.caregap.v1
+    class: domain
+    events: [detected, resolved]
+  - name: sus.task.v1
+    class: domain
+    events: [created, assigned, completed, escalated, sla_breached, cancelled]
+
+  # ---- produção ----
+  - name: sus.production.record.v1
+    class: domain
+    key: data.production_record_id
+    events: [created, validated, pending, corrected]
+  - name: sus.production.validation.v1
+    class: domain
+    key: data.production_record_id
+    events: [issue_found, issue_resolved]
+  - name: sus.production.submission.v1
+    class: domain
+    key: data.batch_id
+    # o barramento só exporta (exported); a transmissão oficial ocorre no sistema oficial e volta como retorno
+    events: [batch_generated, batch_approved, exported, transmitted]
+  - name: sus.production.outcome.v1
+    class: domain
+    key: data.production_record_id
+    # transmitted: um evento por registro quando o retorno de transmissão chega (por lote ou registro)
+    events: [transmitted, received, accepted, rejected, paid]
+
+  # ---- comunicação e consentimento ----
+  - name: sus.communication.v1
+    class: domain
+    events: [requested, approved, sent, delivered, failed]
+  - name: sus.consent.v1
+    class: domain
+    events: [granted, revoked, preference_updated]
+
+  # ---- operação ----
+  - name: sus.integration.status.v1
+    class: ops
+    key: data.connector_id
+    partitions: 3
+    events: [healthy, degraded, down, reconciliation_gap]
+  # comandos do core para os conectores (reprocessamento — KAF-012). event_type: sus.integration.reprocess.requested
+  - name: sus.integration.command.v1
+    class: ops
+    key: data.connector_id
+    partitions: 3
+    retention_days: 7
+    events: [reprocess.requested]
+  - name: sus.audit.v1
+    class: audit
+    key: data.actor_id
+    retention_days: 90
+    schema_compatibility: FULL
+  - name: sus.dlq.v1
+    class: ops
+    key: trace.correlation_id
+    partitions: 3
+    retention_days: 30
+
+retry_policy:
+  suffixes: [".retry.1", ".retry.2", ".retry.3"]
+  backoff: ["PT1M", "PT10M", "PT1H"]
+  then: sus.dlq.v1

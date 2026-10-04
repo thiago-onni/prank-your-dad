@@ -1,0 +1,327 @@
+# Valores padrão — sus-nexus-ai (FastAPI, porta 8000). Estrutura idêntica ao sus-nexus-core.
+# Gerado a partir de sus-nexus-core/values.yaml (scripts/gen-component-values.py); edite com cuidado.
+
+global:
+  environment: dev
+  imageRegistry: ''
+  imagePullSecrets: []
+  multiZone: false
+  domain: sus-nexus.local
+  keycloakUrl: https://auth.sus-nexus.local
+  keycloakRealm: sus-nexus
+  namespaces:
+    core: core
+    fhir: fhir
+    connectors: connectors
+    ai: ai
+    web: web
+    data: data
+    security: security
+    workflows: workflows
+    observability: observability
+    gateway: gateway
+nameOverride: ''
+fullnameOverride: ai-service
+namespaceOverride: ''
+component: ai-service
+tier: backend
+image:
+  registry: ghcr.io
+  repository: sus-nexus/ai-service
+  tag: ''
+  digest: ''
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+replicaCount: 2
+revisionHistoryLimit: 3
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+terminationGracePeriodSeconds: 30
+priorityClassName: ''
+containerPort: 8000
+extraPorts: []
+command: []
+args: []
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+probes:
+  startup:
+    enabled: true
+    path: /health
+    periodSeconds: 5
+    failureThreshold: 30
+    timeoutSeconds: 3
+  liveness:
+    path: /health
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 5
+  readiness:
+    path: /health/ready
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 5
+lifecycle:
+  preStop:
+    exec:
+      command:
+      - sh
+      - -c
+      - sleep 5
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: '2'
+    memory: 2Gi
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  privileged: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+    - ALL
+tmpSizeLimit: 512Mi
+writableDirs: []
+extraVolumes: []
+extraVolumeMounts: []
+initContainers: []
+sidecars: []
+podLabels: {}
+podAnnotations:
+  prometheus.io/scrape: 'false'
+extraLabels: {}
+deploymentAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+serviceAccount:
+  create: true
+  automount: false
+  name: ''
+  annotations: {}
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  scaleDownStabilizationSeconds: 300
+  customMetrics: []
+pdb:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: null
+otel:
+  enabled: true
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+  protocol: grpc
+config:
+  APP_ENV: '{{ .Values.global.environment }}'
+  PORT: '8000'
+  LOG_FORMAT: json
+  LOG_LEVEL: INFO
+  OIDC_ISSUER: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}'
+  OIDC_CLIENT_ID: ai-service
+  OIDC_AUDIENCE: core-municipal
+  CORE_API_URL: http://core-municipal.core.svc.cluster.local:8080/api/v1
+  FHIR_API_URL: http://fhir-gateway.fhir.svc.cluster.local:8081/fhir/r4
+  OPA_URL: http://opa.security.svc.cluster.local:8181
+  KAFKA_BOOTSTRAP_SERVERS: sus-kafka-kafka-bootstrap.data.svc.cluster.local:9093
+  KAFKA_SECURITY_PROTOCOL: SSL
+  REDIS_URL: redis://redis.data.svc.cluster.local:6379/1
+  LITELLM_BASE_URL: http://litellm.ai.svc.cluster.local:4000
+  LANGFUSE_HOST: http://langfuse.ai.svc.cluster.local:3000
+  PII_EGRESS_POLICY: deny
+  OTEL_SDK_DISABLED: 'false'
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: '0.2'
+env: []
+envFrom: []
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: openbao
+    kind: ClusterSecretStore
+  targetName: ''
+  dataFrom: []
+  data:
+  - secretKey: DATABASE_URL
+    remoteRef:
+      key: '{{ .Values.global.environment }}/ai-service/db'
+      property: url
+  - secretKey: OIDC_CLIENT_SECRET
+    remoteRef:
+      key: '{{ .Values.global.environment }}/ai-service/oidc'
+      property: client_secret
+  - secretKey: LITELLM_API_KEY
+    remoteRef:
+      key: '{{ .Values.global.environment }}/ai-service/litellm'
+      property: api_key
+  - secretKey: LANGFUSE_PUBLIC_KEY
+    remoteRef:
+      key: '{{ .Values.global.environment }}/ai-service/langfuse'
+      property: public_key
+  - secretKey: LANGFUSE_SECRET_KEY
+    remoteRef:
+      key: '{{ .Values.global.environment }}/ai-service/langfuse'
+      property: secret_key
+serviceMonitor:
+  enabled: true
+  namespace: ''
+  path: /metrics
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+  metricRelabelings: []
+networkPolicy:
+  enabled: true
+  gatewayNamespace: gateway
+  observabilityNamespace: observability
+  allowDNS: true
+  ingress:
+  - from:
+    - namespace: web
+    - namespace: core
+    ports:
+    - port: 8000
+  egress:
+  - to:
+    - namespace: data
+    ports:
+    - port: 5432
+    - port: 9093
+    - port: 6379
+  - to:
+    - namespace: security
+    ports:
+    - port: 8181
+    - port: 8080
+    - port: 8443
+  - to:
+    - namespace: core
+    ports:
+    - port: 8080
+  - to:
+    - namespace: fhir
+    ports:
+    - port: 8081
+  - to:
+    - podLabels:
+        app.kubernetes.io/name: litellm
+    - podLabels:
+        app.kubernetes.io/name: langfuse
+    ports:
+    - port: 4000
+    - port: 3000
+apisix:
+  enabled: true
+  annotations: {}
+  priority: 10
+  hosts:
+  - ai.{{ .Values.global.domain }}
+  paths:
+  - /api/v1/*
+  methods: []
+  timeout:
+    connect: 5s
+    send: 30s
+    read: 30s
+  oidc:
+    enabled: true
+    discovery: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}/.well-known/openid-configuration'
+    clientId: ai-service
+    clientSecret: ''
+    secretRef: ai-service-apisix-oidc
+    bearerOnly: true
+    scope: openid
+    sslVerify: 'yes'
+    requiredScopes: []
+  rateLimit:
+    enabled: true
+    count: 120
+    timeWindow: 60
+    key: http_x_consumer_username
+    policy: local
+    redisHost: redis.data.svc.cluster.local
+    redisPort: 6379
+    redisClusterNodes: []
+    redisClusterName: ''
+  cors:
+    enabled: false
+    allowOrigins: https://app.sus-nexus.local
+  waf:
+    enabled: false
+    directives: default
+  canary:
+    stableWeight: 100
+    canaryWeight: 0
+  tls:
+    enabled: true
+    secretName: ''
+    certificate:
+      enabled: true
+      issuerName: letsencrypt-prod
+      issuerKind: ClusterIssuer
+  extraPlugins: []
+rollout:
+  enabled: false
+  canary:
+    maxSurge: 25%
+    maxUnavailable: 0
+    steps:
+    - setWeight: 10
+    - pause:
+        duration: 5m
+    - setWeight: 30
+    - pause:
+        duration: 10m
+    - setWeight: 60
+    - pause:
+        duration: 10m
+    trafficRouting: {}
+    analysis:
+      enabled: true
+      startingStep: 1
+      interval: 1m
+      failureLimit: 2
+      minSuccessRate: 0.99
+      maxP99Seconds: 1.0
+      prometheusAddress: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
+migration:
+  enabled: true
+  image: ''
+  command:
+  - alembic
+  args:
+  - upgrade
+  - head
+  env: []
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi

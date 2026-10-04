@@ -1,0 +1,82 @@
+# =====================================================================================
+# PERFIL TASY — Philips Tasy — A HOMOLOGAR
+# Cópia do perfil generic. Ajustar SOMENTE caminhos de origem (source) e tabelas de lookup
+# conforme a implantação do hospital; a lógica Java (HisConnector) é a mesma para todos.
+# Diferenças conhecidas/esperadas (confirmar na homologação):
+#   PV1-19 = nr_atendimento; PV1-3 = setor^quarto^leito; PID-3 costuma trazer CNS com CX-5 'CNS' e CPF com 'CPF'; AIH em segmento ZAI (confirmar índice) ou PV1-50; PV1-36 usa tabela própria de motivo de alta (confirmar códigos).
+# Ative com his.vendor=tasy (HIS_VENDOR=tasy).
+# =====================================================================================
+# HL7 ADT (A01/A02/A04/A06/A07/A08/A11/A13) → HospitalMovementRegistration
+# (POST /api/v1/hospital/episodes, upsert do episódio por nº do atendimento PV1-19).
+# Modelo plano: msh.*, pid.*, evn.*, pv1.*, z*.N (Hl7Fields) + adt.* derivados por HisConnector.flat:
+#   adt.visit_id         PV1-19 → PID-18 → MSH-10
+#   adt.hospital_cnes    his.hospital.cnes → MSH-4 (7 dígitos) → PV1-3-4
+#   adt.occurred_at      EVN-6 → EVN-2 → PV1-44 → MSH-7 (ISO-8601)
+#   adt.patient_class    PV1-2 com padrão por gatilho (A04 → E salvo O; A06 → I; A07 → O; demais → I)
+#   adt.trigger_key      gatilho; A02 na mesma enfermaria vira A02_BED (troca de leito)
+#   adt.bed              PV1-3-3 → PV1-3-2
+#   adt.admit_source     PV1-14
+#   adt.regulation_id    his.regulation.source (pv1-5 = PV1-5 nº de pré-admissão/regulação)
+#   adt.aih_number       his.aih.source (none | pv1-50 | zai → his.aih.zai-field)
+#   adt.principal_diagnosis  DG1 com DG1-6 = his.diagnosis.admit-type (A) ou primeiro; CID sem ponto
+# citizen_ref é montado pelo conector (PID-3: CNS → CPF → identificador local do HIS).
+# Perfil: generic (HL7 padrão). Perfis tasy/mv/aghuse só trocam caminhos/lookups neste arquivo.
+mapping_set: his-adt
+version: "1.0.0"
+entity_type: hospital_movement
+lookups:
+  trigger_movement:    # MSH-9-2 → movement (A02_BED = A02 com PV1-6-1 == PV1-3-1)
+    A01: admit
+    A02: transfer
+    A02_BED: bed_change
+    A04: admit
+    A06: admit
+    A07: admit
+    A08: admit
+    A11: cancel
+    A13: admit
+  patient_class:       # PV1-2 (HL7 tabela 0004) → episode_class
+    I: inpatient
+    E: emergency
+    O: observation
+    B: inpatient       # obstetrícia
+    R: day_hospital    # recorrente (hospital-dia) — a homologar
+    D: day_hospital    # extensão local — a homologar
+  admit_source:        # PV1-14 (HL7 tabela 0023) → admission_source
+    "1": elective      # encaminhamento médico
+    "2": elective      # encaminhamento ambulatorial
+    "3": elective      # convênio/HMO
+    "4": transfer      # transferência de hospital
+    "5": transfer      # transferência de unidade de longa permanência
+    "6": transfer      # transferência de outra unidade
+    "7": emergency     # pronto-socorro
+    "8": other         # judicial
+    "9": other         # não informado
+    R: regulation      # extensão local (regulação) — a homologar
+    REG: regulation
+    E: emergency
+    U: emergency       # urgência
+  trigger_reason:      # motivo informativo por gatilho (reason, máx. 500)
+    A06: "mudanca de classe ambulatorial para internacao (ADT^A06)"
+    A07: "mudanca de classe internacao para ambulatorial (ADT^A07)"
+    A08: "atualizacao de dados do atendimento (ADT^A08)"
+    A11: "cancelamento da admissao (ADT^A11)"
+    A13: "cancelamento da alta - paciente readmitido no mesmo atendimento (ADT^A13)"
+fields:
+  - { target: source.system, constant: HIS }
+  - { target: source.connector, constant: connector-his }
+  - { source: adt.visit_id, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: msh.control_id, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: adt.hospital_cnes, target: source.cnes, transforms: [blank_to_null] }
+  - { source: adt.hospital_cnes, target: hospital_cnes, transforms: [blank_to_null], required: true }
+  - { source: adt.patient_class, target: episode_class, transforms: [trim, upper, { lookup: { table: patient_class, default: inpatient } }], required: true }
+  - { source: adt.trigger_key, target: movement, transforms: [trim, upper, { lookup: { table: trigger_movement, strict: true } }], required: true }
+  - { source: adt.occurred_at, target: occurred_at, transforms: [blank_to_null], required: true }
+  - { source: pv1.ward, target: ward, transforms: [trim, blank_to_null] }
+  - { source: adt.bed, target: bed, transforms: [trim, blank_to_null] }
+  - { source: pv1.attending_id, target: attending_professional_id, transforms: [trim, blank_to_null] }
+  - { source: adt.admit_source, target: admission_source, transforms: [trim, upper, blank_to_null, { lookup: { table: admit_source, default: other } }], depends_on: adt.admit_source }
+  - { source: adt.regulation_id, target: regulation_source_record_id, transforms: [trim, blank_to_null] }
+  - { source: adt.principal_diagnosis, target: principal_diagnosis_cid, transforms: [trim, blank_to_null] }
+  - { source: adt.aih_number, target: aih_number, transforms: [trim, blank_to_null] }
+  - { source: adt.trigger, target: reason, transforms: [trim, upper, { lookup: { table: trigger_reason } }] }

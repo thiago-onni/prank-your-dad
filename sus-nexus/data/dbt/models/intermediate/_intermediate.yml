@@ -1,0 +1,76 @@
+version: 2
+
+# Camada silver: estado corrente por entidade (último evento por id + marcos da linha do tempo).
+# Contém municipal_citizen_id (identificador interno, sem nome/CNS/CPF) — acesso só do pipeline (rules.json).
+models:
+  - name: int_citizen_current
+    description: "Estado corrente do cidadão (estado cadastral e território: unidade, equipe, microárea)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, municipal_citizen_id]
+  - name: int_appointments
+    description: Estado corrente por agendamento (APS + rede) com marcos e desfecho (attended/no_show/cancelled/pending).
+    columns:
+      - name: appointment_id
+        data_tests: [unique, not_null]
+      - name: outcome
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [attended, no_show, cancelled, pending]
+  - name: int_tasks
+    description: Estado corrente por tarefa com marcos de atribuição, conclusão, escalonamento e violação de SLA.
+    columns:
+      - name: task_id
+        data_tests: [unique, not_null]
+      - name: origin_kind
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [workflow, agent, user, rule, connector]
+  - name: int_regulation_requests
+    description: Estado corrente por solicitação regulatória (pedido + linha do tempo de status).
+    columns:
+      - name: regulation_request_id
+        data_tests: [unique, not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [requested, pending_documents, returned, under_review, authorized, denied, scheduled, cancelled, no_show, performed, expired]
+  - name: int_exam_orders
+    description: Estado corrente por pedido de exame + marcos do ciclo e resultado.
+    columns:
+      - name: exam_order_id
+        data_tests: [unique, not_null]
+  - name: int_hospital_episodes
+    description: Estado corrente por episódio hospitalar (ADT + resumo de alta).
+    columns:
+      - name: hospital_episode_id
+        data_tests: [unique, not_null]
+  - name: int_care_plans
+    description: Estado corrente por plano de cuidado.
+    columns:
+      - name: care_plan_id
+        data_tests: [unique, not_null]
+  - name: int_care_gaps
+    description: Estado corrente por lacuna de cuidado.
+    columns:
+      - name: care_gap_id
+        data_tests: [unique, not_null]
+  - name: int_production_records
+    description: Estado corrente por registro de produção (record + validation + outcome; tolerante à ausência da fonte).
+    columns:
+      - name: production_record_id
+        data_tests: [unique]
+  - name: int_production_batches
+    description: Estado corrente por lote de produção (sus.production.submission.*).
+    columns:
+      - name: batch_id
+        data_tests: [unique]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [draft, approved, exported, transmitted, processed]

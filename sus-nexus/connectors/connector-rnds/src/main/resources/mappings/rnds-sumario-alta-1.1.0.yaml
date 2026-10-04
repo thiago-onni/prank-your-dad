@@ -1,0 +1,107 @@
+# Modelo de informação RNDS: Sumário de Alta (SA) — mapeamento declarativo versionado.
+#
+# SITUAÇÃO DAS FONTES (2026-10-04):
+#  - O Guia de Integração (https://rnds-guia.saude.gov.br; fonte lida em github.com/kyriosdata/rnds, portal/docs/sa)
+#    traz o Modelo Computacional do SA como "Em desenvolvimento" — não há perfil, exemplo de Bundle nem regras de
+#    envio publicados ali.
+#  - O Modelo de Informação foi instituído pela Portaria SAES/MS nº 701, de 29/09/2022, e (segundo o índice de
+#    busca) por nova Portaria GM/MS nº 8.026/2025; nenhuma das páginas é acessível pela rede deste ambiente.
+#  - CONFIRMADO nas definições oficiais [SD, src/test/resources/rnds-definicoes/ORIGEM.txt e kyriosdata/rnds
+#    clientes/validar/definicoes]: código "SA" ("Sumário de Alta") no CodeSystem BRTipoDocumento; CodeSystem
+#    BRCID10 (versão 2008); perfil BRContatoAssistencial-1.0 (Encounter).
+#  - Todo o resto (perfil da Composition, perfis de Condition, uso de BRContatoAssistencial no SA, sistemas de
+#    identificador no Bundle, seções obrigatórias) continua A CONFIRMAR. Modelo desabilitado por padrão
+#    (rnds.models.sumario-alta.enabled=false): NÃO habilitar antes de obter o modelo computacional oficial.
+model: sumario-alta
+version: 1.1.0
+status: a-confirmar-na-homologacao
+description: >-
+  Encounter finalizado (alta) do fhir-gateway + diagnóstico principal CID-10 do evento
+  sus.hospital.discharge.v1 (action=completed), enviados como Bundle document à RNDS.
+
+bundle:
+  type: document                      # padrão dos documentos da RNDS (REL); A CONFIRMAR para o SA
+  profile: null
+  # mesmo NamingSystem do REL (identificador do solicitante); A CONFIRMAR para o SA
+  identifier_system: "http://www.saude.gov.br/fhir/r4/NamingSystem/BRRNDS-{solicitante}"
+  identifier_value: source_id
+
+composition:
+  profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRSumarioAlta-A-CONFIRMAR"
+  type:
+    system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTipoDocumento"   # CONFIRMADO (CodeSystem 201701A)
+    code: "SA"                                                               # CONFIRMADO ("Sumário de Alta")
+    display: null
+  category: null
+  title: "Sumário de Alta"            # A CONFIRMAR
+  section_title: "Internação"         # A CONFIRMAR
+
+identifier_systems:                   # origem (fhir-gateway): NamingSystems da RNDS — CONFIRMADO
+  cns: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns"
+  cpf: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf"
+  cnes: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes"
+
+# destino (Bundle): sem definição oficial para o SA → mantém os NamingSystems (A CONFIRMAR; o REL usa as URLs
+# dos perfis BRIndividuo-1.0/BREstabelecimentoSaude-1.0 como system)
+target_systems:
+  patient_cns: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns"
+  patient_cpf: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf"
+  cnes: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes"
+
+code_systems:
+  cid10: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRCID10"   # CONFIRMADO (CodeSystem BRCID10, versão 2008)
+
+replacement:                          # padrão do REL; A CONFIRMAR para o SA
+  code: replaces
+  target_reference: "Composition/{protocolo}"
+
+resources:
+  Encounter:
+    mode: entry
+    # perfil oficial existente (BRContatoAssistencial v1.0); uso no SA A CONFIRMAR
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRContatoAssistencial-1.0"
+  Condition:
+    mode: entry
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRProblemaDiagnostico-A-CONFIRMAR"
+  Patient:
+    mode: logical
+    profile: null
+  Organization:
+    mode: logical
+    profile: null
+
+strip:
+  extension_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  identifier_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  elements:
+    - Encounter.basedOn
+    - Encounter.location
+    - Encounter.reasonCode
+
+required:
+  - name: solicitante_id
+    check: present
+    facts: [requester.solicitante_id]
+  - name: patient_identifier
+    check: cns_or_cpf
+    facts: [patient.cns, patient.cpf]
+  - name: hospital_cnes
+    check: cnes
+    facts: [hospital.cnes]
+  - name: admission_date
+    check: datetime
+    facts: [encounter.start]
+  - name: discharge_date
+    check: datetime
+    facts: [encounter.end]
+  - name: principal_diagnosis
+    check: present
+    facts: [diagnosis.code]
+  - name: finished_status
+    check: one_of
+    facts: [encounter.status]
+    values: [finished]

@@ -1,0 +1,41 @@
+# App-of-apps: aplique UMA vez por cluster (kubectl apply -n argocd -f root-app.yaml). A partir daí o
+# Argo CD reconcilia tudo em platform/argocd/apps. Use ENV para o cluster correspondente.
+#
+#   kubectl apply -n argocd -f project.yaml
+#   sed 's/__ENV__/dev/' root-app.yaml | kubectl apply -n argocd -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sus-nexus-root-__ENV__
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: sus-nexus-__ENV__
+  source:
+    repoURL: https://github.com/sus-nexus/sus-nexus.git
+    targetRevision: main
+    path: sus-nexus/platform/argocd/apps
+    directory:
+      recurse: true
+      include: "*.yaml"
+      jsonnet: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

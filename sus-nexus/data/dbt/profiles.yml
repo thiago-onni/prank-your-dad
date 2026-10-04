@@ -1,0 +1,52 @@
+# Perfis do projeto. Use com `--profiles-dir .` (ou DBT_PROFILES_DIR=sus-nexus/data/dbt).
+#   sus_nexus  → Trino (lakehouse Iceberg + réplica do core). Segredos por variável de ambiente.
+#   duckdb     → CI/local sem infraestrutura: bronze carregado das fixtures (ci/load_bronze_duckdb.py).
+sus_nexus:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: "{{ env_var('TRINO_AUTH_METHOD', 'none') }}"   # none (dev) | ldap | jwt | oauth
+      host: "{{ env_var('TRINO_HOST', 'localhost') }}"
+      port: "{{ env_var('TRINO_PORT', '8088') | int }}"
+      http_scheme: "{{ env_var('TRINO_HTTP_SCHEME', 'http') }}"
+      user: "{{ env_var('TRINO_USER', 'dbt') }}"
+      password: "{{ env_var('TRINO_PASSWORD', '') }}"
+      database: iceberg
+      schema: staging
+      threads: 4
+      session_properties:
+        query_max_run_time: 30m
+    prod:
+      type: trino
+      method: ldap
+      host: "{{ env_var('TRINO_HOST') }}"
+      port: 443
+      http_scheme: https
+      user: "{{ env_var('TRINO_USER', 'dbt') }}"
+      password: "{{ env_var('TRINO_PASSWORD') }}"
+      database: iceberg
+      schema: staging
+      threads: 8
+
+duckdb:
+  target: ci
+  outputs:
+    ci:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'target/sus_nexus_ci.duckdb') }}"
+      threads: 4
+      settings:
+        TimeZone: UTC
+      module_paths: [ci/duckdb_plugins]
+      plugins:
+        - module: sus_nexus_udfs     # hmac_sha256_hex (paridade com hmac_sha256 do Trino)
+    dev:
+      type: duckdb
+      path: target/sus_nexus_dev.duckdb
+      threads: 4
+      settings:
+        TimeZone: UTC
+      module_paths: [ci/duckdb_plugins]
+      plugins:
+        - module: sus_nexus_udfs

@@ -1,0 +1,81 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: local
+    environment: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yaml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: core-municipal
+    metrics_path: /q/metrics
+    static_configs:
+      - targets: ["core-municipal:8080"]
+        labels: { service: core-municipal }
+
+  - job_name: fhir-gateway
+    metrics_path: /q/metrics
+    static_configs:
+      - targets: ["fhir-gateway:8081"]
+        labels: { service: fhir-gateway }
+
+  - job_name: connectors
+    metrics_path: /q/metrics
+    static_configs:
+      - targets: ["connector-pec:8092"]
+        labels: { service: connector-pec, connector_id: pec }
+      - targets: ["connector-sisreg:8093"]
+        labels: { service: connector-sisreg, connector_id: sisreg }
+      - targets: ["connector-esus-regulacao:8094"]
+        labels: { service: connector-esus-regulacao, connector_id: esus-regulacao }
+      - targets: ["connector-lis:8095"]
+        labels: { service: connector-lis, connector_id: lis }
+      - targets: ["connector-his:8096"]
+        labels: { service: connector-his, connector_id: his }
+      - targets: ["connector-ris:8097"]
+        labels: { service: connector-ris, connector_id: ris }
+      - targets: ["connector-sia:8099"]
+        labels: { service: connector-sia, connector_id: sia }
+
+  - job_name: ai-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ai-service:8000"]
+        labels: { service: ai-service }
+
+  - job_name: keycloak
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["keycloak:9000"]
+
+  - job_name: temporal
+    static_configs:
+      - targets: ["temporal:8000"]
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  - job_name: apicurio
+    metrics_path: /q/metrics
+    static_configs:
+      - targets: ["apicurio:8080"]
+
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]

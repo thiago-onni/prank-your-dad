@@ -1,0 +1,20 @@
+{
+  "event_id": "evt_01J0000000000000000000EVT1",
+  "event_type": "sus.schedule.appointment.created",
+  "event_version": "1.0",
+  "occurred_at": "2026-10-02T09:00:00-03:00",
+  "published_at": "2026-10-02T09:00:03-03:00",
+  "tenant": {"municipality_id": "ibge_3143302"},
+  "subject": {"municipal_citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4"},
+  "source": {"system": "SISREG", "connector": "connector-sisreg", "source_record_id": "SISREG-AGD-778899", "cnes": "2112345"},
+  "data": {
+    "action": "created",
+    "appointment_id": "apt_01J0000000000000000000APT1",
+    "status": "booked",
+    "kind": "regulated",
+    "scheduled_start": "2026-10-10T10:00:00-03:00"
+  },
+  "privacy": {"classification": "restricted", "purpose": ["scheduling"]},
+  "trace": {"correlation_id": "corr_kafka_1", "schema_version": "1.0.0"},
+  "replay": false
+}

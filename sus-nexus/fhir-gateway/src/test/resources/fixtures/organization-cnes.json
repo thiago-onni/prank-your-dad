@@ -1,0 +1,16 @@
+{
+  "resourceType": "Organization",
+  "meta": {
+    "profile": ["https://br-core.saude.gov.br/fhir/StructureDefinition/BRCoreOrganization"]
+  },
+  "identifier": [
+    {
+      "use": "official",
+      "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes",
+      "value": "2112345"
+    }
+  ],
+  "active": true,
+  "name": "UBS Centro",
+  "address": [{"text": "Av. Principal, 100 - Centro", "country": "BR"}]
+}

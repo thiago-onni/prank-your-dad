@@ -1,0 +1,194 @@
+# Values do chart prometheus-community/kube-prometheus-stack (Argo: 00-operators.yaml).
+fullnameOverride: kube-prometheus-stack
+defaultRules:
+  create: true
+  rules:
+    etcd: false              # etcd gerenciado (EKS) ou via RKE2 metrics
+    kubeSchedulerAlerting: false
+    kubeControllerManager: false
+
+prometheus:
+  prometheusSpec:
+    replicas: 2
+    retention: 30d
+    retentionSize: 180GB
+    enableRemoteWriteReceiver: true          # OTel Collector → remote write
+    enableFeatures: [exemplar-storage]
+    externalLabels:
+      cluster: sus-nexus
+    # Seleciona ServiceMonitor/PodMonitor/PrometheusRule de qualquer namespace com label release=kube-prometheus-stack
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels: { release: kube-prometheus-stack }
+    ruleSelector:
+      matchLabels: { release: kube-prometheus-stack }
+    podMonitorSelector: {}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: fast-nvme
+          resources:
+            requests:
+              storage: 200Gi
+    resources:
+      requests: { cpu: "1", memory: 4Gi }
+      limits: { cpu: "4", memory: 12Gi }
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      fsGroup: 65534
+      seccompProfile: { type: RuntimeDefault }
+    podAntiAffinity: hard
+    # Nunca aceitar labels com PII vindas de aplicações
+    remoteWriteDashboards: true
+  ingress:
+    enabled: false
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 3
+    retention: 240h
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          resources:
+            requests:
+              storage: 10Gi
+  config:
+    global:
+      resolve_timeout: 5m
+      slack_api_url_file: /etc/alertmanager/secrets/alertmanager-slack/url
+    route:
+      receiver: slack-sre
+      group_by: [alertname, namespace, team]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: pagerduty-critical
+          matchers: [severity="critical"]
+          continue: true
+        - receiver: slack-integration
+          matchers: [team="integration"]
+        - receiver: slack-care
+          matchers: [team=~"care|ai"]
+        - receiver: slack-security
+          matchers: [team="security"]
+        - receiver: "null"
+          matchers: [alertname=~"Watchdog|InfoInhibitor"]
+    receivers:
+      - name: "null"
+      - name: slack-sre
+        slack_configs:
+          - channel: "#sus-nexus-sre"
+            send_resolved: true
+            title: '{{ template "slack.title" . }}'
+            text: '{{ template "slack.text" . }}'
+      - name: slack-integration
+        slack_configs: [{ channel: "#sus-nexus-integracao", send_resolved: true }]
+      - name: slack-care
+        slack_configs: [{ channel: "#sus-nexus-cuidado", send_resolved: true }]
+      - name: slack-security
+        slack_configs: [{ channel: "#sus-nexus-seguranca", send_resolved: true }]
+      - name: pagerduty-critical
+        pagerduty_configs:
+          - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty/routing_key
+            severity: critical
+            description: '{{ .CommonAnnotations.summary }}'
+            details:
+              runbook: '{{ .CommonAnnotations.runbook_url }}'
+    inhibit_rules:
+      - source_matchers: [severity="critical"]
+        target_matchers: [severity="warning"]
+        equal: [alertname, namespace]
+    templates:
+      - /etc/alertmanager/config/*.tmpl
+  templateFiles:
+    sus.tmpl: |-
+      {{ define "slack.title" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }}){{ end }}
+      {{ define "slack.text" }}{{ range .Alerts }}• {{ .Annotations.summary }}{{ if .Annotations.runbook_url }} — <{{ .Annotations.runbook_url }}|runbook>{{ end }}
+      {{ end }}{{ end }}
+
+grafana:
+  enabled: true
+  replicas: 2
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: America/Sao_Paulo
+  admin:
+    existingSecret: grafana-admin         # ExternalSecret → OpenBao secret/<env>/observability/grafana
+    userKey: admin-user
+    passwordKey: admin-password
+  grafana.ini:
+    server:
+      root_url: https://grafana.sus-nexus.local
+    auth.generic_oauth:
+      enabled: true
+      name: Keycloak
+      allow_sign_up: true
+      client_id: grafana
+      scopes: openid profile email roles
+      auth_url: https://auth.sus-nexus.local/realms/sus-nexus/protocol/openid-connect/auth
+      token_url: https://auth.sus-nexus.local/realms/sus-nexus/protocol/openid-connect/token
+      api_url: https://auth.sus-nexus.local/realms/sus-nexus/protocol/openid-connect/userinfo
+      role_attribute_path: contains(roles[*], 'admin_municipal') && 'Admin' || contains(roles[*], 'gestor') && 'Editor' || 'Viewer'
+      use_pkce: true
+    auth:
+      disable_login_form: true
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+    security:
+      cookie_secure: true
+      strict_transport_security: true
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef: { name: grafana-oauth, key: client-secret }
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.observability.svc.cluster.local
+      jsonData:
+        derivedFields:
+          - { name: TraceID, datasourceUid: tempo, matcherRegex: '"trace_id":"(\w+)"', url: "$${__value.raw}" }
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      access: proxy
+      url: http://tempo-query-frontend.observability.svc.cluster.local:3200
+      jsonData:
+        tracesToLogsV2: { datasourceUid: loki, filterByTraceID: true }
+        tracesToMetrics: { datasourceUid: prometheus }
+        serviceMap: { datasourceUid: prometheus }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/name,app.kubernetes.io/component]
+    - deployments=[app.kubernetes.io/name,app.kubernetes.io/version]
+
+nodeExporter:
+  enabled: true
+
+prometheusOperator:
+  admissionWebhooks:
+    certManager:
+      enabled: true
+      issuerRef: { name: internal-ca, kind: ClusterIssuer }

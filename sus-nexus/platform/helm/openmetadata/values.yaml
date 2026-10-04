@@ -1,0 +1,47 @@
+# Valores para o chart oficial do OpenMetadata (https://helm.open-metadata.org, chart `openmetadata` 1.6.x).
+# Opcional (catálogo/linhagem do lakehouse — PLANO 10.1). Instalação sugerida (Argo CD ou manual):
+#   helm repo add open-metadata https://helm.open-metadata.org
+#   helm install openmetadata open-metadata/openmetadata -n data -f platform/helm/openmetadata/values.yaml
+# Banco: CNPG (crie um cluster `openmetadata-db` em values.yaml do umbrella ou reutilize um existente).
+# Busca: OpenSearch gerenciado/operador. Segredos via ESO → OpenBao: <env>/data/openmetadata-db.
+openmetadata:
+  config:
+    authorizer:
+      initialAdmins: [admin]
+      principalDomain: sus-nexus.local
+    authentication:
+      provider: custom-oidc
+      publicKeys:
+        - http://openmetadata:8585/api/v1/system/config/jwks
+        - https://auth.dev.sus-nexus.local/realms/sus-nexus/protocol/openid-connect/certs
+      authority: https://auth.dev.sus-nexus.local/realms/sus-nexus
+      clientId: openmetadata
+      callbackUrl: https://catalog.dev.sus-nexus.local/callback
+    database:
+      host: openmetadata-db-rw.data.svc.cluster.local
+      port: 5432
+      driverClass: org.postgresql.Driver
+      dbScheme: postgresql
+      databaseName: openmetadata_db
+      dbUseSSL: true
+      auth:
+        username: openmetadata
+        password:
+          secretRef: openmetadata-db-credentials
+          secretKey: password
+    elasticsearch:
+      host: opensearch.data.svc.cluster.local
+      port: 9200
+      scheme: https
+      searchType: opensearch
+    pipelineServiceClientConfig:
+      enabled: false          # ingestão por CronJob/CLI (compose/openmetadata/ingestion/*.yaml), sem Airflow
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities: { drop: [ALL] }
+resources:
+  requests: { cpu: 500m, memory: 2Gi }
+  limits: { cpu: "2", memory: 4Gi }

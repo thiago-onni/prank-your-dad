@@ -1,0 +1,3 @@
+co_seq_agendado;co_cidadao;nu_cpf_cidadao;nu_cns_cidadao;dt_agendado;co_situacao_agendado;nu_cnes;co_prof;ds_motivo_cancelamento;dt_atualizado
+5001;1001;12345678909;898001234567890;2026-01-10 14:00:00;1;2206997;77;;2026-01-01 10:05:00
+5002;1002;;700500000000001;2026-01-11 09:30:00;2;2206997;78;Paciente desmarcou;2026-01-01 11:05:00

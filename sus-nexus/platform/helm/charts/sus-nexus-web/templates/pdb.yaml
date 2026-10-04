@@ -1,0 +1,20 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.pdb.minAvailable }}
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

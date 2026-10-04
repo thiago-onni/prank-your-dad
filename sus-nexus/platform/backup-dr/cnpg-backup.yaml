@@ -1,0 +1,148 @@
+# Backup CNPG — complementa o que o chart umbrella já gera (barmanObjectStore + ScheduledBackup diário).
+# Aqui: backup sob demanda (modelo), schedule semanal full "frio" com retenção longa e verificação mensal de
+# PITR (job que restaura em cluster temporário e roda smoke test). Namespace: data.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: core-db-weekly-longterm
+  namespace: data
+  labels:
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/backup-tier: longterm
+spec:
+  schedule: "0 0 1 * * 0"          # domingos 01:00 (6 campos)
+  backupOwnerReference: cluster
+  immediate: false
+  target: prefer-standby
+  method: barmanObjectStore
+  cluster:
+    name: core-db
+---
+# Backup manual (kubectl apply -f) antes de mudanças destrutivas / janela de release prod
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: core-db-pre-release-TEMPLATE
+  namespace: data
+  annotations:
+    sus-nexus.gov.br/usage: "Renomeie com data/release (ex.: core-db-pre-release-v1-4-0) e aplique antes do sync de prod"
+spec:
+  method: barmanObjectStore
+  target: prefer-standby
+  cluster:
+    name: core-db
+---
+# Teste mensal de PITR (PLANO 4.2.3 "PITR testado mensalmente"): restaura core-db em cluster efêmero
+# `core-db-pitr-test` apontando para 24h atrás, roda consultas de sanidade e remove o cluster.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cnpg-pitr-test
+  namespace: data
+  labels:
+    app.kubernetes.io/part-of: sus-nexus
+spec:
+  schedule: "0 4 1 * *"            # dia 1 de cada mês, 04:00
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        spec:
+          serviceAccountName: cnpg-pitr-test
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: pitr-test
+              image: harbor.sus-nexus.local/sus-nexus/ops-tools:latest   # kubectl + psql + mc
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 100m, memory: 128Mi }
+                limits: { cpu: 500m, memory: 512Mi }
+              env:
+                - name: SOURCE_CLUSTER
+                  value: core-db
+                - name: TEST_CLUSTER
+                  value: core-db-pitr-test
+              command: ["/bin/bash", "-ec"]
+              args:
+                - |
+                  TARGET="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+                  echo ">> PITR test: ${SOURCE_CLUSTER} -> ${TEST_CLUSTER} @ ${TARGET}"
+                  kubectl -n data delete cluster "${TEST_CLUSTER}" --ignore-not-found
+                  cat <<EOF | kubectl -n data apply -f -
+                  apiVersion: postgresql.cnpg.io/v1
+                  kind: Cluster
+                  metadata:
+                    name: ${TEST_CLUSTER}
+                    labels: { sus-nexus.gov.br/ephemeral: "true" }
+                  spec:
+                    instances: 1
+                    storage: { size: 500Gi, storageClass: standard }
+                    bootstrap:
+                      recovery:
+                        source: ${SOURCE_CLUSTER}
+                        recoveryTarget:
+                          targetTime: "${TARGET}"
+                    externalClusters:
+                      - name: ${SOURCE_CLUSTER}
+                        barmanObjectStore:
+                          destinationPath: s3://backups/cnpg/prod/${SOURCE_CLUSTER}
+                          endpointURL: https://minio.data.svc.cluster.local
+                          endpointCA: { name: minio-ca, key: ca.crt }
+                          s3Credentials:
+                            accessKeyId: { name: sus-backup-s3-credentials, key: ACCESS_KEY_ID }
+                            secretAccessKey: { name: sus-backup-s3-credentials, key: ACCESS_SECRET_KEY }
+                          wal: { maxParallel: 8 }
+                  EOF
+                  kubectl -n data wait cluster/"${TEST_CLUSTER}" --for=condition=Ready --timeout=90m
+                  PGPASSWORD="$(kubectl -n data get secret ${TEST_CLUSTER}-app -o jsonpath='{.data.password}' | base64 -d)"
+                  export PGPASSWORD
+                  psql "host=${TEST_CLUSTER}-rw.data.svc.cluster.local dbname=sus_nexus_core user=$(kubectl -n data get secret ${TEST_CLUSTER}-app -o jsonpath='{.data.username}' | base64 -d) sslmode=require" \
+                    -v ON_ERROR_STOP=1 -c "SELECT count(*) AS citizens FROM identity.citizen;" \
+                    -c "SELECT max(recorded_at) AS last_event FROM platform.event_outbox;" \
+                    -c "SELECT pg_last_wal_replay_lsn() IS NOT NULL;"
+                  echo ">> PITR OK — removendo cluster de teste"
+                  kubectl -n data delete cluster "${TEST_CLUSTER}"
+                  echo "pitr_test_success{cluster=\"${SOURCE_CLUSTER}\"} 1" | curl --data-binary @- http://prometheus-pushgateway.observability.svc.cluster.local:9091/metrics/job/cnpg-pitr-test || true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cnpg-pitr-test
+  namespace: data
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cnpg-pitr-test
+  namespace: data
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-pitr-test
+  namespace: data
+subjects:
+  - kind: ServiceAccount
+    name: cnpg-pitr-test
+    namespace: data
+roleRef:
+  kind: Role
+  name: cnpg-pitr-test
+  apiGroup: rbac.authorization.k8s.io

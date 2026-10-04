@@ -1,0 +1,103 @@
+{
+  "roles": {
+    "admin_municipal": {
+      "description": "Administrador do tenant: gestão de usuários, conectores, políticas e configuração. Não lê dado clínico individual sem break-glass.",
+      "category": "management",
+      "clinical": false,
+      "break_glass_eligible": true,
+      "default_mask_identifiers": false
+    },
+    "gestor": {
+      "description": "Gestão municipal: somente recursos agregados (indicadores, painéis, relatórios).",
+      "category": "management",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "profissional_aps": {
+      "description": "Profissional da APS (médico, enfermeiro, técnico): cidadãos vinculados à sua equipe/UBS.",
+      "category": "clinical",
+      "clinical": true,
+      "break_glass_eligible": true,
+      "default_mask_identifiers": false
+    },
+    "acs": {
+      "description": "Agente comunitário de saúde: dados mínimos da sua microárea; nunca diagnóstico ou laudo.",
+      "category": "clinical_support",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "regulador": {
+      "description": "Regulador: solicitações, exames e agenda sob regulação.",
+      "category": "clinical",
+      "clinical": true,
+      "break_glass_eligible": true,
+      "default_mask_identifiers": false
+    },
+    "agendador": {
+      "description": "Agendador: identificação, contato e agenda. Sem dado clínico.",
+      "category": "operational",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "profissional_hospitalar": {
+      "description": "Profissional hospitalar: episódios do domínio hospital do próprio CNES.",
+      "category": "clinical",
+      "clinical": true,
+      "break_glass_eligible": true,
+      "default_mask_identifiers": false
+    },
+    "auditor": {
+      "description": "Auditor de produção: registros de produção e evidências, identificadores mascarados.",
+      "category": "audit",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "dpo": {
+      "description": "Encarregado (DPO): trilhas de auditoria, logs de acesso e políticas.",
+      "category": "audit",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "operador_integracao": {
+      "description": "Operador de integração: mensagens, DLQ, reconciliação e reprocessamento; payload sensível mascarado.",
+      "category": "operational",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": true
+    },
+    "cadastro_mestre": {
+      "description": "Cadastro mestre (MPI): revisão de duplicidades, merge e unmerge de cidadãos.",
+      "category": "operational",
+      "clinical": false,
+      "break_glass_eligible": false,
+      "default_mask_identifiers": false
+    }
+  },
+  "role_groups": {
+    "clinical_roles": [
+      "profissional_aps",
+      "profissional_hospitalar",
+      "regulador"
+    ],
+    "reveal_identifier_roles": [
+      "profissional_aps",
+      "agendador",
+      "regulador",
+      "auditor"
+    ],
+    "merge_roles": [
+      "cadastro_mestre",
+      "admin_municipal"
+    ],
+    "export_roles": [
+      "dpo",
+      "gestor",
+      "auditor"
+    ]
+  }
+}

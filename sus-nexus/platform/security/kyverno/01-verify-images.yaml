@@ -1,0 +1,142 @@
+# Imagens do SUS Nexus devem ser assinadas pelo CI (cosign keyless, OIDC do GitHub Actions) ou pela
+# chave da organização. Em dev (namespace label sus-nexus.gov.br/env=dev) a política é Audit.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-sus-nexus-images
+  annotations:
+    policies.kyverno.io/title: Verificar assinatura cosign das imagens SUS Nexus
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/category: Supply Chain Security
+spec:
+  validationFailureAction: Enforce
+  validationFailureActionOverrides:
+    - action: Audit
+      namespaces: [dev-*, "*-dev"]
+  background: false
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: verify-signature-and-attestations
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [core, fhir, connectors, ai, web, data, security, workflows]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/sus-nexus/*"
+            - "harbor.sus-nexus.local/sus-nexus/*"
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                # keyless (GitHub Actions OIDC) — workflow de release do monorepo
+                - keyless:
+                    subject: "https://github.com/sus-nexus/sus-nexus/.github/workflows/sus-nexus-release.yml@refs/tags/v*"
+                    issuer: https://token.actions.githubusercontent.com
+                    rekor:
+                      url: https://rekor.sigstore.dev
+                # chave da organização (fallback para builds internos / air-gapped)
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      REPLACE_WITH_SUS_NEXUS_COSIGN_PUBLIC_KEY
+                      -----END PUBLIC KEY-----
+                    rekor:
+                      ignoreTlog: true
+          attestations:
+            # SBOM (Syft/SPDX) deve existir e não ter pacotes críticos conhecidos — triagem no CI (Trivy)
+            - type: https://spdx.dev/Document
+              attestors:
+                - count: 1
+                  entries:
+                    - keyless:
+                        subject: "https://github.com/sus-nexus/sus-nexus/.github/workflows/sus-nexus-release.yml@refs/tags/v*"
+                        issuer: https://token.actions.githubusercontent.com
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Somente registries aprovados
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-registries
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, kube-node-lease, cilium]
+      validate:
+        message: >-
+          Imagens só podem vir de harbor.sus-nexus.local, ghcr.io/sus-nexus, quay.io (operadores), registry.k8s.io
+          ou dos registries dos operadores aprovados. Use o proxy-cache do Harbor para imagens públicas.
+        foreach:
+          - list: request.object.spec.[containers, initContainers, ephemeralContainers][]
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "harbor.sus-nexus.local/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/sus-nexus/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "quay.io/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "registry.k8s.io/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/cloudnative-pg/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/tensorchord/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/kyverno/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/external-secrets/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/apache/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/grafana/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/otel/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/openpolicyagent/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/temporalio/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/apicurio/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/velero/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/goharbor/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/library/redis:*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "docker.io/oliver006/*"

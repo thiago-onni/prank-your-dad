@@ -1,0 +1,29 @@
+# Ingestão dos artefatos do dbt (manifest.json, catalog.json, run_results.json) no OpenMetadata:
+# linhagem bronze → staging → intermediate → marts, descrições, testes (qualidade) e tags (gold, pseudonymized,
+# aggregated, identified). O dicionário de indicadores vai junto (meta.indicador nas colunas dos marts
+# agregados). Rode após `dbt build` + `dbt docs generate` no alvo Trino. Ver ../README.md.
+# Variáveis: DBT_TARGET_DIR (sus-nexus/data/dbt/target), OM_SERVER, OM_JWT_TOKEN.
+source:
+  type: dbt
+  serviceName: sus_nexus_lakehouse      # mesmo serviço da ingestão do Trino (as tabelas precisam existir)
+  sourceConfig:
+    config:
+      type: DBT
+      dbtConfigSource:
+        dbtConfigType: local
+        dbtManifestFilePath: ${DBT_TARGET_DIR}/manifest.json
+        dbtCatalogFilePath: ${DBT_TARGET_DIR}/catalog.json
+        dbtRunResultsFilePath: ${DBT_TARGET_DIR}/run_results.json
+      dbtUpdateDescriptions: true
+      includeTags: true
+      dbtClassificationName: sus_nexus_dbt
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: ${OM_SERVER}
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OM_JWT_TOKEN}

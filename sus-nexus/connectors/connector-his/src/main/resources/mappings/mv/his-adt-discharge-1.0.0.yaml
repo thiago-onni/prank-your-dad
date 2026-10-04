@@ -1,0 +1,60 @@
+# =====================================================================================
+# PERFIL MV — MV Soluções (SOUL MV) — A HOMOLOGAR
+# Cópia do perfil generic. Ajustar SOMENTE caminhos de origem (source) e tabelas de lookup
+# conforme a implantação do hospital; a lógica Java (HisConnector) é a mesma para todos.
+# Diferenças conhecidas/esperadas (confirmar na homologação):
+#   PV1-19 = cd_atendimento; PV1-3 = unidade de internação^quarto^leito; CNS pode vir em PID-3 sem tipo (inferência por tamanho); PV1-36 = cd_motivo_alta (tabela local — confirmar mapeamento para 0112); AIH geralmente em PV1-50 ou ZAI.
+# Ative com his.vendor=mv (HIS_VENDOR=mv).
+# =====================================================================================
+# HL7 ADT^A03 → DischargeRegistration, publicado em
+# POST /api/v1/hospital/episodes/by-source/HIS/{target_ref.source_record_id}/discharge.
+# adt.* derivados por HisConnector.flat:
+#   adt.visit_id            PV1-19 → PID-18 → MSH-10
+#   adt.discharged_at       PV1-45 → EVN-6 → EVN-2 → MSH-7
+#   adt.principal_diagnosis DG1 com DG1-6 = his.diagnosis.discharge-type (F) ou primeiro; CID sem ponto
+#   adt.procedures_count    nº de segmentos PR1
+#   adt.summary_ref/sha256  raw://connector-his/sha256/<sha> quando o A03 traz OBX/NTE (sumário fica
+#                           só na raw zone; o texto NUNCA vai ao core)
+# followup_plan_present / followup_due_days / care_lines não existem no ADT padrão: mapear de um
+# segmento Z do fornecedor (exemplos comentados abaixo) após homologação.
+mapping_set: his-adt-discharge
+version: "1.0.0"
+entity_type: hospital_discharge
+lookups:
+  disposition:         # PV1-36 (HL7 tabela 0112) → disposition
+    "01": home
+    "02": transfer     # outro hospital de curta permanência
+    "03": transfer     # unidade de longa permanência
+    "04": transfer     # unidade intermediária
+    "05": transfer     # outra instituição
+    "06": home_with_care   # home care / atenção domiciliar
+    "07": against_advice   # evasão / alta a pedido
+    "20": deceased
+    "40": deceased     # óbito em casa (hospice)
+    "41": deceased     # óbito em instituição
+    "42": deceased     # óbito, local desconhecido
+    "1": home          # variantes sem zero à esquerda
+    "2": transfer
+    "3": transfer
+    "4": transfer
+    "5": transfer
+    "6": home_with_care
+    "7": against_advice
+fields:
+  - { target: target_ref.system, constant: HIS }
+  - { source: adt.visit_id, target: target_ref.source_record_id, transforms: [trim], required: true }
+  - { target: source.system, constant: HIS }
+  - { target: source.connector, constant: connector-his }
+  - { source: adt.visit_id, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: msh.control_id, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: adt.hospital_cnes, target: source.cnes, transforms: [blank_to_null] }
+  - { source: adt.discharged_at, target: discharged_at, transforms: [blank_to_null], required: true }
+  - { source: pv1.discharge_disposition, target: disposition, transforms: [trim, upper, { lookup: { table: disposition, default: other } }], required: true }
+  - { source: adt.principal_diagnosis, target: principal_diagnosis_cid, transforms: [trim, blank_to_null] }
+  - { source: adt.procedures_count, target: procedures_count, transforms: [to_integer] }
+  - { source: adt.summary_ref, target: summary_document_ref, transforms: [blank_to_null] }
+  - { source: adt.summary_sha256, target: summary_document_sha256, transforms: [blank_to_null] }
+  # Exemplos (a homologar por fornecedor) de plano de acompanhamento em segmento Z:
+  # - { source: zal.2, target: followup_plan_present, transforms: [ { to_boolean: { true_values: [S, SIM, "1", Y] } } ] }
+  # - { source: zal.3, target: followup_due_days, transforms: [digits, to_integer] }
+  # - { source: zal.4, target: "care_lines[0]", transforms: [trim, lower, blank_to_null] }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/production/record/1.0.0",
+  "title": "sus.production.record.* — data",
+  "description": "Registro de produção ambulatorial/hospitalar (BPA-C, BPA-I, APAC, AIH) e seu resultado de pré-auditoria (PRO-001..004). Dado administrativo: NÃO é projetado na timeline do cidadão. Sem nomes; CNS/CPF somente por hash (HMAC por tenant).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "production_record_id", "kind", "competence", "cnes", "procedure_code", "quantity", "status"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "validated", "pending", "corrected"] },
+    "production_record_id": { "type": "string", "pattern": "^prod_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "kind": { "type": "string", "enum": ["bpa_c", "bpa_i", "apac", "aih"] },
+    "competence": { "type": "string", "pattern": "^[0-9]{4}(0[1-9]|1[0-2])$" },
+    "cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "procedure_code": { "type": "string", "pattern": "^[0-9]{10}$", "description": "SIGTAP" },
+    "quantity": { "type": "integer", "minimum": 1 },
+    "professional_cbo": { "type": "string", "pattern": "^[0-9]{6}$" },
+    "professional_cns_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "municipal_citizen_id": { "type": "string", "pattern": "^cit_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "citizen_identifier_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "attendance_date": { "type": "string", "format": "date" },
+    "status": { "type": "string", "enum": ["generated", "validated", "pending", "exported", "transmitted", "received", "rejected", "corrected", "approved", "paid"] },
+    "errors_count": { "type": "integer", "minimum": 0 },
+    "warnings_count": { "type": "integer", "minimum": 0 },
+    "rule_version": { "type": "string", "description": "Versão do conjunto de regras production-validation aplicada (ex.: production-validation/1)." },
+    "estimated_value": { "type": "number", "minimum": 0 },
+    "deadline_at": { "type": "string", "format": "date-time" },
+    "correction_count": { "type": "integer", "minimum": 0 }
+  }
+}

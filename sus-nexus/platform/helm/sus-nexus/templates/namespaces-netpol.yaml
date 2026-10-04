@@ -1,0 +1,115 @@
+{{- if .Values.networkPolicies.defaultDeny }}
+{{/*
+Default-deny por namespace (PLANO 4.2.2). Os charts de componente adicionam suas allowances.
+Para os namespaces de dados/segurança, permitimos ingress a partir dos namespaces de aplicação nas
+portas dos serviços (Postgres 5432, Kafka 9093/9094, MinIO 9000/443, Redis 6379, Keycloak 8443, OPA 8181).
+*/}}
+{{- $root := . }}
+{{- range $key, $ns := .Values.global.namespaces }}
+{{- if has $key (list "core" "fhir" "connectors" "ai" "web" "data" "security" "workflows") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-observability-scrape
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.global.namespaces.observability }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-observability
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.global.namespaces.observability }}
+      ports:
+        - { port: 4317, protocol: TCP }
+        - { port: 4318, protocol: TCP }
+{{- end }}
+{{- end }}
+{{- range $key := list "data" "security" "workflows" }}
+{{- $ns := index $root.Values.global.namespaces $key }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-apps
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- range $app := list "core" "fhir" "connectors" "ai" "web" "data" "security" "workflows" "gateway" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $root.Values.global.namespaces $app }}
+        {{- end }}
+  egress:
+    # Operadores/serviços de plataforma falam entre si (CNPG ↔ MinIO, Connect ↔ Postgres, Keycloak ↔ DB)
+    - to:
+        {{- range $app := list "data" "security" "workflows" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ index $root.Values.global.namespaces $app }}
+        {{- end }}
+    # API server (operadores, config providers)
+    - to:
+        - ipBlock:
+            cidr: {{ $root.Values.networkPolicies.apiServerCidr }}
+      ports:
+        - { port: 443, protocol: TCP }
+        - { port: 6443, protocol: TCP }
+{{- end }}
+{{- end }}

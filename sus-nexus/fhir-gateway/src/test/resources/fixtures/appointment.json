@@ -1,0 +1,13 @@
+{
+  "resourceType": "Appointment",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusAppointment"]},
+  "status": "booked",
+  "serviceType": [{"coding": [{"system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS", "code": "0301010072"}]}],
+  "description": "Consulta médica em atenção básica",
+  "start": "2026-09-15T10:00:00-03:00",
+  "end": "2026-09-15T10:20:00-03:00",
+  "participant": [
+    {"actor": {"reference": "Patient/PAT1"}, "required": "required", "status": "accepted"},
+    {"actor": {"reference": "Location/LOC1"}, "required": "required", "status": "accepted"}
+  ]
+}

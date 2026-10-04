@@ -1,0 +1,161 @@
+{{- if .Values.minio.enabled }}
+{{- $ns := include "umbrella.ns.data" . }}
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: minio-root
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: minio-root
+    template:
+      data:
+        config.env: |
+          export MINIO_ROOT_USER="{{ "{{ .user }}" }}"
+          export MINIO_ROOT_PASSWORD="{{ "{{ .password }}" }}"
+          export MINIO_BROWSER_REDIRECT_URL="https://minio-console.{{ .Values.global.domain }}"
+          export MINIO_PROMETHEUS_AUTH_TYPE="public"
+  data:
+    - secretKey: user
+      remoteRef: { key: "{{ .Values.global.environment }}/data/minio-root", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ .Values.global.environment }}/data/minio-root", property: password }
+---
+# MinIO Operator — Tenant (minio.min.io/v2)
+apiVersion: minio.min.io/v2
+kind: Tenant
+metadata:
+  name: minio
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  image: {{ .Values.minio.image }}
+  configuration:
+    name: minio-root
+  requestAutoCert: true
+  features:
+    bucketDNS: false
+  prometheusOperator: true
+  pools:
+    - name: pool-0
+      servers: {{ .Values.minio.servers }}
+      volumesPerServer: {{ .Values.minio.volumesPerServer }}
+      volumeClaimTemplate:
+        metadata:
+          name: data
+        spec:
+          storageClassName: {{ .Values.minio.storageClass }}
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: {{ .Values.minio.volumeSize }}
+      resources:
+        {{- toYaml .Values.minio.resources | nindent 8 }}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      {{- if gt (int .Values.minio.servers) 1 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  v1.min.io/tenant: minio
+      {{- end }}
+  # Buckets (PLANO 4.2.3). objectLock=true habilita WORM; a retenção padrão (COMPLIANCE) é aplicada
+  # pelo Job minio-buckets abaixo porque o Tenant CRD não expõe retention.
+  buckets:
+    - name: raw-zone
+      objectLock: false
+    - name: documents
+      objectLock: false
+    - name: exports
+      objectLock: false
+    - name: backups
+      objectLock: false
+    - name: audit-archive
+      objectLock: true
+    - name: production-exports
+      objectLock: false
+    {{- if or .Values.minio.lakehouseBucket (and .Values.lakehouse .Values.lakehouse.enabled) }}
+    - name: lakehouse
+      objectLock: false
+    {{- end }}
+---
+# Pós-configuração: versionamento, retenção WORM, expiração de exports. Idempotente.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-buckets-{{ .Release.Revision }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mc
+          image: {{ .Values.minio.mcImage }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: minio-root, key: user } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: minio-root, key: password } }
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              mc --insecure alias set t https://minio.{{ $ns }}.svc.cluster.local "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+              for b in raw-zone backups audit-archive; do mc --insecure version enable t/$b; done
+              mc --insecure retention set --default {{ .Values.minio.auditArchive.lockMode }} {{ .Values.minio.auditArchive.retentionDays }}d t/audit-archive
+              mc --insecure ilm rule ls t/exports 2>/dev/null | grep -q Expiration || mc --insecure ilm rule add --expire-days 30 t/exports
+              mc --insecure ilm rule ls t/raw-zone 2>/dev/null | grep -q Expiration || mc --insecure ilm rule add --noncurrent-expire-days {{ .Values.minio.rawZone.noncurrentExpireDays }} t/raw-zone
+              {{- if .Values.minio.replication.enabled }}
+              mc --insecure replicate ls t/audit-archive | grep -q . || mc --insecure replicate add t/audit-archive --remote-bucket "{{ .Values.minio.replication.auditArchiveTarget }}" --replicate "delete-marker,existing-objects"
+              mc --insecure replicate ls t/backups | grep -q . || mc --insecure replicate add t/backups --remote-bucket "{{ .Values.minio.replication.backupsTarget }}" --replicate "existing-objects"
+              {{- end }}
+              echo done
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

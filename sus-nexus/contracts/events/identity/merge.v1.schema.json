@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/identity/merge/1.0.0",
+  "title": "sus.identity.merge.* — data",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "case_id", "surviving_citizen_id"],
+  "properties": {
+    "action": { "type": "string", "enum": ["case_opened", "merged", "unmerged", "rejected"] },
+    "case_id": { "type": "string", "pattern": "^case_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "surviving_citizen_id": { "type": "string", "pattern": "^cit_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "merged_citizen_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^cit_[0-9A-HJKMNP-TV-Z]{26}$" }
+    },
+    "reason": { "type": "string", "maxLength": 500 },
+    "decided_by": { "type": "string", "description": "ID do usuário responsável (nunca agente de IA)." },
+    "evidence_count": { "type": "integer", "minimum": 0 },
+    "reversible": { "type": "boolean" }
+  }
+}

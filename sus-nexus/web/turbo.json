@@ -1,0 +1,47 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": ["NODE_ENV", "CI"],
+  "tasks": {
+    "generate": {
+      "inputs": [
+        "../../../contracts/openapi/core-municipal.yaml",
+        "../../../contracts/openapi/ai-service.yaml"
+      ],
+      "outputs": ["src/generated/**"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "env": [
+        "AUTH_MODE",
+        "AUTH_SECRET",
+        "AUTH_KEYCLOAK_ID",
+        "AUTH_KEYCLOAK_SECRET",
+        "AUTH_KEYCLOAK_ISSUER",
+        "AUTH_MOCK_ROLES",
+        "AUTH_MOCK_USER",
+        "AUTH_MOCK_CNES",
+        "AUTH_MOCK_TEAMS",
+        "AUTH_MOCK_MICROAREAS",
+        "AUTH_URL",
+        "CORE_API_URL",
+        "NEXT_PUBLIC_API_MOCK"
+      ],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "env": ["AUTH_MODE", "NEXT_PUBLIC_API_MOCK"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

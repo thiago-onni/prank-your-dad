@@ -1,0 +1,33 @@
+# Inventário Ansible gerado pelo Terraform — cluster ${cluster_name} (${environment})
+# Playbook: sus-nexus-infra/ansible/rke2.yml (ordem: rke2_first_server -> rke2_servers -> rke2_agents)
+
+[rke2_first_server]
+${first_server.name} ansible_host=${first_server.ip} rke2_zone=${first_server.zone}
+
+[rke2_servers]
+%{ for n in other_servers ~}
+${n.name} ansible_host=${n.ip} rke2_zone=${n.zone}
+%{ endfor ~}
+
+[rke2_agents]
+%{ for n in agents ~}
+${n.name} ansible_host=${n.ip} rke2_zone=${n.zone} rke2_tier=${n.tier}
+%{ endfor ~}
+
+[rke2_control_plane:children]
+rke2_first_server
+rke2_servers
+
+[rke2_cluster:children]
+rke2_control_plane
+rke2_agents
+
+[rke2_cluster:vars]
+ansible_user=${ssh_user}
+ansible_become=true
+ansible_python_interpreter=/usr/bin/python3
+rke2_version=${rke2_version}
+rke2_api_vip=${api_vip}
+rke2_cluster_name=${cluster_name}
+rke2_environment=${environment}
+rke2_config_dir=./generated

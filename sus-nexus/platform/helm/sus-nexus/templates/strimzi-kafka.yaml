@@ -1,0 +1,193 @@
+{{- if .Values.strimzi.enabled }}
+{{- $ns := .Values.strimzi.namespace | default (include "umbrella.ns.data" .) }}
+{{- $cluster := .Values.strimzi.clusterName }}
+# Strimzi — Kafka em modo KRaft com node pools (sem ZooKeeper).
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: {{ .Values.strimzi.nodePool.name }}
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  replicas: {{ .Values.strimzi.nodePool.replicas }}
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ .Values.strimzi.nodePool.storageSize }}
+        class: {{ .Values.strimzi.nodePool.storageClass }}
+        deleteClaim: false
+        kraftMetadata: shared
+  resources:
+    {{- toYaml .Values.strimzi.nodePool.resources | nindent 4 }}
+  jvmOptions:
+    -Xms: {{ .Values.strimzi.nodePool.jvm.xms }}
+    -Xmx: {{ .Values.strimzi.nodePool.jvm.xmx }}
+  template:
+    pod:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if gt (int .Values.strimzi.nodePool.replicas) 1 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: {{ ternary "topology.kubernetes.io/zone" "kubernetes.io/hostname" .Values.global.multiZone }}
+              labelSelector:
+                matchLabels:
+                  strimzi.io/cluster: {{ $cluster }}
+                  strimzi.io/pool-name: {{ .Values.strimzi.nodePool.name }}
+      {{- end }}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ $cluster }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    strimzi.io/kraft: enabled
+    strimzi.io/node-pools: enabled
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  kafka:
+    version: {{ .Values.strimzi.kafkaVersion | quote }}
+    metadataVersion: {{ .Values.strimzi.metadataVersion | quote }}
+    listeners:
+      # Interno TLS + autenticação mTLS (serviços do cluster)
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+      # SCRAM-SHA-512 para componentes que não usam mTLS (Kafka Connect legado, ferramentas)
+      - name: scram
+        port: 9094
+        type: internal
+        tls: true
+        authentication:
+          type: scram-sha-512
+      {{- if .Values.strimzi.externalListener.enabled }}
+      # Externo (agentes de borda / MirrorMaker do site DR) — mTLS obrigatório
+      - name: external
+        port: 9095
+        type: {{ .Values.strimzi.externalListener.type }}
+        tls: true
+        authentication:
+          type: tls
+        {{- with .Values.strimzi.externalListener.configuration }}
+        configuration:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- end }}
+    authorization:
+      type: simple
+      superUsers:
+        - CN=sus-admin
+        - CN=mirrormaker2-dr
+    config:
+      default.replication.factor: {{ .Values.strimzi.topicReplication }}
+      min.insync.replicas: {{ .Values.strimzi.topicMinInsyncReplicas }}
+      offsets.topic.replication.factor: {{ .Values.strimzi.topicReplication }}
+      transaction.state.log.replication.factor: {{ .Values.strimzi.topicReplication }}
+      transaction.state.log.min.isr: {{ .Values.strimzi.topicMinInsyncReplicas }}
+      auto.create.topics.enable: "false"
+      delete.topic.enable: "false"
+      num.partitions: 12
+      log.retention.hours: 720
+      log.message.format.version: {{ .Values.strimzi.metadataVersion | quote }}
+      inter.broker.protocol.version: {{ .Values.strimzi.metadataVersion | quote }}
+      ssl.client.auth: required
+      compression.type: producer
+      message.max.bytes: 4194304
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: {{ $cluster }}-metrics
+          key: kafka-metrics-config.yml
+    {{- with .Values.strimzi.rack }}
+    rack:
+      topologyKey: {{ .topologyKey }}
+    {{- end }}
+  entityOperator:
+    topicOperator:
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { cpu: 500m, memory: 512Mi }
+    userOperator:
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { cpu: 500m, memory: 512Mi }
+  {{- if .Values.strimzi.cruiseControl.enabled }}
+  cruiseControl:
+    autoRebalance:
+      - mode: add-brokers
+      - mode: remove-brokers
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { cpu: "1", memory: 1Gi }
+  {{- end }}
+  kafkaExporter:
+    topicRegex: "sus\\..*|_connect.*"
+    groupRegex: ".*"
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 200m, memory: 256Mi }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $cluster }}-metrics
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+data:
+  kafka-metrics-config.yml: |
+    lowercaseOutputName: true
+    rules:
+      - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
+        name: kafka_server_$1_$2
+        type: GAUGE
+        labels: { clientId: "$3", topic: "$4", partition: "$5" }
+      - pattern: kafka.server<type=(.+), name=(.+)><>Value
+        name: kafka_server_$1_$2
+        type: GAUGE
+      - pattern: kafka.controller<type=(.+), name=(.+)><>Value
+        name: kafka_controller_$1_$2
+        type: GAUGE
+      - pattern: kafka.network<type=(.+), name=(.+)><>Value
+        name: kafka_network_$1_$2
+        type: GAUGE
+      - pattern: kafka.log<type=Log, name=(.+), topic=(.+), partition=(.+)><>Value
+        name: kafka_log_$1
+        type: GAUGE
+        labels: { topic: "$2", partition: "$3" }
+      - pattern: kafka.server<type=(.+), name=(.+)PerSec\w*><>Count
+        name: kafka_server_$1_$2_total
+        type: COUNTER
+---
+# Usuário administrativo (CN=sus-admin) — superuser, somente para operação (kafka-ui, scripts)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: sus-admin
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  authentication:
+    type: tls
+{{- end }}

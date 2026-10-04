@@ -1,0 +1,477 @@
+# SUS Nexus — `core-municipal`
+
+Monólito modular do barramento municipal de saúde digital (Fase 1 — fundação + segunda leva:
+`integration`, `scheduling`, `tasks`, `journey`, Kafka, Temporal, OPA, idempotência; Fase 2 —
+`regulation` e `exams` com workflows `RegulationSlaWorkflow` e `ExamFollowUpWorkflow`; Fase 3 —
+`hospital` (ADT, alta, pós-alta com `DischargeFollowUpWorkflow`), `careplan` (protocolos versionados,
+planos, lacunas e `CareGapDetectionJob`) e `consent` mínimo, com regras configuráveis em
+`platform.rule_set`/`rule_version`; Fase 4 — `production` (pré-auditoria BPA-C/BPA-I/APAC/AIH por regras
+versionadas, `ProductionPreAuditWorkflow`, lotes com aprovação humana, exportação em layout de referência,
+retornos oficiais, painel e prazos por competência).
+Java 21 + Quarkus 3.39.x + PostgreSQL 16 (+ Kafka, Temporal e OPA em prod). Segue `../CONVENTIONS.md`
+e o plano em `docs/sus-nexus/PLANO_IMPLEMENTACAO.md` (§5.1–5.8, §8).
+
+## Como rodar
+
+Pré-requisitos: JDK 21, Maven 3.9, PostgreSQL 16 local com extensões `pg_trgm` e `unaccent`
+disponíveis (pacote `postgresql-contrib`). Não há dependência de Docker.
+
+```bash
+# banco de desenvolvimento (uma vez)
+PGPASSWORD=postgres createdb -h localhost -U postgres sus_nexus
+
+# dev mode (perfil %dev: OIDC desligado, autenticação por header, hot reload)
+mvn quarkus:dev
+```
+
+As migrações Flyway rodam no start com o usuário administrador (`postgres`) e criam o papel
+`sus_nexus_app`, usado pela aplicação. Esse papel **não** é superusuário nem dono das tabelas,
+portanto as políticas de RLS se aplicam a ele (sem `app.tenant_id` na transação nenhuma linha é
+visível — fail-closed).
+
+Em dev/test cada chamada precisa dos headers:
+
+| Header | Exemplo | Função |
+|---|---|---|
+| `X-Tenant-Id` | `ibge_3143302` | tenant (em prod vem do claim JWT `municipality_id`) |
+| `X-Test-User` | `dra.ana` | ator fake (somente perfis dev/test) |
+| `X-Test-Roles` | `profissional_aps,gestor` | papéis fake (somente perfis dev/test) |
+| `X-Purpose-Of-Use` | `care_coordination` | finalidade LGPD (obrigatória em leituras de cidadão) |
+| `X-Correlation-Id` | opcional | propagado em MDC, resposta e eventos |
+| `Idempotency-Key` | opcional em POST | resposta memorizada por 72 h (ver "Idempotência") |
+| `X-Test-Cnes`, `X-Test-Teams`, `X-Test-Microareas` | `1234567`, `0000123456`, `03` | vínculos fake do ator (em prod: claims `cnes`, `teams`, `microareas`) |
+
+```bash
+curl -s localhost:8080/api/v1/citizens \
+  -H 'Content-Type: application/json' -H 'X-Tenant-Id: ibge_3143302' \
+  -H 'X-Test-User: connector-pec' -H 'X-Test-Roles: operador_integracao' \
+  -d '{"source":{"system":"ESUS_APS_PEC","connector":"connector-pec","source_record_id":"PEC-1"},
+       "identifiers":[{"system":"CNS","value":"898001234565678"}],
+       "demographics":{"legal_name":"Maria da Silva","birthdate":"1985-03-10","mother_name":"Ana da Silva"}}'
+```
+
+Endpoints auxiliares: `/q/health` (liveness/readiness), `/q/metrics` (Prometheus).
+
+## Perfis e variáveis
+
+| Perfil | OIDC | Auth por header | Tenant por header | OTel | Log |
+|---|---|---|---|---|---|
+| `%dev` | desligado | sim | sim | desligado | texto |
+| `%test` | desligado | sim | sim | desligado | texto |
+| `%prod` | Keycloak | não | não | OTLP | JSON |
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `SUS_DB_URL` | `jdbc:postgresql://localhost:5432/sus_nexus` | datasource da aplicação |
+| `SUS_DB_APP_USER` / `SUS_DB_APP_PASSWORD` | `sus_nexus_app` / `sus_nexus_app` | papel sem bypass de RLS |
+| `SUS_DB_ADMIN_USER` / `SUS_DB_ADMIN_PASSWORD` | `postgres` / `postgres` | usuário do Flyway |
+| `SUS_IDENTITY_HMAC_KEY` | chave de exemplo | HMAC-SHA256 de CPF/CNS (derivada por tenant) |
+| `SUS_IDENTITY_ENC_KEY` | chave de exemplo (base64, 32 bytes) | AES-256-GCM do `value_enc` |
+| `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` | — | OIDC em prod |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OpenTelemetry em prod |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka (prod/dev) |
+| `TEMPORAL_TARGET`, `TEMPORAL_NAMESPACE` | `localhost:7233`, `default` | Temporal (só com `sus.temporal.enabled=true`) |
+| `OPA_URL` | `http://localhost:8181` | OPA (só com `sus.authz.mode=opa`) |
+
+Parâmetros SUS Nexus (`application.properties`): `sus.authz.mode` (`rbac` | `opa`), `sus.authz.opa-timeout`,
+`sus.idempotency.ttl` (PT72H) / `purge-every`, `sus.scheduling.duplicate-window-hours` (72),
+`sus.temporal.enabled|target|namespace|task-queue`, `sus.outbox.relay.enabled|every|batch-size`,
+`sus.regulation.documents-required-kinds` (tipos em que `attached_documents_count=0` gera pendência;
+padrão `procedure,surgery,admission`), `sus.exams.not-scheduled-days` (15), `sus.exams.result-pending-days`
+(7), `sus.exams.followup-days` (10), `sus.exams.document-base-url`, `sus.exams.document-signing-key`
+(HMAC-SHA256 da URL assinada do laudo; **trocar em produção**), `sus.exams.document-link-ttl` (PT5M),
+`sus.privacy.highly-restricted-cid-prefixes` (prefixos/intervalos CID-10 classificados
+`highly_restricted`; padrão `F,B20-B24,O`), `sus.careplan.gap-detection-cron` (varredura diária de
+lacunas; desligada no perfil `test`, onde `CareGapDetectionJob.runOnce()` é invocado explicitamente),
+`sus.production.deadline-day` (10) / `deadline-zone` (`America/Sao_Paulo`) — prazo padrão quando a
+competência não tem linha em `production.production_deadline`, `sus.production.deadline-alert-cron`
+(alertas D-5/D-1; desligado no `test`, onde `CompetenceDeadlineJob.runOnce(Instant)` é invocado),
+`sus.production.export-storage` (`SUS_PRODUCTION_EXPORT_STORAGE`: `file` — padrão em dev/test — ou `s3`),
+`sus.production.export-dir` (`SUS_PRODUCTION_EXPORT_DIR`; modo `file` — **diretório restrito**: o arquivo contém
+CNS em claro), `sus.production.s3.bucket` (`production-exports`) / `region` / `endpoint` (MinIO) / `path-style` /
+`access-key` / `secret-key` / `prefix` / `sse` (`AES256` padrão, `aws:kms` + `kms-key-id`, `none` só em dev sem
+KMS) — variáveis `SUS_PRODUCTION_S3_*` — e `sus.production.export-origin-name|acronym|document` e `sus.production.export-destination-name|indicator` (cabeçalhos BPA-Mag/APAC).
+Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
+elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
+O prazo do contato pós-alta fica em `tasks.sla_policy` (`post_discharge_followup` × prioridade = risco:
+high 24 h, medium 72 h, low 7 d; `escalate_after` 12 h / 24 h / 3 d define o segundo prazo da busca ativa) e a
+classificação de risco pós-alta em `platform.rule_set` `post-discharge-risk` (tabela de decisão jsonb
+versionada, seed v1: high se LOS ≥ 7, `home_with_care`, reinternação em 30 d, idade ≥ 75 ou linha
+oncologia/saúde mental; medium se LOS ≥ 3 ou sem plano de seguimento; senão low — `risk_rule_version`
+gravada em cada alta, com os fatos em `hospital_discharge.risk_facts`).
+
+Parâmetros do MPI ficam em `sus.mpi.*` (`application.properties`): `threshold.high/low`,
+`jaro-winkler.agree/partial`, `blocking.*` e pesos m/u por campo (`weights.<campo>.m|u`).
+As chaves de exemplo **não** devem ir para produção; o desenho prevê OpenBao/transit.
+
+## Testes
+
+```bash
+PGPASSWORD=postgres createdb -h localhost -U postgres sus_nexus_test   # uma vez
+mvn -q verify
+```
+
+`mvn verify` executa: Google Java Format (`fmt-maven-plugin`, goal `format`), compilação,
+testes unitários (value objects, normalização, Fellegi-Sunter, mascaramento de log, ULID, cliente OPA
+com WireMock), ArchUnit (modularidade) e `@QuarkusTest` + REST-assured contra `sus_nexus_test`
+(Flyway `clean-at-start` no perfil test). Os contratos de evento são copiados de
+`../contracts/events` para `target/test-classes/contracts/events` pelo `maven-resources-plugin`
+e validados nos testes de outbox (json-schema-validator, draft 2020-12 com asserção de formatos).
+
+Sem Docker: no perfil `test` o Kafka é substituído pelo conector **in-memory** do SmallRye
+(`%test.mp.messaging.*.connector=smallrye-in-memory`; o helper `support/Bus` faz o papel do broker:
+`OutboxRelay.relayOnce()` → canais de saída → canais de entrada que assinam o mesmo tópico), o Temporal
+roda **in-process** (`TestWorkflowEnvironment`, time-skipping, cliente injetado no
+`TemporalClientProvider`) e o OPA é um **WireMock** (`OpaAuthorizationPolicyTest` unitário e
+`OpaProfileTest` com `sus.authz.mode=opa`). Os testes de Fase 2 (`RegulationFlowTest`,
+`RegulationSlaWorkflowTest`, `ExamFlowTest`, `ExamFollowUpWorkflowTest`) cobrem o ciclo completo, as
+pendências, os eventos contra os schemas de `regulation/` e `exam/`, a timeline (ACS não vê laudos) e o
+isolamento de tenant. Os de Fase 3 (`HospitalFlowTest`, `DischargeFollowUpWorkflowTest`,
+`CarePlanFlowTest`) cobrem ADT → alta → risco/tarefa → contrarreferência → contato (abre plano), CID
+sensível (só equipe/hospital; eventos e timeline `highly_restricted` sem o código), reinternação, óbito,
+ingestão `ingest-hospital-in`, o workflow pós-alta (escalonamento + lacuna + `not_found`), o ciclo de
+aprovação de protocolos (sem casos de teste → 422; `profissional_aps` não aprova → 403; ativação revoga
+a vigente; tenant B só vê as globais), evidência automática por agendamento/exame, job de lacunas,
+perda de seguimento, eventos `careplan/` e `caregap/` e o summary. Os de Fase 4 (`ProductionFlowTest`,
+`ProductionPreAuditWorkflowTest`, `ProductionRulesTest`) cobrem registro válido → `validated`; inválido por
+CBO/sexo/idade/quantidade/instrumento/duplicidade/competência/CNES/procedimento/identificação → `pending` com
+pendências e `rule_version` + tarefa `production_issue` (fila `auditoria`, sem cidadão); correção com
+justificativa revalida (agente de IA → 403, inclusive com papel `auditor` no token); aviso dispensável e erro
+não; lote só com `validated`; aprovação exige papel e justificativa; exportação BPA-Mag de referência com
+SHA-256 conferido no arquivo; retornos (transmitido por lote, rejeitado reabre pendência com motivo oficial,
+pago com valor, idempotência); painel; prazos e alertas D-5/D-1; ingestão `ingest-production-in`; AIH
+conciliada com episódio ADT; isolamento de tenant; eventos contra os 4 schemas de `production/`; produção
+ausente da timeline; workflow com time-skipping (expiração no prazo → `deadline_missed`; correção encerra);
+casos de teste anexados à regra vigente e larguras do layout. `ProductionRuleVersionTest` cobre `POST
+/production/rules` (papéis, jsonb inválido, casos de teste que falham → 422, ativação v2/v3 com revogação, pré-auditoria
+usando a nova versão); `ProductionOpaTest` (perfil `sus.authz.mode=opa`, OPA em WireMock) verifica o input enviado
+ao OPA nas ações de produção, 403 nas negações, quatro olhos no serviço mesmo com a política permitindo e
+fail-closed; `S3ExportStorageTest` testa o `S3ExportStorage` contra um S3/MinIO falso (WireMock: chave, SSE,
+escrita condicional, checksum SHA-256, leitura só do bucket) e a seleção `file|s3`. O fluxo principal também cobre
+o quatro olhos (403 `four-eyes`) e um evento `sus.production.outcome.transmitted` por registro.
+
+## Estrutura
+
+```text
+br.gov.sus.nexus.core
+├── platform/            cross-cutting (sem dependência de módulos de domínio)
+│   ├── tenant/          TenantContext, TenantFilter (claim/header), @TenantTransactional
+│   │                    (JTA + set_config('app.tenant_id', ?, true)), TenantTransactions
+│   ├── correlation/     CorrelationId + filtro (MDC, header de resposta)
+│   ├── security/        CurrentActor (papéis, cnes/teams/microareas, client_type), Purpose, Roles,
+│   │                    AuthorizationPolicy (Decision + Obligations), RoleBasedAuthorizationPolicy
+│   │                    (padrão), OpaAuthorizationPolicy (sus.authz.mode=opa), HeaderAuthenticationMechanism
+│   ├── events/          EventEnvelope (envelope.schema.json), DomainEvent, EventPublisher (outbox),
+│   │                    EventInbox (idempotência de consumidores), InboundEventProcessor (suporte
+│   │                    aos consumidores Kafka), OutboxRelay (relay de desenvolvimento)
+│   ├── idempotency/     IdempotencyFilter (Idempotency-Key) + IdempotencyStore (expurgo @Scheduled)
+│   ├── ingestion/       BatchSource, UpsertResult (lotes dos conectores)
+│   ├── errors/          ProblemException + mappers RFC 9457
+│   ├── logging/         PiiMasker, PiiLogFilter (quarkus.log.console.filter=pii-mask)
+│   ├── pagination/      Cursor opaco, Page { items, next_cursor }
+│   ├── temporal/        TemporalClientProvider, TemporalWorkers (descobre os WorkflowRegistrar dos módulos)
+│   ├── rules/           RuleSets (platform.rule_set/rule_version vigente) + RuleEvaluator (tabelas de decisão
+│   │                    e condições jsonb restritas: eq/ne/gt/ge/lt/le/in/contains_any/is_true/is_false/present)
+│   └── ids/             Ulid com prefixos
+├── sharedkernel/        Cns, Cpf, Cnes, Cbo, Competence, IdentifierHash (HMAC por tenant), Masks
+├── audit/               audit_log encadeado por hash (append-only), access_log, @AuditedAccess,
+│                        GET /api/v1/audit/access
+├── reference/           organization, health_unit, professional, professional_role, care_team,
+│                        territory, microarea; upsert por (tenant, cnes); GET/PUT /api/v1/reference/health-units,
+│                        POST /api/v1/reference/health-units/upsert (lote, UpsertResult)
+├── terminology/         terminology.code (global), busca trigram+unaccent, TerminologyService.isValid;
+│                        GET /api/v1/terminology/{system}/codes, POST .../codes/upsert (lote por competência)
+├── identity/            MPI: citizen + identifiers (hash/enc/masked) + histórico bitemporal +
+│                        endereço/contato/source_link + merge case/merge + match candidate/evidence +
+│                        golden record com proveniência; IdentityResolutionService; /api/v1/citizens, /api/v1/mpi;
+│                        consumidor de ingestão `ingest-pec-in` (mesma porta do POST /citizens)
+├── integration/         registry de conectores (heartbeat + eventos de status), ledger espelho SEM payload,
+│                        erros, DLQ, reconciliação, reprocessamento (comando sus.integration.reprocess.requested);
+│                        /api/v1/integration/*; consumidor `integration-status-in`
+├── scheduling/          appointment + status_history + source_link + duplicate (AGE-004, janela configurável);
+│                        resolução de cidadão via identity.api; no-show → tarefa no_show_recovery (AGE-006);
+│                        /api/v1/appointments; consumidor `ingest-agenda-in`
+├── tasks/               care_task + task_history + sla_policy (seed global; override por tenant); máquina de
+│                        estados; TaskCommands/TaskQueries (API pública); workflows Temporal TaskSlaWorkflow e
+│                        MpiReviewWorkflow; consumidores `tasks-task-in` (starter) e `tasks-merge-in` (mpi_review)
+├── regulation/          fila regulatória espelhada do sistema oficial (regulation_request + status_history +
+│                        decision [somente registro] + issue [REG-005] + source_link + provider_capacity [REG-006]
+│                        + regulation_sla_policy [REG-010]); /api/v1/regulation/*; consumidor `ingest-regulation-in`;
+│                        RegulationSlaWorkflow; o barramento NUNCA decide nem muda prioridade (REG-009)
+├── exams/               pedidos de exame (exam_order + status_history + exam_result [só metadados + document_ref]
+│                        + source_link), pendências EXA-004/005/009, tempos de ciclo EXA-010, URL assinada do laudo
+│                        com access_log; /api/v1/exams/orders/*; consumidor `ingest-exam-in`; ExamFollowUpWorkflow
+├── hospital/            episódios (hospital_episode + hospital_bed_movement [append-only] + hospital_discharge
+│                        [metadados + risk_facts] + counter_referral + source_link); CID principal só código,
+│                        highly_restricted por prefixo configurável; /api/v1/hospital/episodes/*; consumidor
+│                        `ingest-hospital-in`; DischargeFollowUpWorkflow (Workflow 2)
+├── careplan/            protocol + protocol_version (jsonb items/eligibility/test_cases; draft→in_review→approved→
+│                        active→revoked; globais seed: gestante, hipertensão, diabetes) + care_plan + care_plan_item +
+│                        care_gap; /api/v1/careplans, /caregaps, /protocols; consumidores de evidência
+│                        `careplan-appointment-in`/`careplan-exam-in`; CareGapDetectionJob (@Scheduled diário)
+├── production/          production_record (CNS/CPF só hash + máscara + cifra) + history [append-only] +
+│                        validation_issue (rule_id, rule_version, severity, origem rule|workflow|official_return)
+│                        + batch/batch_item + submission + outcome + source_link + deadline (+ alertas);
+│                        PreAuditor (fatos) + rule_set `production-validation` (regras); ExportLayouts
+│                        (BPA-Mag de referência, CSV) via ExportStorage; /api/v1/production/*; consumidores
+│                        `ingest-production-in` e `production-record-in`; ProductionPreAuditWorkflow
+│                        (Workflow 3) e CompetenceDeadlineJob; NÃO projetado na timeline
+├── consent/             consent + communication_preference (só value_masked/value_hash); API interna consent.api
+│                        (contact_valid em caregaps e summary); sem REST nesta fase
+└── journey/             read model timeline_event (projeções de identity/schedule/task/regulation/exam/hospital/
+                         careplan; merge reatribui, unmerge reverte); GET /api/v1/citizens/{id}/timeline (keyset
+                         occurred_at+id, filtragem por sensibilidade via AuthorizationPolicy, redação por
+                         obrigações) e /summary (JOR-008: open_tasks, open_regulation_requests, pending_exams,
+                         next_appointment_at, last_hospital_discharge_at, care_lines, care_gaps, contact_valid)
+```
+
+Cada módulo de domínio tem `api/` (contratos públicos), `domain/`, `application/` e
+`infrastructure/`. O `ArchitectureTest` garante que um módulo só importa `..<outro>.api..` de
+outros módulos e que `platform`/`sharedkernel` não conhecem módulos.
+
+Um schema PostgreSQL por módulo (`platform`, `audit`, `reference`, `terminology`, `identity`,
+`integration`, `scheduling`, `tasks`, `journey`, `regulation`, `exams`, `hospital`, `careplan`,
+`consent`, `production`), migrações em `src/main/resources/db/migration/V0NN__<módulo>.sql` (V001–V020; V015 cria
+`platform.rule_set`/`rule_version` e as políticas de SLA pós-alta; V019 cria `production` e a regra
+`production-validation` v1; V020 acrescenta os atributos SIGTAP de pré-auditoria aos códigos de exemplo). Todas as tabelas com
+`tenant_id` têm RLS (`platform.current_tenant()` ↔ `app.tenant_id`); terminologia é global e
+`tasks.sla_policy`/`regulation.regulation_sla_policy`/`platform.rule_version`/`careplan.protocol[_version]`
+expõem linhas globais (`tenant_id IS NULL`) mais as do tenant (a do tenant tem precedência) — idem
+`production.production_deadline`.
+
+## Regulação (`/api/v1/regulation`) e exames (`/api/v1/exams`)
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /regulation/requests` | operador_integracao, regulador | upsert por `(tenant, source.system, source_record_id)`; cidadão via identity.api; `sla_due_at = requested_at + política(prioridade)`; `cid_code` **não** é persistido |
+| `POST /regulation/requests/{id}/status` e `.../by-source/{system}/{sourceRecordId}/status` | operador_integracao, regulador | histórico + `regulation_decision` (authorized/denied/returned); `appointment_source_record_id` vincula o agendamento (scheduling.api); `returned` abre pendência; `no_show` → tarefa `no_show_recovery`; agente de IA → 403 (REG-009) |
+| `POST /regulation/requests/{id}/issues` | regulador, agente_ia | origem `agent` exige papel `agente_ia` (aprovação humana ocorre no ai-service); registrado em `audit_log` |
+| `GET /regulation/requests` | regulador, gestor, agendador, profissional_aps, operador_integracao, agente_ia | filtros do contrato; `issue=incomplete|returned|expired|duplicate|no_capacity|sla_breached`; `sort=waiting_time_desc` (padrão: `requested_at` asc), `priority_desc`, `created_at_asc`; cursor por deslocamento; `@AuditedAccess` |
+| `GET/POST /regulation/capacity` | leitura ampla / operador_integracao, regulador, gestor | upsert por `(tenant, provider_cnes, service_code, competence)`; itens inválidos contam como `rejected`; reavalia `no_capacity` dos pedidos abertos do serviço |
+| `GET /regulation/queues/summary?group_by=` | gestor, regulador | agregação SQL: `open_requests`, `by_priority`, `avg/p90_waiting_days` (`percentile_cont`), `sla_breached`, `with_issues`, `scheduled_30d`, `no_show_30d`, `capacity_available` (competência ≥ atual; só para `service_code`/`provider_cnes`) |
+| `POST /exams/orders` | operador_integracao, profissional_aps | upsert por vínculo de origem; `regulation_source_record_id`/`appointment_source_record_id` vinculam regulação e agenda |
+| `POST /exams/orders/{id}/status` | operador_integracao, profissional_aps | `scheduled` grava `scheduled_at`; `performed`/`collected` gravam `performed_at` |
+| `POST /exams/orders/{id}/results` e `.../by-source/{system}/{sourceRecordId}/results` | operador_integracao | só metadados; observações codificadas (texto livre descartado); marca `reported`; `sus.exam.result.available` com `data_ref = document_ref`; `critical=true` → `critical_flagged` + tarefa `exam_result_followup` urgente ao solicitante **sem conteúdo** (EXA-008) |
+| `GET /exams/orders[/{id}]` | leitura ampla | `issues` derivadas (not_scheduled, result_pending, no_result_followup, inconclusive, critical, integration_failure) e `cycle_times` em horas (EXA-010); `@AuditedAccess` |
+| `GET /exams/orders/{id}/results/{rid}/document` | profissional_aps, profissional_hospitalar, regulador | URL assinada (HMAC-SHA256, 5 min) para `sus.exams.document-base-url` + `document_ref`; `access_log` (`exam_result`/`document_link`) com finalidade; 404 sem documento |
+
+Pendências de regulação (REG-005, origem `rule`, reavaliadas a cada escrita): `clinical_justification`
+(`justification_present=false`), `missing_document` (`attached_documents_count=0` nos tipos configurados),
+`duplicate` (mesmo cidadão + serviço com outro pedido aberto), `no_capacity` (serviço com oferta cadastrada e
+sem `available > 0` em competência ≥ à do pedido), `sla_breached` (prazo vencido sem decisão). Decisão
+registrada resolve as pendências de regra; encerramento resolve todas.
+
+## Hospital (`/api/v1/hospital`), planos de cuidado (`/api/v1/careplans`, `/caregaps`, `/protocols`)
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /hospital/episodes` | operador_integracao, profissional_hospitalar | ADT por vínculo `(tenant, source.system, source_record_id)`: `admit` cria/garante (cidadão via identity.api; `regulation_source_record_id` vincula regulação); `transfer`/`bed_change` registram movimentação (append-only); `discharge`/`death` executam o fluxo de alta; `cancel` encerra sem alta; movimento sem episódio → 404; episódio encerrado → 409 |
+| `POST /hospital/episodes/{id}/discharge` e `.../by-source/{system}/{sourceRecordId}/discharge` | operador_integracao, profissional_hospitalar | LOS, reinternação em 30 d (`previous_episode_id`), UBS/equipe/microárea de referência (identity), risco pela regra vigente `post-discharge-risk`, `hospital_discharge` com `risk_facts`, eventos `sus.hospital.adt.discharged|deceased` → `sus.hospital.discharge.completed` (`data_ref` = sumário), tarefa `post_discharge_followup` (prioridade = risco; equipe INE → UBS → fila `busca_ativa`; prazo pela `sla_policy`); óbito não abre tarefa |
+| `POST /hospital/episodes/{id}/counter-referral` | operador_integracao, profissional_hospitalar | metadados + referência ao documento; evento `counter_referral_received`; exige alta registrada |
+| `POST /hospital/episodes/{id}/followup` | profissional_aps, acs, gestor | desfecho do contato (`contact_made`, `appointment_scheduled`, `deceased`, `moved`, `refused`, `not_found`): conclui as tarefas (`workflow`/`discharge-followup:<hep>`), resolve lacunas do episódio, sinaliza o workflow; contato efetivo abre plano quando há protocolo vigente elegível para as `care_lines` (`origin.kind=hospital_discharge`); já encerrado → 409 |
+| `GET /hospital/episodes[/{id}]` | leitura ampla | filtros do contrato incl. `reference_cnes` e `followup_status`; `principal_diagnosis_cid` só para papel clínico (aps/hospitalar/regulador) com vínculo (CNES do hospital/UBS de referência, equipe INE ou regulador); CID `highly_restricted` (prefixos configuráveis) só para a equipe de referência ou profissional hospitalar do CNES; `admin_municipal` vê tudo; `@AuditedAccess` |
+| `GET/POST /protocols`, `POST /protocols/{id}/versions/{v}/transition` | leitura ampla / gestor, profissional_aps | nova versão em `draft` (número sequencial por protocolo; protocolo do tenant criado se não existir); `submit` → `in_review`; `approve` exige `test_cases` > 0 **e** papel gestor/admin (`approved_by`); `activate` revoga a versão ativa do tenant e grava `effective_from`; versões globais (seed) não são alteráveis pelo município (409) |
+| `POST/GET /careplans[/{id}]`, `POST /{id}/items/{itemId}`, `POST /{id}/close` | profissional_aps, gestor (escrita); acs lê/atualiza itens | instancia a versão vigente (tenant > global) após elegibilidade (`platform.rules` sobre `age_years`/`sex`); um plano ativo por linha (409); item `done` fecha a lacuna e gera a próxima ocorrência periódica; encerramento cancela itens abertos e resolve lacunas; eventos `sus.careplan.*` |
+| `GET /caregaps`, `POST /caregaps/{id}/resolve` | profissional_aps, acs, gestor | lista de busca ativa por linha/UBS/equipe/microárea/`min_days_overdue` com `contact_valid` (consent.api); resolução conclui a tarefa `care_gap` (`performed` marca o item); eventos `sus.caregap.*` |
+
+Evidência automática (CUI-002): `sus.schedule.appointment.attended` e `sus.exam.order.*` com status
+`performed|collected|reported` marcam como `done` o item em aberto de código SIGTAP igual ou, na falta, do
+mesmo tipo com `expected_by` em ±30 d; o evento assistencial também resolve `lost_to_followup`.
+`CareGapDetectionJob` (cron `sus.careplan.gap-detection-cron`, percorre `careplan.active_tenants()`):
+item vencido além de `gap_after_days` → item `missed` + `care_gap` (`consultation|exam|vaccine|return_overdue`,
+`no_contact`) + tarefa `care_gap` (equipe → UBS → fila `busca_ativa`, origem `rule`/`care-gap:<id>`); plano sem
+evento assistencial por `lost_to_followup_days` → `lost_to_followup`. Idempotente (uma lacuna aberta por
+item/plano/kind).
+
+## Produção (`/api/v1/production`) — PRO-001…010, Workflow 3
+
+Dado **administrativo de faturamento**: nenhum consumidor do `journey` assina `sus.production.*` e as tarefas
+`production_issue` são criadas **sem `citizen_id`** — produção não aparece na timeline do cidadão. Eventos sem
+`subject` (chave = id do registro/lote, conforme `topics.yaml`), CNS/CPF só por hash.
+
+| Operação | Papéis | Observações |
+|---|---|---|
+| `POST /production/records` | operador_integracao, auditor (+ OPA `register_record`) | upsert por `(tenant, source.system, source_record_id)`; reenvio idêntico → 200 inalterado; registro já exportado/processado → 409; CNS do profissional e CNS/CPF do cidadão (DV validado) viram hash (HMAC por tenant) + máscara + cifra AES-GCM (só para a exportação); cidadão via identity.api; pré-auditoria imediata → `validated` ou `pending` + tarefa `production_issue` (fila `auditoria`, prioridade `high`; `urgent` perto do prazo/rejeição/prazo vencido; prazo = prazo da competência) |
+| `GET /production/records[/{id}]`, `.../by-source/{system}/{id}` | auditor, gestor, operador_integracao, admin_municipal (+ OPA `read`) | filtros do contrato; pendências e histórico; `@AuditedAccess` |
+| `POST /production/records/{id}/corrections` | auditor (+ OPA `correct`) | justificativa ≥ 10 (400 sem); `pending`/`validated`/`rejected`; registro em lote rascunho sai do lote, em lote aprovado → 409; avisos dispensáveis (`waive_issue_ids`), erros não (422); rejeição oficial é resolvida e o registro volta a ser elegível (reapresentação); `production_record_history` + `audit_log`; sinaliza o workflow após o commit; agente de IA → 403 mesmo com outro papel |
+| `GET /production/issues` | auditor, gestor, **agente_ia**, admin_municipal (+ OPA `read`) | filtros severity/rule/competence/cnes/kind/status (padrão `open`)/record_id; sem dado do cidadão |
+| `POST /production/batches` | auditor (+ OPA `create_batch`) | todos os `validated` da competência/CNES/tipo fora de lote; sem elegíveis → 422; nasce `draft` |
+| `POST /production/batches/{id}/approve` | auditor, gestor (+ OPA `approve_batch`) | **aprovação humana obrigatória** (PRO-010) com justificativa; só `draft`; agente → 403; **quatro olhos**: quem gerou o lote não aprova → 403 `urn:sus-nexus:problem:four-eyes` (serviço e política) |
+| `POST /production/batches/{id}/export` | auditor (+ OPA `export_batch`) | só lote `approved`; `bpa_mag_v202412` (BPA-C/BPA-I), `apac_mag_v202607` (APAC) ou `csv_ref_v1` (qualquer tipo; único para AIH) — layout incompatível com o tipo → 422; grava via `ExportStorage` em `<tenant>/<competência>/<lote>/<arquivo>` sem sobrescrita — `file` (`CREATE_NEW`, `file://`) ou `s3` (`S3ExportStorage`: bucket `production-exports`, SSE, `If-None-Match: *`, `x-amz-checksum-sha256`, `s3://`) —, devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
+| `POST /production/outcomes` | operador_integracao, auditor (+ OPA `register_outcome`) | `transmitted`/`received`/`accepted` por lote ou registro (cada registro afetado publica `sus.production.outcome.<outcome>`, inclusive `transmitted` por lote); `rejected` (motivo oficial → pendência `official_rejection` + tarefa) e `paid` (valor obrigatório) só por registro; idempotente por origem do retorno; lote → `processed` quando todos os registros têm desfecho final |
+| `GET /production/summary?competence=&cnes=` | gestor, auditor, admin_municipal | totais por status, corrigidos, valores (estimado = Σ quantidade × `valor` SIGTAP, validado, pago, pendente, rejeitado) e **perda evitável estimada** (pendente + rejeitado), pendências por regra e por instrumento |
+| `POST /production/rules` | gestor, admin_municipal (+ OPA `create_rule_version`) | nova versão da regra `production-validation` do tenant: jsonb validado (gramática do `RuleEvaluator`, ids únicos, severidade, só fatos de `PreAuditor.FACTS`) e **casos de teste anexados executados antes de ativar** (falha → 422, nada gravado); versão sequencial ativa no tenant, revoga a anterior do tenant (a global continua para os demais); `audit_log` com justificativa; agente → 403 |
+| `GET /production/deadlines?from=&to=` | auditor, gestor, operador_integracao, admin_municipal | prazo (tenant → global → padrão), `open|closing|closed`, dias restantes, alertas e contagens |
+
+**Autorização** — além do `@RolesAllowed`, cada operação consulta a `AuthorizationPolicy` via
+`ProductionAuthorization` (ação `<tipo>:<ação>`, ex.: `production_batch:approve_batch`; finalidade padrão
+`production_audit` quando o cliente não envia `X-Purpose-Of-Use`; atributos `domain=production`,
+`created_by` do lote na aprovação). Em `sus.authz.mode=opa` a decisão vem de `policies/sus/production`
+(via `data.sus.authz.decision`, fail-closed: OPA fora do ar ⇒ 403); em `rbac` (dev/test) a
+`RoleBasedAuthorizationPolicy` aplica a mesma matriz (sem atalho de admin, agente só lê pendências, quatro
+olhos). Negação ⇒ 403 problem+json com os motivos da política.
+
+**Pré-auditoria ("configuração antes de código")** — `PreAuditor` só calcula fatos; as regras (condição de
+violação, severidade, campo e mensagem) vivem no jsonb da versão vigente de `platform.rule_set
+production-validation` (seed v1 com casos de teste anexados): `citizen_unresolved`, `citizen_identifier_invalid`,
+`cnes_not_registered`, `cnes_inactive`, `procedure_invalid` (SIGTAP na competência), `cbo_unknown`,
+`cbo_incompatible` (atributo `cbos`), `instrument_incompatible` (`instrumentos`), `sex_incompatible` (`sexo`),
+`age_incompatible` (`idade_min/max` na data do atendimento), `quantity_exceeded` (`qt_maxima`, individualizados),
+`duplicate` (mesmo cidadão + procedimento + data + CNES, registro anterior não rejeitado),
+`attendance_outside_competence` (até 3 competências anteriores), `competence_closed` (prazo vencido),
+`apac_number_missing`, `aih_number_missing`, `cid_invalid` — erros; `evidence_missing` (BPA-I/APAC sem
+agendamento `fulfilled` do cidadão no CNES/data ou `appointment_ref`; `encounter_ref` declarado conta como
+evidência), `hospital_episode_missing` (AIH sem `hospital_episode_ref` resolvido no ADT) e
+`professional_not_linked` (profissional conhecido na base CNES sem vínculo ativo com o CBO — `reference.api
+ProfessionalDirectory`) — avisos. Cada pendência grava `rule_version`; a revalidação é idempotente (abre as
+novas, resolve as não mais violadas, mantém avisos dispensados). Pendências fora das regras: `deadline_missed`
+(workflow) e `official_rejection` (retorno oficial).
+
+**Layouts de exportação** (`ExportLayouts`; tabela de campos, fontes e pendências em
+[`docs/integracoes/layouts-sia-sih.md`](../docs/integracoes/layouts-sia-sih.md)):
+
+- `bpa_mag_v202412` — **"Layout de Exportação BPA"** do DATASUS/SIA (`Layout_Exportacao_BPA.pdf`, 12/12/2024,
+  listado em <https://sia.datasus.gov.br/documentos/listar_ftp_bpa.php>): cabeçalho `01#BPA#` (130), BPA-C `02`
+  (48) e BPA-I `03` (350, com nome/nascimento/endereço do paciente, CNS **ou** CPF, INE e situação de rua), CR+LF;
+  campo de controle `cbc_smt_vrf = (Σ (procedimento + quantidade)) mod 1111 + 1111`; folhas de 20 linhas
+  (BPA-I quebra também por profissional). Raça/cor sai `99` (sem informação — não trafega na produção);
+  nacionalidade, etnia, serviço/classificação, equipe e telefone/e-mail saem em branco.
+- `apac_mag_v202607` — layout de interface texto **APAC/SIA** (registros `01` cabeçalho `#APAC` (137), `14` corpo
+  (537) e `13` procedimentos (97)); controle `(Σ nº das APAC + Σ (procedimento + quantidade)) mod 1111 + 1111`.
+  Os campos de autorização/laudo que o barramento não conhece (validade, tipo de APAC, médico responsável,
+  autorizador, datas de solicitação/autorização, emissor, motivo de saída, partes variáveis 06–20) saem em branco e
+  são completados no APAC-Mag/SIA.
+- `csv_ref_v1` — CSV de referência (alternativa local para qualquer tipo). **AIH** só sai neste layout: o
+  "Layout da interface texto do SISAIH01" (SIHD) não pôde ser obtido nem conferido (ver documento de layouts).
+- **Pendência de conferência:** os PDFs oficiais do BPA e da APAC estão nos portais do DATASUS
+  (`sia.datasus.gov.br`), bloqueados pela política de rede do ambiente em que foram implementados; as posições
+  vêm de transcrições do PDF oficial e foram conferidas pela soma dos tamanhos — conferir com o PDF original
+  (ou com o importador do SIA) antes da primeira transmissão.
+
+O arquivo contém CNS/CPF e dados nominais em claro (decifrados/lidos só para o arquivo), por isso o
+`export-dir`/bucket deve ser restrito: em produção use `sus.production.export-storage=s3` com o bucket
+`production-exports` (criado em `platform/compose/minio/init.sh` e no `minio-tenant` do Helm) acessível **somente**
+pela credencial do core (política dedicada com `s3:PutObject`/`s3:GetObject` nesse bucket — não reutilize a
+credencial compartilhada `sus-app`), sem acesso público/listagem para outros serviços, SSE ativo (MinIO com KMS ou
+`aws:kms`) e retenção/versionamento conforme a política do município.
+
+## Kafka — canais e tópicos
+
+Produção publica via **Debezium Outbox Event Router** lendo `platform.event_outbox` (CDC); o
+`OutboxRelay` (`sus.outbox.relay.enabled=true`, ligado no perfil `%dev`) existe apenas para ambientes
+sem Debezium: lê o outbox não publicado, emite no canal do `aggregate_type` e marca `published_at`.
+Consumidores são `@Incoming` + `@Blocking`, idempotentes via `platform.event_inbox` (`InboundEventProcessor`:
+tenant do envelope, correlation id, transação nova com o inbox na mesma transação do handler).
+
+| Canal (SmallRye) | Tópico | Grupo | Função |
+|---|---|---|---|
+| `ingest-pec-in` | `sus.ingest.pec.v1` | `core-ingest-pec` | `data` = `CitizenRegistration` → `CitizenService.register` |
+| `ingest-agenda-in` | `sus.ingest.agenda.v1` | `core-ingest-agenda` | `data` = `AppointmentRegistration` → `AppointmentService.register` |
+| `integration-status-in` | `sus.integration.status.v1` | `core-integration-status` | registry de conectores (health, métricas, gaps) |
+| `tasks-task-in` | `sus.task.v1` | `core-tasks-sla` | `created` inicia `TaskSlaWorkflow`; `completed/cancelled` sinalizam |
+| `tasks-merge-in` | `sus.identity.merge.v1` | `core-tasks-merge` | `case_opened` → tarefa `mpi_review` + `MpiReviewWorkflow`; decisão conclui |
+| `ingest-regulation-in` | `sus.ingest.regulation.v1` | `core-ingest-regulation` | `data` = `RegulationRequestRegistration` (tem `kind`) ou `RegulationStatusChange` (pedido por `source_record_id`) |
+| `ingest-exam-in` | `sus.ingest.exam.v1` | `core-ingest-exam` | `data` = `ExamOrderRegistration` (`exam_code`), `ExamResultRegistration` (`reported_at`) ou `ExamStatusChange` |
+| `ingest-production-in` | `sus.ingest.production.v1` | `core-ingest-production` | `data` = `ProductionRecordRegistration` (tem `kind`) ou `ProductionOutcomeRegistration` (tem `outcome`) |
+| `production-record-in` | `sus.production.record.v1` | `core-production-preaudit` | `created` inicia `ProductionPreAuditWorkflow` (prazo da competência lido no início) |
+| `ingest-hospital-in` | `sus.ingest.hospital.v1` | `core-ingest-hospital` | `data` = `HospitalMovementRegistration` (`movement`), `DischargeRegistration` (`disposition`; episódio por `source`) ou `CounterReferralRegistration` (`received_at`) |
+| `regulation-request-in`, `regulation-status-in` | `sus.regulation.request.v1`, `sus.regulation.status.v1` | `core-regulation-sla` | `created` inicia `RegulationSlaWorkflow`; `status.changed` sinaliza |
+| `exams-order-in`, `exams-result-in`, `exams-task-in`, `exams-appointment-in` | `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.task.v1`, `sus.schedule.appointment.v1` | `core-exams-followup` | `created` inicia `ExamFollowUpWorkflow`; status/laudo/tarefa concluída/falta sinalizam |
+| `hospital-discharge-in`, `hospital-task-in` | `sus.hospital.discharge.v1`, `sus.task.v1` | `core-hospital-followup` | `discharge.completed` (salvo óbito) inicia `DischargeFollowUpWorkflow`; `task.completed` com origem `discharge-followup:<hep>` sinaliza o contato |
+| `careplan-appointment-in`, `careplan-exam-in` | `sus.schedule.appointment.v1`, `sus.exam.order.v1` | `core-careplan-evidence` | `attended` / `performed|collected|reported` → evidência automática dos itens do plano |
+| `journey-identity-in`, `journey-merge-in`, `journey-appointment-in`, `journey-task-in`, `journey-regulation-request-in`, `journey-regulation-status-in`, `journey-exam-order-in`, `journey-exam-result-in`, `journey-hospital-adt-in`, `journey-hospital-discharge-in`, `journey-careplan-in`, `journey-caregap-in` | `sus.identity.citizen.v1`, `sus.identity.merge.v1`, `sus.schedule.appointment.v1`, `sus.task.v1`, `sus.regulation.request.v1`, `sus.regulation.status.v1`, `sus.exam.order.v1`, `sus.exam.result.v1`, `sus.hospital.adt.v1`, `sus.hospital.discharge.v1`, `sus.careplan.v1`, `sus.caregap.v1` | `core-journey` | projeções da timeline (regulação, laudos, hospital e careplan: `restricted`; hospital com CID sensível: `highly_restricted`; resumo nunca contém CID) |
+| `citizen-out`, `merge-out`, `appointment-out`, `task-out`, `integration-command-out`, `regulation-request-out`, `regulation-status-out`, `exam-order-out`, `exam-result-out`, `hospital-adt-out`, `hospital-discharge-out`, `careplan-out`, `caregap-out`, `production-record-out`, `production-validation-out`, `production-submission-out`, `production-outcome-out` | tópicos correspondentes | — | saída do `OutboxRelay` (dev); `aggregate_type` → canal |
+
+Eventos produzidos: `sus.identity.citizen.*`, `sus.identity.merge.*`, `sus.schedule.appointment.*`
+(`created|confirmed|cancelled|rescheduled|attended|no_show|duplicate_detected`), `sus.task.*`
+(`created|assigned|completed|escalated|sla_breached|cancelled`), `sus.integration.reprocess.requested`
+(tópico `sus.integration.command.v1`), `sus.regulation.request.{created|updated|returned|cancelled}`,
+`sus.regulation.status.changed` (`actor_kind` nunca `agent`), `sus.exam.order.{created|status_changed}` e
+`sus.exam.result.{available|critical_flagged}` (`data_ref` = referência do laudo; nunca valores),
+`sus.hospital.adt.{admitted|transferred|bed_changed|discharged|deceased}` e
+`sus.hospital.discharge.{completed|counter_referral_received}` (`restricted`, ou `highly_restricted` com o CID
+omitido do payload; `data_ref` = sumário de alta), `sus.careplan.{created|updated|closed}` e
+`sus.caregap.{detected|resolved}` (`restricted`; só ids, códigos e contagens),
+`sus.production.record.{created|validated|pending|corrected}`, `sus.production.validation.{issue_found|issue_resolved}`,
+`sus.production.submission.{batch_generated|batch_approved|exported|transmitted}` (`data_ref` = arquivo exportado)
+e `sus.production.outcome.{received|accepted|rejected|paid}` (`restricted`, finalidade `production_audit`; sem
+`subject`, CNS/CPF só hash), todos validados nos testes contra `contracts/events/**`.
+
+## Temporal
+
+`temporal-sdk` no runtime; conexão real só com `sus.temporal.enabled=true` (`platform.temporal.TemporalWorkers`
+registra na fila `sus.temporal.task-queue`, no `StartupEvent`, os `WorkflowRegistrar` de cada módulo — as
+activities de cada módulo usam `namePrefix` para não colidir). Workflows determinísticos com
+`Workflow.getVersion`; toda I/O em activities idempotentes (`TenantTransactions.runAs` + serviços):
+
+- `TaskSlaWorkflow` (`task-sla:<task_id>`): timer até `due_at`; se a tarefa segue aberta → `breachSla`
+  (evento `sla_breached` + escalonamento para `escalate_to` da `sla_policy`); sinais `completed`/`cancelled`.
+- `MpiReviewWorkflow` (`mpi-review:<case_id>`): garante a tarefa `mpi_review` (fila `cadastro_mestre`),
+  aguarda `decided` até o SLA de revisão, escalona e conclui a tarefa com a decisão.
+- `RegulationSlaWorkflow` (`regulation-sla:<request_id>`, REG-010): timer em 50 % do SLA (pendência
+  documental aberta → tarefa `regulation_pending_document` para a UBS solicitante) e em 100 % (pendência
+  `sla_breached`, `sus.regulation.status.changed` com `sla_breached=true` e `actor_kind=workflow`, tarefa
+  `generic` "SLA de regulação vencido" na fila `regulacao`); sinal `status_changed` encerra ao haver decisão.
+- `ExamFollowUpWorkflow` (`exam-followup:<exam_order_id>`, Workflow 1): N dias sem agendamento → pendência
+  `not_scheduled` + tarefa `exam_not_scheduled` (UBS solicitante); falta → `no_show_recovery`; realizado sem
+  laudo em 7 d → `result_pending`; laudo sem retorno em M dias → `exam_result_followup`; encerra em
+  cancelamento/não realização ou quando a tarefa de retorno é concluída (`sus.task.completed` com origem
+  `exam-followup:<id>`). Reconcilia com o estado persistido (`snapshot`) a cada prazo.
+- `DischargeFollowUpWorkflow` (`discharge-followup:<hep>`, Workflow 2): aguarda o sinal `contacted(outcome)`
+  até o `due_at` da tarefa `post_discharge_followup` (SLA por risco); sem contato → `followup_status=escalated`,
+  tarefa de contato escalonada para a fila `busca_ativa` (em transação própria — o `TaskSlaWorkflow` pode estar
+  escalonando a mesma tarefa), nova tarefa `active_search` para a equipe/microárea e lacuna
+  `post_discharge_no_contact` (careplan.api); vencido o segundo prazo (`escalate_after` da política) →
+  encerra como `not_found` (tarefas concluídas, lacuna resolvida). Contato efetivo/desfecho final encerra.
+- `ProductionPreAuditWorkflow` (`production-preaudit:<prod_id>`, Workflow 3): activity `validate` (revalidação
+  idempotente); pendente → aguarda o sinal `corrected` (correção humana ou reenvio da origem, enviado **após o
+  commit**) até o prazo da competência, revalidando a cada sinal; prazo vencido ainda pendente → `expire`
+  (pendência `deadline_missed`, origem `workflow`, tarefa urgente). O lote continua exigindo aprovação humana.
+- `CompetenceDeadlineWorkflow` é implementado como job `@Scheduled` (`CompetenceDeadlineJob`, percorre
+  `production.active_tenants()`): para cada competência com produção em pré-auditoria, o alerta mais urgente
+  aplicável de `alert_days` (D-5 → tarefa `high`, D-1 → `urgent`, fila `auditoria`, origem
+  `production-deadline:<competência>:D-n`), idempotente por `production_deadline_alert`; `runOnce(Instant)`.
+- `CareGapDetectionWorkflow` é implementado como job `@Scheduled` (`CareGapDetectionJob`, cron diário por
+  tenant com planos ativos), invocável em testes e operação via `runOnce()`.
+
+Os starters ficam nos **consumidores** (`TaskEventsConsumer`, `IdentityMergeConsumer`,
+`RegulationEventsConsumer`, `ExamEventsConsumer`, `HospitalEventsConsumer`, `ProductionEventsConsumer`), não nos serviços, com
+`WorkflowIdReusePolicy=REJECT_DUPLICATE` — replay de eventos não duplica workflows.
+
+## Autorização (OPA) e obrigações
+
+`AuthorizationPolicy.Decision` carrega `reasons`, `policy_version` e `Obligations`
+(`mask_identifiers`, `redact_fields`, `log_access`, `require_justification`, `alert_dpo`).
+`RoleBasedAuthorizationPolicy` (padrão, dev/test) implementa a matriz local, incluindo a regra de
+timeline (ACS não vê `restricted`/`highly_restricted` de `aps`/`hospital`/`exam`). Com
+`sus.authz.mode=opa`, `OpaAuthorizationPolicy` monta o input de `policies/README.md` (`subject` com
+roles/tenant/cnes/teams/microareas/client_type; `action`; `resource` com type/tenant/domain/sensitivity/
+citizen_*; `context` com purpose/break_glass/justification/channel) e chama
+`POST {sus.authz.opa-url}/v1/data/sus/authz/decision` — **fail-closed** (OPA fora, timeout, resposta
+inválida ⇒ deny). Obrigações: `redact_fields` é aplicada na timeline (`summary`, `detail_ref`,
+`professional_ref`, `health_unit_name`; campos clínicos removem `detail_ref`); `mask_identifiers` é
+satisfeita por construção (listagens só carregam `value_masked`; reveal é ação própria);
+`log_access` é cumprida pelo `@AuditedAccess`.
+
+## Idempotência de API
+
+`IdempotencyFilter` (POST com `Idempotency-Key`): hash SHA-256 de método + caminho + corpo; mesma
+chave + mesmo hash devolve a resposta armazenada (`Idempotent-Replayed: true`); mesma chave + hash
+diferente → 422 (`idempotency-key-reused`). Armazenamento em `platform.idempotency_key` (RLS por tenant,
+transação própria); expurgo de 72 h por `@Scheduled` via função `SECURITY DEFINER`
+`platform.purge_idempotency_keys`.
+
+## Pipeline de resolução de identidade (resumo)
+
+1. Normalização (maiúsculas, sem acento, partículas removidas, nome social separado) e validação
+   (DV de CNS/CPF, data plausível).
+2. Determinístico: CNS → CPF → `source_link` → nome + data de nascimento + nome da mãe.
+   Conflito (mesmo CNS/CPF com data de nascimento diferente, CNS/CPF divergentes, identificador já
+   de outro cidadão) **nunca vincula**: cria registro `divergent` e abre `citizen_merge_case` com
+   `conflicts`.
+3. Probabilístico (Fellegi-Sunter com Jaro-Winkler em nome/mãe, data, sexo, telefone):
+   `≥ high` → `probable`, `low..high` → `pending` — ambos apenas fila de revisão; `< low` → novo.
+4. Persistência de vínculo, evidências (`citizen_match_evidence`) e proveniência; evento
+   `sus.identity.citizen.{created|linked}` / `sus.identity.merge.*` via `platform.event_outbox`.
+
+Merge marca `status=merged` + `merged_into_id` (nada é apagado) e guarda snapshot para unmerge.

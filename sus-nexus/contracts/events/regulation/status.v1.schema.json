@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/regulation/status/1.0.0",
+  "title": "sus.regulation.status.* — data",
+  "description": "Mudança de status/decisão registrada a partir do sistema oficial (REG-003/007/012). A decisão nunca é tomada pelo barramento.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "regulation_request_id", "status", "previous_status", "occurred_at", "actor_kind"],
+  "properties": {
+    "action": { "type": "string", "enum": ["changed"] },
+    "regulation_request_id": { "type": "string", "pattern": "^reg_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "status": { "type": "string", "enum": ["requested", "pending_documents", "returned", "under_review", "authorized", "denied", "scheduled", "cancelled", "no_show", "performed", "expired"] },
+    "previous_status": { "type": "string" },
+    "priority": { "type": "string", "enum": ["elective", "priority", "urgent", "emergency"] },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "actor_kind": { "type": "string", "enum": ["regulator", "requester", "provider", "system", "workflow", "connector"], "description": "Nunca 'agent': agentes não alteram status regulatório (REG-009)." },
+    "actor_id": { "type": "string" },
+    "provider_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "scheduled_at": { "type": "string", "format": "date-time" },
+    "appointment_id": { "type": "string" },
+    "return_to_origin": { "type": "boolean" },
+    "reason": { "type": "string", "maxLength": 500 },
+    "sla_breached": { "type": "boolean" }
+  }
+}

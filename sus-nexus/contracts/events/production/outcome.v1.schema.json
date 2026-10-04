@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/production/outcome/1.0.0",
+  "title": "sus.production.outcome.* — data",
+  "description": "Retorno do processamento oficial (SIA/SIH) por registro (PRO-008): transmitido (um evento por registro, inclusive quando o retorno chega por lote), recebido, aceito/aprovado, rejeitado (com motivo oficial — reabre pendência) ou pago (com valor).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "production_record_id", "outcome", "record_status", "processed_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["transmitted", "received", "accepted", "rejected", "paid"] },
+    "production_record_id": { "type": "string", "pattern": "^prod_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "outcome_id": { "type": "string", "pattern": "^pout_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "batch_id": { "type": "string", "pattern": "^pbat_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "outcome": { "type": "string", "enum": ["transmitted", "received", "accepted", "rejected", "paid"] },
+    "record_status": { "type": "string", "enum": ["transmitted", "received", "approved", "rejected", "paid"] },
+    "competence": { "type": "string", "pattern": "^[0-9]{4}(0[1-9]|1[0-2])$" },
+    "cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "kind": { "type": "string", "enum": ["bpa_c", "bpa_i", "apac", "aih"] },
+    "procedure_code": { "type": "string", "pattern": "^[0-9]{10}$" },
+    "reason_code": { "type": "string" },
+    "reason": { "type": "string", "maxLength": 500 },
+    "paid_amount": { "type": "number", "minimum": 0 },
+    "approved_quantity": { "type": "integer", "minimum": 0 },
+    "processed_at": { "type": "string", "format": "date-time" }
+  }
+}

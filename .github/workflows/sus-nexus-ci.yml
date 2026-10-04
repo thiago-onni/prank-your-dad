@@ -1,0 +1,611 @@
+name: sus-nexus-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["sus-nexus/**", ".github/workflows/sus-nexus-ci.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["sus-nexus/**", ".github/workflows/sus-nexus-ci.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: sus-nexus-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: "21"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+  PYTHON_VERSION: "3.11"
+  HELM_VERSION: v3.16.4
+  KUBECONFORM_VERSION: v0.6.7
+  TERRAFORM_VERSION: "1.9.8"
+  OPA_VERSION: v1.9.0
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/sus-nexus
+
+jobs:
+  # ------------------------------------------------------------------------------------------------
+  changes:
+    name: detectar mudanças
+    runs-on: ubuntu-latest
+    outputs:
+      contracts: ${{ steps.filter.outputs.contracts }}
+      core: ${{ steps.filter.outputs.core }}
+      fhir: ${{ steps.filter.outputs.fhir }}
+      connectors: ${{ steps.filter.outputs.connectors }}
+      web: ${{ steps.filter.outputs.web }}
+      policies: ${{ steps.filter.outputs.policies }}
+      ai: ${{ steps.filter.outputs.ai }}
+      platform: ${{ steps.filter.outputs.platform }}
+      data: ${{ steps.filter.outputs.data }}
+      any_code: ${{ steps.filter.outputs.any_code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contracts:
+              - 'sus-nexus/contracts/**'
+            core:
+              - 'sus-nexus/core-municipal/**'
+              - 'sus-nexus/contracts/**'
+            fhir:
+              - 'sus-nexus/fhir-gateway/**'
+              - 'sus-nexus/contracts/**'
+            connectors:
+              - 'sus-nexus/connectors/**'
+              - 'sus-nexus/contracts/**'
+            web:
+              - 'sus-nexus/web/**'
+              - 'sus-nexus/contracts/openapi/**'
+            policies:
+              - 'sus-nexus/policies/**'
+            ai:
+              - 'sus-nexus/ai-service/**'
+            platform:
+              - 'sus-nexus/platform/**'
+              - 'sus-nexus/contracts/events/topics.yaml'
+              - '.github/workflows/sus-nexus-*.yml'
+            data:
+              - 'sus-nexus/data/**'
+              - 'sus-nexus/contracts/events/**'
+              - 'sus-nexus/tools/synthetic-data/**'
+              - '.github/workflows/sus-nexus-ci.yml'
+            any_code:
+              - 'sus-nexus/**'
+
+  # ------------------------------------------------------------------------------------------------
+  contracts:
+    name: contracts
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: sus-nexus/contracts } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: sus-nexus/contracts/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm validate
+
+  # ------------------------------------------------------------------------------------------------
+  core:
+    name: core-municipal
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: sus_nexus_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: sus-nexus/core-municipal } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          cache-dependency-path: sus-nexus/core-municipal/**/pom.xml
+      - name: preparar banco de teste (extensões)
+        run: |
+          psql "postgresql://postgres:postgres@localhost:5432/sus_nexus_test" -v ON_ERROR_STOP=1 \
+            -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' -c 'CREATE EXTENSION IF NOT EXISTS unaccent;' \
+            -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto;' -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' \
+            -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+      - run: mvn -B -ntp verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-surefire
+          path: sus-nexus/core-municipal/**/target/surefire-reports/*.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  fhir:
+    name: fhir-gateway
+    needs: changes
+    if: needs.changes.outputs.fhir == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: sus_nexus_fhir_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: sus-nexus/fhir-gateway } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          cache-dependency-path: sus-nexus/fhir-gateway/**/pom.xml
+      - name: preparar banco de teste (extensões)
+        run: |
+          psql "postgresql://postgres:postgres@localhost:5432/sus_nexus_fhir_test" -v ON_ERROR_STOP=1 \
+            -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' -c 'CREATE EXTENSION IF NOT EXISTS unaccent;' \
+            -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto;' -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+      - run: mvn -B -ntp verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fhir-surefire
+          path: sus-nexus/fhir-gateway/**/target/surefire-reports/*.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  connectors:
+    name: connectors
+    needs: changes
+    if: needs.changes.outputs.connectors == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults: { run: { working-directory: sus-nexus/connectors } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+          cache-dependency-path: sus-nexus/connectors/**/pom.xml
+      - run: mvn -B -ntp verify
+
+  # ------------------------------------------------------------------------------------------------
+  web:
+    name: web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults: { run: { working-directory: sus-nexus/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: sus-nexus/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            sus-nexus/web/.turbo
+            sus-nexus/web/apps/*/.next/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # ------------------------------------------------------------------------------------------------
+  policies:
+    name: policies (OPA)
+    needs: changes
+    if: needs.changes.outputs.policies == 'true'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: sus-nexus/policies } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-policy-agent/setup-opa@v2
+        with: { version: "${{ env.OPA_VERSION }}" }
+      - run: opa fmt --list --fail .
+      - run: opa check --strict .
+      - run: make test
+      - name: cobertura mínima (PLANO 12.2)
+        run: opa test --coverage --format=json --ignore examples --ignore bundle . | python3 -c 'import json,sys; c=json.load(sys.stdin)["coverage"]; print(f"cobertura {c:.1f}%"); sys.exit(0 if c>=80 else 1)'
+
+  # ------------------------------------------------------------------------------------------------
+  ai:
+    name: ai-service
+    needs: changes
+    if: needs.changes.outputs.ai == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults: { run: { working-directory: sus-nexus/ai-service } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: sus-nexus/ai-service/pyproject.toml
+      - run: pip install -e '.[dev]'
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy .
+      - run: pytest -q --maxfail=1 --junitxml=pytest-report.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-pytest
+          path: sus-nexus/ai-service/pytest-report.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  platform:
+    name: platform (helm, kubeconform, terraform, yaml)
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults: { run: { working-directory: sus-nexus/platform } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: pip install pyyaml yamllint
+      - uses: azure/setup-helm@v4
+        with: { version: "${{ env.HELM_VERSION }}" }
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "${{ env.TERRAFORM_VERSION }}" }
+      - name: instalar kubeconform
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      - name: yamllint
+        run: yamllint -c .yamllint.yaml .
+      - name: parse YAML de todos os arquivos
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          bad = 0
+          for p in pathlib.Path('.').rglob('*.y*ml'):
+              if 'templates' in p.parts or 'charts/' in str(p) and p.suffix == '.tgz':
+                  continue
+              try:
+                  list(yaml.safe_load_all(p.read_text(encoding='utf-8')))
+              except Exception as e:
+                  print(f"ERRO {p}: {e}"); bad += 1
+          sys.exit(1 if bad else 0)
+          PY
+      - name: shell scripts (bash -n)
+        run: find . -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: arquivos gerados estão atualizados
+        run: |
+          python3 helm/scripts/gen-kafka-topics.py --check
+          bash helm/scripts/sync-chart-templates.sh --check
+          bash helm/scripts/sync-realm.sh --check
+          bash helm/scripts/sync-lakehouse-files.sh --check
+          bash observability/scripts/gen-dashboards-configmap.sh && git diff --exit-code -- observability/dashboards-configmap.yaml
+      - name: helm lint (charts de componente)
+        run: for c in helm/charts/*; do helm lint "$c" --strict; done
+      - name: helm dependency build (umbrella)
+        run: |
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo add trino https://trinodb.github.io/charts
+          helm dependency build helm/sus-nexus
+      - name: helm lint + template (umbrella, dev/hml/prod)
+        run: |
+          mkdir -p rendered
+          for env in dev hml prod; do
+            helm lint helm/sus-nexus -f "helm/sus-nexus/values-${env}.yaml" --strict
+            helm template sus-nexus helm/sus-nexus -f "helm/sus-nexus/values-${env}.yaml" --kube-version 1.30.0 > "rendered/${env}.yaml"
+          done
+          helm template core helm/charts/sus-nexus-core --set rollout.enabled=true --kube-version 1.30.0 > rendered/core-rollout.yaml
+      - name: kubeconform (manifests renderizados + manifests puros)
+        run: |
+          kubeconform -strict -summary -kubernetes-version 1.30.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            -ignore-missing-schemas \
+            rendered/*.yaml security/kyverno security/cert-manager security/external-secrets observability/alert-rules backup-dr/cnpg-backup.yaml backup-dr/velero-schedules.yaml backup-dr/mirrormaker2.yaml argocd
+      - name: terraform fmt / validate
+        run: |
+          terraform fmt -check -recursive terraform
+          for env in dev hml prod; do
+            (cd "terraform/envs/${env}" && terraform init -backend=false -input=false >/dev/null && terraform validate)
+          done
+      - name: compose — scripts e YAML
+        run: |
+          bash -n compose/kafka/create-topics.sh compose/debezium/register-outbox-connector.sh compose/postgres/init/01-databases.sh
+          bash -n compose/postgres/init/02-lakehouse.sh compose/kafka-connect/register-iceberg-sink.sh compose/trino/bootstrap-lakehouse.sh
+          DRY_RUN=true bash compose/kafka-connect/register-iceberg-sink.sh >/dev/null
+          python3 -c "import json; json.load(open('compose/trino/rules.json')); json.load(open('compose/metabase/sala-de-situacao.json'))"
+          DRY_RUN=true python3 compose/metabase/provision.py compose/metabase/sala-de-situacao.json
+          sh -n compose/minio/init.sh
+          DRY_RUN=true KAFKA_TOPICS_CMD=echo bash compose/kafka/create-topics.sh | grep -c '^>>'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rendered-manifests
+          path: sus-nexus/platform/rendered
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  # Camada analítica (Fase 4): dbt em DuckDB com bronze sintético (fixtures validadas contra os contratos)
+  data:
+    name: data (dbt duckdb, sqlfluff)
+    needs: changes
+    if: needs.changes.outputs.data == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults: { run: { working-directory: sus-nexus/data/dbt } }
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/sus-nexus/data/dbt
+      DBT_CITIZEN_KEY_SALT: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: sus-nexus/data/requirements.txt
+      - name: instalar dbt-duckdb, sqlfluff
+        run: pip install -r ../requirements.txt
+      - name: gerar fixtures (eventos sintéticos validados contra contracts/events)
+        run: python ci/generate_fixtures.py --anchor now
+      - name: carregar bronze no DuckDB
+        run: python ci/load_bronze_duckdb.py
+      - run: dbt deps
+      - name: dbt build (DuckDB)
+        run: dbt build --profile duckdb --target ci
+      - name: dbt source freshness
+        run: dbt source freshness --profile duckdb --target ci
+      - name: produção ausente (modelo tolerante materializa vazio)
+        run: |
+          python ci/generate_fixtures.py --anchor now --no-production --out /tmp/fx-np
+          python ci/load_bronze_duckdb.py --fixtures /tmp/fx-np --db /tmp/np.duckdb
+          DBT_DUCKDB_PATH=/tmp/np.duckdb dbt build --profile duckdb --target ci --target-path /tmp/np-target
+      - name: sqlfluff lint (dialeto trino)
+        run: sqlfluff lint models tests
+      - name: dbt docs (artefatos para OpenMetadata)
+        run: dbt docs generate --profile duckdb --target ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dbt-artifacts
+          path: |
+            sus-nexus/data/dbt/target/manifest.json
+            sus-nexus/data/dbt/target/catalog.json
+            sus-nexus/data/dbt/target/run_results.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  security:
+    name: security (trivy, gitleaks, semgrep, checkov)
+    needs: changes
+    if: needs.changes.outputs.any_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: "true"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+      - name: trivy fs (vulnerabilidades, segredos, misconfig)
+        uses: aquasecurity/trivy-action@master
+        env:
+          # evita resolver POMs no Maven Central (429) — lockfiles/poms locais bastam
+          TRIVY_OFFLINE_SCAN: "true"
+        with:
+          scan-type: fs
+          scan-ref: sus-nexus
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "0"
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-fs.sarif') != ''
+        with: { sarif_file: trivy-fs.sarif, category: trivy-fs }
+
+      - name: semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/default
+            p/owasp-top-ten
+            p/java
+            p/typescript
+            p/python
+            p/kubernetes
+            p/terraform
+            p/dockerfile
+            p/secrets
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with: { sarif_file: semgrep.sarif, category: semgrep }
+      - name: checkov (IaC)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: sus-nexus/platform
+          framework: terraform,kubernetes,helm,github_actions
+          skip_path: sus-nexus/platform/helm/sus-nexus/charts
+          # CKV2_AWS_19: falso positivo não determinístico (EIP↔NAT por for_each); skip inline não é respeitado no SARIF
+          skip_check: CKV2_AWS_19
+          soft_fail: true
+          output_format: sarif
+          output_file_path: checkov
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('checkov/results_sarif.sarif') != ''
+        with: { sarif_file: checkov/results_sarif.sarif, category: checkov }
+
+  # ------------------------------------------------------------------------------------------------
+  # Imagens: somente em main (push) ou tags. PRs apenas constroem (sem push) os componentes alterados.
+  images:
+    name: image ${{ matrix.component }}
+    needs: [changes, core, fhir, connectors, web, ai]
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # cosign keyless (OIDC)
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { component: core-municipal, context: sus-nexus/core-municipal, dockerfile: Dockerfile, changed: core }
+          - { component: fhir-gateway, context: sus-nexus/fhir-gateway, dockerfile: Dockerfile, changed: fhir }
+          - { component: connector-pec, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-pec", changed: connectors }
+          - { component: connector-sisreg, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-sisreg\nPORT=8093", changed: connectors }
+          - { component: connector-esus-regulacao, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-esus-regulacao\nPORT=8094", changed: connectors }
+          - { component: connector-lis, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-lis\nPORT=8095", changed: connectors }
+          - { component: connector-his, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-his\nPORT=8096", changed: connectors }
+          - { component: connector-ris, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-ris\nPORT=8097", changed: connectors }
+          - { component: connector-sia, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-sia\nPORT=8099", changed: connectors }
+          - { component: web-shell, context: sus-nexus, dockerfile: web/apps/shell/Dockerfile, changed: web }
+          - { component: ai-service, context: sus-nexus/ai-service, dockerfile: Dockerfile, changed: ai }
+    steps:
+      - name: componente alterado?
+        id: gate
+        run: |
+          changed='${{ toJSON(needs.changes.outputs) }}'
+          if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]] || echo "$changed" | grep -q '"${{ matrix.changed }}": *"true"'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.build == 'true'
+      - uses: docker/setup-qemu-action@v3
+        if: steps.gate.outputs.build == 'true'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.gate.outputs.build == 'true'
+      - uses: docker/login-action@v3
+        if: steps.gate.outputs.build == 'true'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        if: steps.gate.outputs.build == 'true'
+        id: meta
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
+          tags: |
+            type=ref,event=branch,prefix=main-,suffix=-{{sha}},enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=sus-nexus/${{ matrix.component }}
+            org.opencontainers.image.vendor=Secretaria Municipal de Saude
+      - name: build + push (multi-arch)
+        if: steps.gate.outputs.build == 'true'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build_args }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - uses: sigstore/cosign-installer@v3
+        if: steps.gate.outputs.build == 'true'
+      - uses: anchore/sbom-action@v0
+        if: steps.gate.outputs.build == 'true'
+        with:
+          image: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: true
+          artifact-name: sbom-${{ matrix.component }}
+      - name: cosign sign + attest SBOM (keyless)
+        if: steps.gate.outputs.build == 'true'
+        env:
+          COSIGN_YES: "true"
+        run: |
+          IMAGE="${IMAGE_PREFIX}/${{ matrix.component }}@${{ steps.build.outputs.digest }}"
+          cosign sign "$IMAGE"
+          cosign attest --type spdxjson --predicate sbom.spdx.json "$IMAGE"
+      - name: trivy image
+        if: steps.gate.outputs.build == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ------------------------------------------------------------------------------------------------
+  ci-ok:
+    name: ci ok
+    needs: [changes, contracts, core, fhir, connectors, web, policies, ai, platform, data, security]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: verificar resultados
+        run: |
+          echo '${{ toJSON(needs) }}' | python3 -c '
+          import json,sys
+          needs=json.load(sys.stdin); bad=[k for k,v in needs.items() if v["result"] in ("failure","cancelled")]
+          print({k:v["result"] for k,v in needs.items()}); sys.exit(1 if bad else 0)'

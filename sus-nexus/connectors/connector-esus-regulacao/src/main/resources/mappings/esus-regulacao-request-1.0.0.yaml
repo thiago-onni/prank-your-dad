@@ -1,0 +1,84 @@
+# Item de solicitação da API (ou linha exportada) do e-SUS Regulação → RegulationRequestRegistration.
+# Os caminhos de origem (a.b[0].c) são HIPÓTESE DE HOMOLOGAÇÃO: ajuste-os à resposta real da API.
+# citizen_ref é montado pelo conector a partir de citizen_identifiers.* (CNS → CPF → id municipal → id local).
+mapping_set: esus-regulacao-request
+version: "1.0.0"
+entity_type: regulation_request
+lookups:
+  situacao:
+    PENDENTE: requested
+    SOLICITADA: requested
+    SOLICITADO: requested
+    NOVA: requested
+    EM_FILA: requested
+    AGUARDANDO_REGULACAO: requested
+    PENDENTE_DOCUMENTO: pending_documents
+    PENDENTE_DOCUMENTOS: pending_documents
+    PENDENCIA: pending_documents
+    DEVOLVIDA: returned
+    DEVOLVIDO: returned
+    EM_ANALISE: under_review
+    EM_REGULACAO: under_review
+    AUTORIZADA: authorized
+    AUTORIZADO: authorized
+    NEGADA: denied
+    NEGADO: denied
+    AGENDADA: scheduled
+    AGENDADO: scheduled
+    CANCELADA: cancelled
+    CANCELADO: cancelled
+    FALTA: no_show
+    NAO_COMPARECEU: no_show
+    REALIZADA: performed
+    REALIZADO: performed
+    VENCIDA: expired
+    EXPIRADA: expired
+  prioridade:
+    VERMELHO: emergency
+    VERMELHA: emergency
+    EMERGENCIA: emergency
+    AMARELO: urgent
+    AMARELA: urgent
+    URGENCIA: urgent
+    URGENTE: urgent
+    VERDE: priority
+    PRIORIDADE: priority
+    PRIORITARIO: priority
+    AZUL: elective
+    ELETIVO: elective
+    ELETIVA: elective
+  tipo:
+    CONSULTA: consultation
+    CONSULTA_ESPECIALIZADA: consultation
+    EXAME: exam
+    PROCEDIMENTO: procedure
+    CIRURGIA: surgery
+    INTERNACAO: admission
+    LEITO: admission
+fields:
+  - { target: source.system, constant: ESUS_REGULACAO }
+  - { target: source.connector, constant: connector-esus-regulacao }
+  - { source: id, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: atualizado_em, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: unidade_solicitante.cnes, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: paciente.cns, target: citizen_identifiers.cns, transforms: [digits, blank_to_null] }
+  - { source: paciente.cpf, target: citizen_identifiers.cpf, transforms: [digits, blank_to_null] }
+  - { source: paciente.id, target: citizen_identifiers.local, transforms: [trim, blank_to_null] }
+  - { source: tipo, target: kind, transforms: [trim, unaccent, upper, { regex: { pattern: "[^A-Z0-9]+", replacement: "_" } }, { lookup: { table: tipo, default: procedure } }], required: true }
+  - { source: situacao, target: status, transforms: [trim, unaccent, upper, { regex: { pattern: "[^A-Z0-9]+", replacement: "_" } }, { lookup: { table: situacao, default: requested } }], required: true }
+  - { source: prioridade, target: priority, transforms: [trim, unaccent, upper, blank_to_null, { lookup: { table: prioridade, default: elective } }] }
+  - { source: data_solicitacao, target: requested_at, transforms: [{ date: { from: "yyyy-MM-dd'T'HH:mm:ss|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd|dd/MM/yyyy HH:mm:ss|dd/MM/yyyy", to: iso-datetime } }], required: true }
+  - { source: procedimento.codigo, target: requested_service_code, transforms: [digits, blank_to_null], required: true }
+  - { source: procedimento.sistema, target: code_system, transforms: [trim, upper, { default: SIGTAP }] }
+  - { source: especialidade, target: specialty, transforms: [trim, blank_to_null] }
+  - { source: unidade_solicitante.cnes, target: requesting_cnes, transforms: [digits, blank_to_null] }
+  - { source: profissional_solicitante.id, target: requesting_professional_id, transforms: [trim, blank_to_null] }
+  - { source: profissional_solicitante.cbo, target: requesting_professional_cbo, transforms: [digits, blank_to_null] }
+  - { source: justificativa_presente, target: justification_present, transforms: [blank_to_null, { to_boolean: { true_values: ["TRUE", "1", "S", "SIM"] } }] }
+  - { source: anexos.length, target: attached_documents_count, transforms: [blank_to_null, to_integer] }
+  - { source: cid, target: cid_code, transforms: [trim, upper, blank_to_null] }
+  - { source: unidade_executante.cnes, target: provider_cnes, transforms: [digits, blank_to_null] }
+  - { source: data_agendamento, target: scheduled_at, transforms: [blank_to_null, { date: { from: "yyyy-MM-dd'T'HH:mm:ss|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd|dd/MM/yyyy HH:mm:ss|dd/MM/yyyy", to: iso-datetime } }] }
+  - { source: regulador.id, target: regulator_id, transforms: [trim, blank_to_null] }
+  - { source: motivo, target: decision_reason, transforms: [trim, blank_to_null, { substring: { start: 0, end: 500 } }] }
+  - { source: atualizado_em, target: occurred_at, transforms: [blank_to_null, { date: { from: "yyyy-MM-dd'T'HH:mm:ss|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }] }

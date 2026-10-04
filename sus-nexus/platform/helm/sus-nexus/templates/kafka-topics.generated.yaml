@@ -1,0 +1,3010 @@
+# GERADO por platform/helm/scripts/gen-kafka-topics.py a partir de contracts/events/topics.yaml.
+# NÃO edite manualmente — rode o script (o CI verifica com --check).
+{{- if .Values.strimzi.enabled }}
+{{- $ns := .Values.strimzi.namespace | default .Values.global.namespaces.data }}
+{{- $cluster := .Values.strimzi.clusterName }}
+{{- $rf := int .Values.strimzi.topicReplication }}
+{{- $minIsr := int .Values.strimzi.topicMinInsyncReplicas }}
+{{- $pf := .Values.strimzi.partitionFactor | default 1.0 }}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-pec-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.pec.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.pec.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-pec-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.pec.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.pec.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-pec-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.pec.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.pec.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-pec-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.pec.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.pec.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-agenda-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.agenda.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.agenda.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-agenda-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.agenda.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.agenda.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-agenda-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.agenda.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.agenda.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-agenda-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.agenda.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.agenda.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-cnes-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.cnes.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.cnes.v1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-cnes-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.cnes.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.cnes.v1.retry.1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-cnes-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.cnes.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.cnes.v1.retry.2
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-cnes-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.cnes.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.cnes.v1.retry.3
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-terminology-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.terminology.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.terminology.v1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-terminology-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.terminology.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.terminology.v1.retry.1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-terminology-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.terminology.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.terminology.v1.retry.2
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-terminology-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.terminology.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.terminology.v1.retry.3
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-regulation-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.regulation.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.regulation.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-regulation-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.regulation.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.regulation.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-regulation-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.regulation.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.regulation.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-regulation-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.regulation.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.regulation.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-exam-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.exam.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.exam.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-exam-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.exam.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.exam.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-exam-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.exam.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.exam.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-exam-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.exam.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.exam.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-hospital-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.hospital.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.hospital.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-hospital-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.hospital.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.hospital.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-hospital-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.hospital.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.hospital.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-hospital-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.hospital.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.hospital.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ingest
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.1
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.2
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-ingest-production-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.ingest.production.v1.retry.3
+    sus-nexus.gov.br/partition-key: source.source_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.ingest.production.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-citizen-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.citizen.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,linked,updated,registration_state_changed"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.citizen.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-citizen-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.citizen.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.citizen.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-citizen-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.citizen.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.citizen.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-citizen-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.citizen.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.citizen.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-merge-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.merge.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "case_opened,merged,unmerged,rejected"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.merge.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-merge-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.merge.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.merge.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-merge-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.merge.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.merge.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-identity-merge-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.identity.merge.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.identity.merge.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-encounter-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.encounter.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,updated"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.encounter.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-encounter-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.encounter.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.encounter.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-encounter-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.encounter.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.encounter.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-encounter-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.encounter.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.encounter.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-appointment-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.appointment.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,confirmed,cancelled,rescheduled,attended,no_show"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.appointment.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-appointment-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.appointment.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.appointment.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-appointment-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.appointment.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.appointment.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-appointment-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.appointment.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.appointment.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-home-visit-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.home-visit.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.home-visit.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-home-visit-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.home-visit.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.home-visit.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-home-visit-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.home-visit.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.home-visit.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-aps-home-visit-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.aps.home-visit.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.aps.home-visit.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-request-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.request.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,updated,returned,cancelled"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.request.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-request-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.request.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.request.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-request-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.request.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.request.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-request-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.request.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.request.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-status-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.status.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "changed"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.status.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-status-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.status.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.status.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-status-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.status.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.status.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-status-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.status.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.status.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-queue-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.queue.v1
+    sus-nexus.gov.br/partition-key: data.queue_id
+    sus-nexus.gov.br/events: "snapshot"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.queue.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-queue-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.queue.v1.retry.1
+    sus-nexus.gov.br/partition-key: data.queue_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.queue.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-queue-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.queue.v1.retry.2
+    sus-nexus.gov.br/partition-key: data.queue_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.queue.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-regulation-queue-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.regulation.queue.v1.retry.3
+    sus-nexus.gov.br/partition-key: data.queue_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.regulation.queue.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-schedule-appointment-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.schedule.appointment.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,confirmed,cancelled,rescheduled,attended,no_show,duplicate_detected"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.schedule.appointment.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-schedule-appointment-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.schedule.appointment.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.schedule.appointment.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-schedule-appointment-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.schedule.appointment.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.schedule.appointment.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-schedule-appointment-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.schedule.appointment.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.schedule.appointment.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-order-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.order.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,status_changed"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.order.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-order-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.order.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.order.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-order-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.order.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.order.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-order-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.order.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.order.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-result-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.result.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "available,critical_flagged"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.result.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-result-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.result.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.result.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-result-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.result.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.result.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-exam-result-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.exam.result.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.exam.result.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-adt-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.adt.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "admitted,transferred,bed_changed,discharged,deceased"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.adt.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-adt-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.adt.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.adt.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-adt-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.adt.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.adt.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-adt-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.adt.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.adt.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-discharge-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.discharge.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "completed,counter_referral_received"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.discharge.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-discharge-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.discharge.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.discharge.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-discharge-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.discharge.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.discharge.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-hospital-discharge-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.hospital.discharge.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.hospital.discharge.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-careplan-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.careplan.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,updated,closed"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.careplan.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-careplan-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.careplan.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.careplan.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-careplan-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.careplan.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.careplan.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-careplan-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.careplan.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.careplan.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-caregap-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.caregap.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "detected,resolved"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.caregap.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-caregap-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.caregap.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.caregap.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-caregap-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.caregap.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.caregap.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-caregap-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.caregap.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.caregap.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-task-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.task.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "created,assigned,completed,escalated,sla_breached,cancelled"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.task.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-task-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.task.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.task.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-task-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.task.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.task.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-task-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.task.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.task.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-record-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.record.v1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/events: "created,validated,pending,corrected"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.record.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-record-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.record.v1.retry.1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.record.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-record-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.record.v1.retry.2
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.record.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-record-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.record.v1.retry.3
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.record.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-validation-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.validation.v1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/events: "issue_found,issue_resolved"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.validation.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-validation-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.validation.v1.retry.1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.validation.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-validation-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.validation.v1.retry.2
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.validation.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-validation-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.validation.v1.retry.3
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.validation.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-submission-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.submission.v1
+    sus-nexus.gov.br/partition-key: data.batch_id
+    sus-nexus.gov.br/events: "batch_generated,batch_approved,exported,transmitted"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.submission.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-submission-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.submission.v1.retry.1
+    sus-nexus.gov.br/partition-key: data.batch_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.submission.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-submission-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.submission.v1.retry.2
+    sus-nexus.gov.br/partition-key: data.batch_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.submission.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-submission-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.submission.v1.retry.3
+    sus-nexus.gov.br/partition-key: data.batch_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.submission.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-outcome-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.outcome.v1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/events: "transmitted,received,accepted,rejected,paid"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.outcome.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-outcome-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.outcome.v1.retry.1
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.outcome.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-outcome-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.outcome.v1.retry.2
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.outcome.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-production-outcome-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.production.outcome.v1.retry.3
+    sus-nexus.gov.br/partition-key: data.production_record_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.production.outcome.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-communication-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.communication.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "requested,approved,sent,delivered,failed"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.communication.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-communication-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.communication.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.communication.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-communication-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.communication.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.communication.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-communication-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.communication.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.communication.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-consent-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: domain
+  annotations:
+    sus-nexus.gov.br/topic: sus.consent.v1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/events: "granted,revoked,preference_updated"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.consent.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-consent-v1-retry-1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.consent.v1.retry.1
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.consent.v1.retry.1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-consent-v1-retry-2
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.consent.v1.retry.2
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.consent.v1.retry.2
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-consent-v1-retry-3
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: retry
+  annotations:
+    sus-nexus.gov.br/topic: sus.consent.v1.retry.3
+    sus-nexus.gov.br/partition-key: subject.municipal_citizen_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.consent.v1.retry.3
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-integration-status-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ops
+  annotations:
+    sus-nexus.gov.br/topic: sus.integration.status.v1
+    sus-nexus.gov.br/partition-key: data.connector_id
+    sus-nexus.gov.br/events: "healthy,degraded,down,reconciliation_gap"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.integration.status.v1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-integration-command-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ops
+  annotations:
+    sus-nexus.gov.br/topic: sus.integration.command.v1
+    sus-nexus.gov.br/partition-key: data.connector_id
+    sus-nexus.gov.br/events: "reprocess.requested"
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.integration.command.v1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-audit-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: audit
+  annotations:
+    sus-nexus.gov.br/topic: sus.audit.v1
+    sus-nexus.gov.br/partition-key: data.actor_id
+    sus-nexus.gov.br/schema-compatibility: FULL
+spec:
+  topicName: sus.audit.v1
+  partitions: {{ max 1 (int (mulf 12 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "7776000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    message.timestamp.type: LogAppendTime
+    max.message.bytes: "1048576"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sus-dlq-v1
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    app.kubernetes.io/part-of: sus-nexus
+    sus-nexus.gov.br/topic-class: ops
+  annotations:
+    sus-nexus.gov.br/topic: sus.dlq.v1
+    sus-nexus.gov.br/partition-key: trace.correlation_id
+    sus-nexus.gov.br/schema-compatibility: BACKWARD
+spec:
+  topicName: sus.dlq.v1
+  partitions: {{ max 1 (int (mulf 3 $pf)) }}
+  replicas: {{ $rf }}
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "{{ $minIsr }}"
+    cleanup.policy: delete
+    compression.type: producer
+    max.message.bytes: "1048576"
+{{- end }}

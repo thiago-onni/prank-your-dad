@@ -1,0 +1,247 @@
+# prod — HA: 3 nós de controle, ≥3 workers por zona, 2 zonas quando disponível (PLANO 3.4/3.5).
+# Imagens SOMENTE por digest assinado (Kyverno verifica cosign). Promoção por PR com 2 aprovações.
+global:
+  environment: prod
+  domain: sus-nexus.saude.montesclaros.mg.gov.br
+  imageRegistry: harbor.sus-nexus.local/sus-nexus
+  keycloakUrl: https://auth.sus-nexus.saude.montesclaros.mg.gov.br
+  multiZone: true
+
+core:
+  enabled: true
+  replicaCount: 3
+  hpa: { enabled: true, minReplicas: 3, maxReplicas: 10 }
+  pdb: { minAvailable: 2 }
+  rollout:
+    enabled: true
+    canary:
+      steps:
+        - setWeight: 5
+        - pause: { duration: 10m }
+        - setWeight: 25
+        - pause: { duration: 20m }
+        - setWeight: 50
+        - pause: { duration: 30m }
+      analysis: { minSuccessRate: 0.995, maxP99Seconds: 0.8 }
+  resources:
+    requests: { cpu: "1", memory: 1536Mi }
+    limits: { cpu: "4", memory: 3Gi }
+  config:
+    QUARKUS_OTEL_TRACES_SAMPLER_ARG: "0.1"
+    QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://core-db-pooler-rw.data.svc.cluster.local:5432/sus_nexus_core
+  apisix:
+    waf: { enabled: true }
+    rateLimit: { policy: redis, count: 1200 }
+fhir:
+  enabled: true
+  replicaCount: 3
+  hpa: { enabled: true, minReplicas: 3, maxReplicas: 8 }
+  pdb: { minAvailable: 2 }
+  rollout: { enabled: true }
+  apisix:
+    waf: { enabled: true }
+    rateLimit: { policy: redis }
+web:
+  enabled: true
+  replicaCount: 3
+  hpa: { enabled: true, minReplicas: 3, maxReplicas: 8 }
+  pdb: { minAvailable: 2 }
+  apisix:
+    waf: { enabled: true }
+    rateLimit: { policy: redis }
+ai:
+  enabled: true
+  replicaCount: 2
+  hpa: { enabled: true, minReplicas: 2, maxReplicas: 6 }
+connector-pec:
+  enabled: true
+  replicaCount: 1
+connector-agenda:
+  enabled: true
+connector-sisreg:
+  enabled: true
+connector-cnes:
+  enabled: true
+connector-cadsus:
+  enabled: true
+connector-esus-regulacao:
+  enabled: true
+connector-lis:
+  enabled: true
+  replicaCount: 1   # listener MLLP com estado de sessão: uma réplica por laboratório/rota
+  connector:
+    mllp:
+      serviceType: LoadBalancer
+      serviceAnnotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external         # NLB (AWS LB Controller)
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internal       # só rede/VPN municipal
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        # IP de origem preservado → NetworkPolicy (ipBlock) avalia a faixa real do laboratório
+        service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=true
+      # Somente as faixas dos laboratórios conveniados (rede municipal/VPN) — ajuste por município.
+      allowedSourceCidrs: ["172.16.20.0/24", "172.16.21.0/24"]
+connector-his:
+  enabled: true     # agente de borda no hospital: só gera KafkaUser/ACL (connector.edgeAgent=true)
+  connector:
+    edgeAgent: true
+    # Se o HIS precisar rodar no cluster (edgeAgent=false), defina as faixas dos hospitais:
+    mllp: { allowedSourceCidrs: ["172.16.30.0/24"] }
+connector-ris:
+  enabled: true     # agente de borda no serviço de imagem (connector.edgeAgent=true)
+  connector:
+    edgeAgent: true
+    mllp: { allowedSourceCidrs: ["172.16.31.0/24"] }
+connector-sia:
+  enabled: true
+  replicaCount: 1   # pasta monitorada + marca d'água por arquivo: uma réplica (sem disputa de arquivos)
+
+cnpg:
+  enabled: true
+  defaults:
+    instances: 3
+    storageClass: fast-nvme
+  backup:
+    enabled: true
+    retentionPolicy: 30d
+  clusters:
+    core-db:
+      instances: 3
+      storageSize: 2Ti
+      walStorageSize: 100Gi
+      synchronous: true
+      resources:
+        requests: { cpu: "8", memory: 32Gi }
+        limits: { cpu: "16", memory: 64Gi }
+      sharedBuffers: 16GB
+      effectiveCacheSize: 48GB
+      maxConnections: "400"
+      backupRetention: 90d
+    fhir-db:
+      instances: 3
+      storageSize: 500Gi
+      resources:
+        requests: { cpu: "2", memory: 8Gi }
+        limits: { cpu: "8", memory: 16Gi }
+    temporal-db: { instances: 3, storageSize: 200Gi }
+    keycloak-db: { instances: 3, storageSize: 50Gi }
+    langfuse-db: { instances: 2, storageSize: 100Gi }
+    ai-db: { instances: 2, storageSize: 100Gi }
+    apicurio-db: { instances: 2, storageSize: 20Gi }
+
+strimzi:
+  enabled: true
+  topicReplication: 3
+  topicMinInsyncReplicas: 2
+  partitionFactor: 1.0
+  nodePool:
+    replicas: 3
+    storageClass: fast-nvme
+    storageSize: 1Ti
+    resources:
+      requests: { cpu: "4", memory: 16Gi }
+      limits: { cpu: "8", memory: 24Gi }
+    jvm: { xms: 6g, xmx: 6g }
+  rack: { topologyKey: topology.kubernetes.io/zone }
+  cruiseControl: { enabled: true }
+  externalListener:
+    enabled: true        # MirrorMaker 2 do site DR + agentes de borda (mTLS)
+    type: loadbalancer
+    configuration:
+      bootstrap:
+        annotations:
+          metallb.universe.tf/address-pool: kafka-external
+
+kafkaConnect:
+  enabled: true
+  replicas: 3
+
+apicurio:
+  enabled: true
+  replicas: 3
+
+minio:
+  enabled: true
+  servers: 4
+  volumesPerServer: 4
+  volumeSize: 1Ti
+  storageClass: standard
+  auditArchive:
+    lockMode: COMPLIANCE
+    retentionDays: 1825
+  replication:
+    enabled: true
+    auditArchiveTarget: "https://sus-replica:REPLACE_VIA_OPENBAO@minio-dr.sus-nexus.local/audit-archive"
+    backupsTarget: "https://sus-replica:REPLACE_VIA_OPENBAO@minio-dr.sus-nexus.local/backups"
+
+redis:
+  enabled: true
+  replicas: 1
+  maxmemory: 2gb
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 2560Mi }
+
+keycloak:
+  enabled: true
+  instances: 3
+  hostname: auth.sus-nexus.saude.montesclaros.mg.gov.br
+  tls: { issuerName: letsencrypt-prod }
+  adminAllowCidrs: ["10.10.0.0/16"]     # sub-rede de gestão (ver terraform network.mgmt_cidr)
+  importDevUsers: false
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits: { cpu: "4", memory: 4Gi }
+  realmOverrides:
+    displayName: SUS Nexus — Secretaria Municipal de Saúde
+    sslRequired: all
+    bruteForceProtected: true
+    permanentLockout: false
+    failureFactor: 5
+    accessTokenLifespan: 600
+    ssoSessionIdleTimeout: 900
+    ssoSessionMaxLifespan: 28800
+    # MFA obrigatório: CONFIGURE_TOTP (defaultAction=true) + WebAuthn opcional (PLANO 4.2.4)
+    requiredActions:
+      - alias: CONFIGURE_TOTP
+        name: Configure OTP
+        providerId: CONFIGURE_TOTP
+        enabled: true
+        defaultAction: true
+        priority: 10
+      - alias: webauthn-register
+        name: Webauthn Register
+        providerId: webauthn-register
+        enabled: true
+        defaultAction: false
+        priority: 20
+    otpPolicyType: totp
+    otpPolicyAlgorithm: HmacSHA256
+    otpPolicyDigits: 6
+    otpPolicyPeriod: 30
+    otpPolicyLookAheadWindow: 1
+    webAuthnPolicyRpId: auth.sus-nexus.saude.montesclaros.mg.gov.br
+    webAuthnPolicyRequireResidentKey: "No"
+    webAuthnPolicyUserVerificationRequirement: required
+    attributes:
+      frontendUrl: https://auth.sus-nexus.saude.montesclaros.mg.gov.br
+      _dev_note_mfa: ""
+
+opa:
+  enabled: true
+  replicas: 3
+  bundle:
+    resource: harbor.sus-nexus.local/sus-nexus/policies:prod
+
+networkPolicies:
+  defaultDeny: true
+  apiServerCidr: 10.10.0.0/16
+
+temporal:
+  enabled: true
+  server:
+    replicaCount: 3
+    config:
+      numHistoryShards: 2048
+  web:
+    enabled: true
+    replicaCount: 2

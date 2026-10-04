@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": "REG-F-001",
+      "tipo": "EXAME",
+      "situacao": "Em análise",
+      "prioridade": "Verde",
+      "data_solicitacao": "2026-02-01T08:00:00-03:00",
+      "procedimento": { "codigo": "0205010048", "sistema": "SIGTAP", "descricao": "ECOCARDIOGRAFIA" },
+      "paciente": { "id": "P-9", "cns": "", "cpf": "123.456.789-09" },
+      "unidade_solicitante": { "cnes": "2206997" },
+      "atualizado_em": "2026-02-01T08:05:00-03:00"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "agent": {"id": "agent_busca_ativa", "version": "1.3.0", "tools_granted": ["citizen.search_pseudonymized", "task.create", "communication.send_reminder"]},
+  "tool": "communication.send_reminder",
+  "action_class_requested": "requires_approval",
+  "tenant": "ibge_3143302",
+  "kill_switch": {"global": false, "agents": [], "tools": [], "tenants": []}
+}

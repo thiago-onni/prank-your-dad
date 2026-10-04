@@ -1,0 +1,122 @@
+# Velero — backup da configuração do cluster (recursos K8s + PVs via CSI snapshots/Kopia).
+# Dados de Postgres/Kafka/MinIO NÃO dependem do Velero (CNPG barman, MirrorMaker 2, replicação MinIO);
+# Velero cobre "configuração do cluster" (RTO ≤ 4 h, PLANO 4.2.6) e PVs secundários.
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: default
+  namespace: velero
+spec:
+  provider: aws
+  default: true
+  objectStorage:
+    bucket: backups
+    prefix: velero
+    caCert: ""                       # base64 da CA do MinIO (preenchido por Kustomize/ESO em prod)
+  config:
+    region: sa-east-1
+    s3ForcePathStyle: "true"
+    s3Url: https://minio.data.svc.cluster.local
+    checksumAlgorithm: ""
+  credential:
+    name: velero-s3-credentials
+    key: cloud
+---
+# Site DR: segunda BSL (MinIO do site secundário). Velero grava no default; a replicação de bucket
+# (minio.replication) copia para o DR. Esta BSL em modo ReadOnly permite restaurar NO site DR.
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: dr-site
+  namespace: velero
+spec:
+  provider: aws
+  accessMode: ReadOnly
+  objectStorage:
+    bucket: backups
+    prefix: velero
+  config:
+    region: sa-east-1
+    s3ForcePathStyle: "true"
+    s3Url: https://minio-dr.sus-nexus.local
+  credential:
+    name: velero-s3-credentials-dr
+    key: cloud
+---
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: default
+  namespace: velero
+spec:
+  provider: csi
+---
+# Diário completo: tudo exceto dados geridos por outros mecanismos
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-cluster-config
+  namespace: velero
+spec:
+  schedule: "30 2 * * *"
+  useOwnerReferencesInBackup: false
+  template:
+    ttl: 720h                        # 30 dias
+    storageLocation: default
+    snapshotMoveData: true           # CSI snapshot → object storage (independente de storage class)
+    includedNamespaces: ["*"]
+    excludedNamespaces: [kube-system, kube-public, kube-node-lease, velero]
+    excludedResources:
+      - events
+      - events.events.k8s.io
+      - pods
+      - replicasets.apps
+      - endpoints
+      - endpointslices.discovery.k8s.io
+      - backups.velero.io
+      - restores.velero.io
+    # PVs de Postgres/Kafka/MinIO são excluídos por label (gerenciados pelos operadores + barman/MM2/replicação)
+    labelSelector:
+      matchExpressions:
+        - key: cnpg.io/cluster
+          operator: DoesNotExist
+        - key: strimzi.io/cluster
+          operator: DoesNotExist
+        - key: v1.min.io/tenant
+          operator: DoesNotExist
+    defaultVolumesToFsBackup: false
+    hooks: {}
+---
+# Horário (a cada 4h) só de recursos críticos de configuração (sem volumes) — recuperação rápida de
+# ConfigMaps/Secrets/CRs (Keycloak realm, KafkaTopics, ApisixRoutes, Argo apps)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: 4h-critical-config
+  namespace: velero
+spec:
+  schedule: "15 */4 * * *"
+  template:
+    ttl: 168h
+    storageLocation: default
+    snapshotVolumes: false
+    includedNamespaces: [argocd, security, data, gateway, core, fhir, connectors, ai, web, workflows, observability]
+    includedResources:
+      - configmaps
+      - secrets
+      - serviceaccounts
+      - roles
+      - rolebindings
+      - networkpolicies
+      - applications.argoproj.io
+      - applicationsets.argoproj.io
+      - appprojects.argoproj.io
+      - kafkatopics.kafka.strimzi.io
+      - kafkausers.kafka.strimzi.io
+      - kafkaconnectors.kafka.strimzi.io
+      - keycloakrealmimports.k8s.keycloak.org
+      - apisixroutes.apisix.apache.org
+      - apisixtls.apisix.apache.org
+      - externalsecrets.external-secrets.io
+      - certificates.cert-manager.io
+      - prometheusrules.monitoring.coreos.com

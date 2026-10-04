@@ -1,0 +1,214 @@
+# AppProject do SUS Nexus — restringe origens, destinos e tipos de recurso.
+# Um projeto por ambiente para isolar permissões (prod exige sync manual + 2 aprovações no PR).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sus-nexus-dev
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: SUS Nexus — ambiente dev
+  sourceRepos:
+    - https://github.com/sus-nexus/sus-nexus.git
+    - https://go.temporal.io/helm-charts
+    - https://charts.jetstack.io
+    - https://charts.external-secrets.io
+    - https://kyverno.github.io/kyverno/
+    - https://cloudnative-pg.github.io/charts
+    - oci://quay.io/strimzi-helm
+    - https://operator.min.io
+    - https://charts.apache.org/apisix
+    - https://charts.apache.org
+    - https://argoproj.github.io/argo-helm
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - https://vmware-tanzu.github.io/helm-charts
+    - https://openbao.github.io/openbao-helm
+    - https://helm.goharbor.io
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  roles:
+    - name: developer
+      description: Desenvolvedores podem sincronizar apps de dev
+      policies:
+        - p, proj:sus-nexus-dev:developer, applications, get, sus-nexus-dev/*, allow
+        - p, proj:sus-nexus-dev:developer, applications, sync, sus-nexus-dev/*, allow
+      groups: [sus-nexus-developers]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sus-nexus-hml
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: SUS Nexus — homologação
+  sourceRepos:
+    - https://github.com/sus-nexus/sus-nexus.git
+    - https://go.temporal.io/helm-charts
+    - https://charts.jetstack.io
+    - https://charts.external-secrets.io
+    - https://kyverno.github.io/kyverno/
+    - https://cloudnative-pg.github.io/charts
+    - oci://quay.io/strimzi-helm
+    - https://operator.min.io
+    - https://charts.apache.org/apisix
+    - https://argoproj.github.io/argo-helm
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - https://vmware-tanzu.github.io/helm-charts
+    - https://openbao.github.io/openbao-helm
+    - https://helm.goharbor.io
+  destinations:
+    - name: hml
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  roles:
+    - name: qa
+      description: QA pode ver e sincronizar hml
+      policies:
+        - p, proj:sus-nexus-hml:qa, applications, get, sus-nexus-hml/*, allow
+        - p, proj:sus-nexus-hml:qa, applications, sync, sus-nexus-hml/*, allow
+      groups: [sus-nexus-qa, sus-nexus-sre]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sus-nexus-prod
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: SUS Nexus — produção (somente branch main; sync manual para apps)
+  sourceRepos:
+    - https://github.com/sus-nexus/sus-nexus.git
+    - https://go.temporal.io/helm-charts
+    - https://charts.jetstack.io
+    - https://charts.external-secrets.io
+    - https://kyverno.github.io/kyverno/
+    - https://cloudnative-pg.github.io/charts
+    - oci://quay.io/strimzi-helm
+    - https://operator.min.io
+    - https://charts.apache.org/apisix
+    - https://argoproj.github.io/argo-helm
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - https://vmware-tanzu.github.io/helm-charts
+    - https://openbao.github.io/openbao-helm
+    - https://helm.goharbor.io
+  destinations:
+    - name: prod
+      namespace: core
+    - name: prod
+      namespace: fhir
+    - name: prod
+      namespace: connectors
+    - name: prod
+      namespace: ai
+    - name: prod
+      namespace: web
+    - name: prod
+      namespace: data
+    - name: prod
+      namespace: security
+    - name: prod
+      namespace: workflows
+    - name: prod
+      namespace: observability
+    - name: prod
+      namespace: gateway
+    - name: prod
+      namespace: platform-operators
+    - name: prod
+      namespace: cnpg-system
+    - name: prod
+      namespace: strimzi-system
+    - name: prod
+      namespace: minio-operator
+    - name: prod
+      namespace: keycloak-operator
+    - name: prod
+      namespace: cert-manager
+    - name: prod
+      namespace: external-secrets
+    - name: prod
+      namespace: kyverno
+    - name: prod
+      namespace: argo-rollouts
+    - name: prod
+      namespace: velero
+    - name: prod
+      namespace: openbao
+    - name: prod
+      namespace: harbor
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: admissionregistration.k8s.io
+      kind: "*"
+    - group: kyverno.io
+      kind: "*"
+    - group: cert-manager.io
+      kind: ClusterIssuer
+    - group: external-secrets.io
+      kind: ClusterSecretStore
+    - group: storage.k8s.io
+      kind: StorageClass
+    - group: scheduling.k8s.io
+      kind: PriorityClass
+    - group: monitoring.coreos.com
+      kind: "*"
+    - group: apisix.apache.org
+      kind: ApisixGlobalRule
+    - group: velero.io
+      kind: "*"
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+  syncWindows:
+    # Janela de mudança em prod: terça a quinta, 20h–23h (BRT = UTC-3 → 23h–02h UTC); fora dela só manual com override
+    - kind: allow
+      schedule: "0 23 * * 2-4"
+      duration: 3h
+      applications: ["*"]
+      manualSync: true
+    - kind: deny
+      schedule: "0 0 * * 0,6"
+      duration: 24h
+      applications: ["sus-nexus-prod-*"]
+      manualSync: false
+  roles:
+    - name: sre
+      description: SRE pode sincronizar prod (após aprovação do PR)
+      policies:
+        - p, proj:sus-nexus-prod:sre, applications, get, sus-nexus-prod/*, allow
+        - p, proj:sus-nexus-prod:sre, applications, sync, sus-nexus-prod/*, allow
+        - p, proj:sus-nexus-prod:sre, applications, action/argoproj.io/Rollout/promote-full, sus-nexus-prod/*, allow
+        - p, proj:sus-nexus-prod:sre, applications, action/argoproj.io/Rollout/abort, sus-nexus-prod/*, allow
+      groups: [sus-nexus-sre]
+    - name: readonly
+      policies:
+        - p, proj:sus-nexus-prod:readonly, applications, get, sus-nexus-prod/*, allow
+      groups: [sus-nexus-developers, sus-nexus-qa, sus-nexus-auditoria]

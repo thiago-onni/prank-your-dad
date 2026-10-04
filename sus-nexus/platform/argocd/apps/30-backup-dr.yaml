@@ -1,0 +1,44 @@
+# Backup/DR (wave 70): schedules Velero, MirrorMaker 2 (somente prod → DR), ScheduledBackups extra.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sus-nexus-backup-dr
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            sus-nexus.gov.br/managed: "true"
+        values:
+          env: "{{ index .metadata.labels \"sus-nexus.gov.br/env\" }}"
+  template:
+    metadata:
+      name: "backup-dr-{{ .values.env }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "70"
+      labels:
+        sus-nexus.gov.br/layer: backup-dr
+        sus-nexus.gov.br/env: "{{ .values.env }}"
+    spec:
+      project: "sus-nexus-{{ .values.env }}"
+      source:
+        repoURL: https://github.com/sus-nexus/sus-nexus.git
+        targetRevision: main
+        path: sus-nexus/platform/backup-dr
+        directory:
+          recurse: false
+          include: "{velero-schedules.yaml,cnpg-backup.yaml{{ if eq .values.env \"prod\" }},mirrormaker2.yaml{{ end }}}"
+      destination:
+        name: "{{ .name }}"
+        namespace: velero
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

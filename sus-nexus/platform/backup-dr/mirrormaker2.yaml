@@ -1,0 +1,127 @@
+# MirrorMaker 2 (Strimzi) — replicação ativa→DR dos tópicos críticos (PLANO 4.2.6: RPO ≤ 15 min, RTO ≤ 4 h).
+# Executa NO CLUSTER DR (consome do site primário via listener externo mTLS, porta 9095). Aplicado pelo
+# Argo somente em prod (30-backup-dr.yaml) — o Application de prod aponta para o cluster DR via destino
+# dedicado quando o cluster DR estiver registrado (name: prod-dr); até lá, aplicar manualmente no DR.
+#
+# Pré-requisitos no DR: Kafka `sus-kafka` (mesmo chart umbrella com values-prod.yaml + strimzi.clusterName),
+# KafkaUser `mirrormaker2-dr` no primário (ACL Read sus.*), secret com certificado do usuário e CA do primário.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: sus-mm2-dr
+  namespace: data
+  labels:
+    app.kubernetes.io/part-of: sus-nexus
+  annotations:
+    argocd.argoproj.io/sync-wave: "70"
+spec:
+  version: 3.9.0
+  replicas: 2
+  connectCluster: dr                 # Connect roda no cluster de destino
+  clusters:
+    - alias: primary
+      bootstrapServers: kafka-external.sus-nexus.saude.montesclaros.mg.gov.br:9095
+      tls:
+        trustedCertificates:
+          - secretName: primary-cluster-ca-cert
+            certificate: ca.crt
+      authentication:
+        type: tls
+        certificateAndKey:
+          secretName: mirrormaker2-dr-primary-user
+          certificate: user.crt
+          key: user.key
+    - alias: dr
+      bootstrapServers: sus-kafka-kafka-bootstrap:9093
+      tls:
+        trustedCertificates:
+          - secretName: sus-kafka-cluster-ca-cert
+            certificate: ca.crt
+      authentication:
+        type: tls
+        certificateAndKey:
+          secretName: mirrormaker2-dr
+          certificate: user.crt
+          key: user.key
+      config:
+        config.storage.replication.factor: 3
+        offset.storage.replication.factor: 3
+        status.storage.replication.factor: 3
+        ssl.cipher.suites: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        ssl.enabled.protocols: TLSv1.3,TLSv1.2
+  mirrors:
+    - sourceCluster: primary
+      targetCluster: dr
+      sourceConnector:
+        tasksMax: 6
+        autoRestart: { enabled: true }
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          sync.topic.acls.enabled: "false"
+          sync.topic.configs.enabled: "true"
+          refresh.topics.interval.seconds: 300
+          # IdentityReplicationPolicy: mesmo nome de tópico no DR (sem prefixo "primary.") para failover transparente
+          replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+          producer.override.acks: all
+          producer.override.compression.type: lz4
+      checkpointConnector:
+        tasksMax: 2
+        autoRestart: { enabled: true }
+        config:
+          checkpoints.topic.replication.factor: 3
+          sync.group.offsets.enabled: "true"
+          sync.group.offsets.interval.seconds: 60
+          emit.checkpoints.interval.seconds: 60
+          replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+      heartbeatConnector:
+        config:
+          heartbeats.topic.replication.factor: 3
+      # Tópicos críticos (domínio, audit e ingest). Tópicos de retry/DLQ e internos não são replicados.
+      topicsPattern: "sus\\.(identity|aps|regulation|schedule|exam|hospital|careplan|caregap|task|production|communication|consent|integration|audit)\\..*\\.v[0-9]+$|sus\\.(careplan|caregap|task|communication|consent|audit)\\.v[0-9]+$|sus\\.ingest\\..*\\.v[0-9]+$"
+      topicsExcludePattern: ".*\\.retry\\.[0-9]+$|.*\\.internal$|__.*"
+      groupsPattern: "core-.*|fhir-.*|ai-.*|connector-.*"
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 2Gi }
+  metricsConfig:
+    type: jmxPrometheusExporter
+    valueFrom:
+      configMapKeyRef:
+        name: sus-kafka-metrics
+        key: kafka-metrics-config.yml
+  template:
+    pod:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+    connectContainer:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: { drop: [ALL] }
+---
+# Alerta de lag de replicação para o DR (RPO ≤ 15 min)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sus-nexus-dr-replication
+  namespace: data
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: sus.dr
+      rules:
+        - alert: SusDrKafkaReplicationLag
+          expr: max(kafka_connect_mirror_mirrorsourceconnector_replication_latency_ms_max) > 900000
+          for: 5m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "MirrorMaker 2: latência de replicação para o DR > 15 min (RPO violado)"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/platform/backup-dr/RUNBOOK-DR.md
+        - alert: SusDrMirrorMakerDown
+          expr: absent(up{job=~".*sus-mm2-dr.*"} == 1)
+          for: 10m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "MirrorMaker 2 (DR) indisponível há 10 min"

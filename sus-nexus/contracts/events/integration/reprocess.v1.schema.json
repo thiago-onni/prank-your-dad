@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/integration/reprocess/1.0.0",
+  "title": "sus.integration.reprocess.* — data (tópico sus.integration.command.v1)",
+  "description": "Comando do core para o conector reprocessar uma mensagem do ledger (KAF-012: efeitos externos suprimidos, idempotente).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "message_id", "connector_id", "source_system", "requested_by", "suppress_external_effects"],
+  "properties": {
+    "action": { "type": "string", "enum": ["requested"] },
+    "message_id": { "type": "string", "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "connector_id": { "type": "string" },
+    "source_system": { "type": "string" },
+    "source_record_id": { "type": "string" },
+    "raw_ref": { "type": "string", "description": "Referência à raw zone; nunca o payload" },
+    "requested_by": { "type": "string" },
+    "reason": { "type": "string", "maxLength": 500 },
+    "suppress_external_effects": { "type": "boolean", "const": true }
+  }
+}

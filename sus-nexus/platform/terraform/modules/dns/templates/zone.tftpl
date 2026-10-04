@@ -1,0 +1,19 @@
+; Zona ${zone_name} — gerada pelo Terraform (site ativo: ${active_site})
+$ORIGIN ${zone_name}.
+$TTL ${ttl}
+@   IN  SOA ns1.${zone_name}. sre.${zone_name}. (
+        ${serial} ; serial
+        3600       ; refresh
+        900        ; retry
+        1209600    ; expire
+        ${ttl}     ; minimum
+)
+@   IN  NS  ns1.${zone_name}.
+@   IN  NS  ns2.${zone_name}.
+@   IN  CAA 0 issue "letsencrypt.org"
+@   IN  CAA 0 issuewild "letsencrypt.org"
+%{ for name, r in records ~}
+%{ for v in r.values ~}
+${name}  ${r.ttl}  IN  ${r.type}  ${r.type == "CNAME" ? "${v}." : v}
+%{ endfor ~}
+%{ endfor ~}

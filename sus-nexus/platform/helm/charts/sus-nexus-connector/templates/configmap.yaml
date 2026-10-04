@@ -1,0 +1,13 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sus.configMapName" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+data:
+  {{- range $k, $v := .Values.config }}
+  {{ $k }}: {{ tpl (toString $v) $ | quote }}
+  {{- end }}
+{{- end }}

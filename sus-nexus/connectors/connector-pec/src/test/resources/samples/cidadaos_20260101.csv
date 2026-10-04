@@ -1,0 +1,4 @@
+co_seq_cidadao;no_cidadao;no_social_cidadao;nu_cpf;nu_cns;dt_nascimento;no_mae;no_pai;no_sexo;co_raca_cor;ds_logradouro;nu_numero;ds_complemento;no_bairro;co_ibge;ds_cep;nu_telefone_celular;nu_cnes;nu_ine;nu_micro_area;st_faleceu;dt_obito;dt_atualizado
+1001;José da Silva;;123.456.789-09;898001234567890;1980-03-05;Maria da Silva;;M;3;Rua das Flores;120;;São Judas;3143302;39400000;(38) 99999-0000;2206997;0001234567;03;0;;2026-01-01 10:00:00
+1002;Ana Souza;;;700500000000001;2001-12-24;Clara Souza;;F;1;Av. Brasil;10;Ap 2;Centro;3143302;39400100;;2206997;;01;0;;2026-01-01 11:00:00
+1003;Sem Nascimento;;;;;;;F;;;;;;;;;;;;0;;2026-01-01 12:00:00

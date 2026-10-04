@@ -1,0 +1,14 @@
+{
+  "resourceType": "ServiceRequest",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusServiceRequest"]},
+  "status": "active",
+  "intent": "order",
+  "priority": "routine",
+  "category": [{"coding": [{"system": "http://sus-nexus.gov.br/fhir/CodeSystem/regulation-kind", "code": "consultation"}]}],
+  "code": {"coding": [{"system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS", "code": "0301010072"}], "text": "Consulta especializada"},
+  "subject": {"reference": "Patient/PAT1"},
+  "authoredOn": "2026-09-01T08:00:00-03:00",
+  "requester": {"reference": "Organization/ORG1"},
+  "performer": [{"reference": "Organization/ORG2"}],
+  "reasonCode": [{"text": "Dor torácica atípica"}]
+}

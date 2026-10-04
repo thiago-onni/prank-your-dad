@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "REG-A-003",
+      "tipo": "EXAME",
+      "situacao": "AUTORIZADA",
+      "prioridade": "AZUL",
+      "data_solicitacao": "2026-01-07T11:00:00-03:00",
+      "procedimento": { "codigo": "0205010048", "sistema": "SIGTAP" },
+      "unidade_solicitante": { "cnes": "2206997" },
+      "unidade_executante": { "cnes": "2131234" },
+      "paciente": { "id": "P-3", "cpf": "123.456.789-09" },
+      "regulador": { "id": "REG-USER-9" },
+      "atualizado_em": "2026-01-12T10:00:00-03:00"
+    }
+  ],
+  "page": 2,
+  "total": 3
+}

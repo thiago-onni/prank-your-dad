@@ -1,0 +1,11 @@
+{
+  "resourceType": "CarePlan",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusCarePlan"]},
+  "status": "active",
+  "intent": "plan",
+  "category": [{"coding": [{"system": "http://sus-nexus.gov.br/fhir/CodeSystem/care-line", "code": "hipertensao"}]}],
+  "title": "Linha de cuidado HAS",
+  "description": "Acompanhamento trimestral com aferição de PA",
+  "subject": {"reference": "Patient/PAT1"},
+  "period": {"start": "2026-01-01", "end": "2026-12-31"}
+}

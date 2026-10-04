@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/exam/order/1.0.0",
+  "title": "sus.exam.order.* — data",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "exam_order_id", "status", "exam_code", "code_system", "requested_at"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "status_changed"] },
+    "exam_order_id": { "type": "string", "pattern": "^exo_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "status": { "type": "string", "enum": ["requested", "authorized", "scheduled", "collected", "performed", "reported", "cancelled", "not_performed"] },
+    "previous_status": { "type": "string" },
+    "exam_code": { "type": "string" },
+    "code_system": { "type": "string", "enum": ["SIGTAP", "LOINC", "LOCAL"] },
+    "category": { "type": "string", "enum": ["laboratory", "imaging", "other"] },
+    "priority": { "type": "string", "enum": ["routine", "priority", "urgent"] },
+    "requested_at": { "type": "string", "format": "date-time" },
+    "requesting_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "performer_cnes": { "type": "string", "pattern": "^[0-9]{7}$" },
+    "regulation_request_id": { "type": "string" },
+    "appointment_id": { "type": "string" },
+    "scheduled_at": { "type": "string", "format": "date-time" },
+    "care_line": { "type": "string" },
+    "reason": { "type": "string", "maxLength": 500 }
+  }
+}

@@ -1,0 +1,286 @@
+# Baseline de segurança de pods (PLANO 4.2.2): sem privileged, runAsNonRoot, recursos obrigatórios,
+# sem hostPath/hostNetwork, capabilities dropadas, seccomp RuntimeDefault, readOnlyRootFilesystem (Audit).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged
+  annotations:
+    policies.kyverno.io/severity: critical
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: no-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, longhorn-system, velero]
+      validate:
+        message: Containers privilegiados são proibidos.
+        pattern:
+          spec:
+            =(ephemeralContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+    - name: no-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, longhorn-system, velero]
+      validate:
+        message: allowPrivilegeEscalation deve ser false.
+        pattern:
+          spec:
+            =(initContainers):
+              - securityContext:
+                  allowPrivilegeEscalation: "false"
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: "false"
+    - name: no-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, observability, longhorn-system]
+      validate:
+        message: hostNetwork, hostPID e hostIPC são proibidos.
+        pattern:
+          spec:
+            =(hostNetwork): "false"
+            =(hostPID): "false"
+            =(hostIPC): "false"
+    - name: no-host-path
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, observability, longhorn-system, velero, minio-operator]
+      validate:
+        message: Volumes hostPath são proibidos.
+        pattern:
+          spec:
+            =(volumes):
+              - X(hostPath): "null"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-nonroot
+  annotations:
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, longhorn-system, velero]
+      validate:
+        message: runAsNonRoot deve ser true (pod ou todos os containers).
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: "true"
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: "true"
+    - name: drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, longhorn-system, velero, gateway]
+      validate:
+        message: Containers devem dropar ALL capabilities.
+        pattern:
+          spec:
+            =(initContainers):
+              - securityContext:
+                  capabilities:
+                    drop: [ALL]
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop: [ALL]
+    - name: seccomp-runtime-default
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium, longhorn-system]
+      validate:
+        message: seccompProfile deve ser RuntimeDefault ou Localhost.
+        anyPattern:
+          - spec:
+              securityContext:
+                seccompProfile:
+                  type: "RuntimeDefault | Localhost"
+          - spec:
+              containers:
+                - securityContext:
+                    seccompProfile:
+                      type: "RuntimeDefault | Localhost"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resources
+  annotations:
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, cilium]
+      validate:
+        message: Todo container precisa de resources.requests (cpu, memory) e resources.limits.memory.
+        pattern:
+          spec:
+            =(initContainers):
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-readonly-rootfs
+  annotations:
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Audit    # Enforce nos namespaces de aplicação após validação por componente
+  validationFailureActionOverrides:
+    - action: Enforce
+      namespaces: [core, fhir, connectors, ai, web]
+  background: true
+  rules:
+    - name: readonly-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: readOnlyRootFilesystem deve ser true; use emptyDir para diretórios graváveis.
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: "true"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels-and-probes
+  annotations:
+    policies.kyverno.io/severity: low
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: required-labels
+      match:
+        any:
+          - resources:
+              kinds: [Deployment, StatefulSet, Rollout]
+              namespaces: [core, fhir, connectors, ai, web]
+      validate:
+        message: Workloads precisam de app.kubernetes.io/name, app.kubernetes.io/part-of e app.kubernetes.io/version.
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+              app.kubernetes.io/part-of: sus-nexus
+              app.kubernetes.io/version: "?*"
+    - name: probes
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [core, fhir, connectors, ai, web]
+      validate:
+        message: Containers de aplicação precisam de livenessProbe e readinessProbe.
+        pattern:
+          spec:
+            containers:
+              - livenessProbe:
+                  periodSeconds: ">0"
+                readinessProbe:
+                  periodSeconds: ">0"
+---
+# Gera NetworkPolicy default-deny em todo namespace novo com label sus-nexus.gov.br/default-deny=true
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-default-deny
+spec:
+  rules:
+    - name: default-deny-netpol
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+              selector:
+                matchLabels:
+                  sus-nexus.gov.br/default-deny: "true"
+      generate:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: default-deny-all
+        namespace: "{{ request.object.metadata.name }}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes: [Ingress, Egress]

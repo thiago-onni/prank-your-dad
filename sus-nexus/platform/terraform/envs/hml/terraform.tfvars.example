@@ -1,0 +1,4 @@
+# Copie para terraform.tfvars (NÃO versionar). Segredos: export TF_VAR_rke2_cluster_token=$(bao kv get -field=token secret/hml/platform/rke2)
+ssh_authorized_keys = ["ssh-ed25519 AAAA... sre@sus-nexus"]
+minio_endpoint      = "minio.hml.sus-nexus.local"
+# minio_access_key / minio_secret_key / rke2_cluster_token via TF_VAR_*

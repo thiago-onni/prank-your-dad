@@ -1,0 +1,60 @@
+# Values do chart vmware-tanzu/velero (Argo 00-operators.yaml). BSL/VSL/Schedules em velero-schedules.yaml.
+fullnameOverride: velero
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.11.0
+    volumeMounts: [{ mountPath: /target, name: plugins }]
+configuration:
+  backupStorageLocation: []        # definidas em velero-schedules.yaml
+  volumeSnapshotLocation: []
+  features: EnableCSI
+  uploaderType: kopia
+  defaultSnapshotMoveData: true
+  garbageCollectionFrequency: 1h
+  logLevel: info
+  namespace: velero
+credentials:
+  useSecret: true
+  existingSecret: velero-s3-credentials   # ExternalSecret → OpenBao secret/<env>/platform/backup-s3 (formato "cloud")
+deployNodeAgent: true
+nodeAgent:
+  podSecurityContext:
+    runAsUser: 0                    # node-agent precisa acessar os PVs; único componente root (exceção Kyverno)
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: "1", memory: 1Gi }
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels: { release: kube-prometheus-stack }
+  prometheusRule:
+    enabled: true
+    additionalLabels: { release: kube-prometheus-stack }
+    spec:
+      - alert: VeleroBackupPartialFailures
+        expr: velero_backup_partial_failure_total{schedule!=""} > 0
+        for: 15m
+        labels: { severity: warning, team: platform }
+        annotations:
+          summary: "Backup Velero {{ $labels.schedule }} com falhas parciais"
+          runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/platform/backup-dr/RUNBOOK-DR.md
+      - alert: VeleroBackupFailures
+        expr: velero_backup_failure_total{schedule!=""} > 0
+        for: 15m
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "Backup Velero {{ $labels.schedule }} FALHOU"
+          runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/platform/backup-dr/RUNBOOK-DR.md
+      - alert: VeleroNoRecentBackup
+        expr: time() - velero_backup_last_successful_timestamp{schedule="daily-cluster-config"} > 129600
+        for: 30m
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "Nenhum backup Velero bem-sucedido há > 36 h"
+schedules: {}                       # em velero-schedules.yaml
+upgradeCRDs: true
+cleanUpCRDs: false

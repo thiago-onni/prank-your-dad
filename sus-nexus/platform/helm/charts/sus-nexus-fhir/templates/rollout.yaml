@@ -1,0 +1,98 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.rollout.enabled }}
+# Argo Rollouts — deploy progressivo (canário) para core e fhir-gateway (PLANO 4.2.5).
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+  strategy:
+    canary:
+      canaryService: {{ include "sus.fullname" . }}-canary
+      stableService: {{ include "sus.fullname" . }}
+      maxSurge: {{ .Values.rollout.canary.maxSurge }}
+      maxUnavailable: {{ .Values.rollout.canary.maxUnavailable }}
+      {{- if .Values.rollout.canary.analysis.enabled }}
+      analysis:
+        templates:
+          - templateName: {{ include "sus.fullname" . }}-success-rate
+        startingStep: {{ .Values.rollout.canary.analysis.startingStep }}
+        args:
+          - name: service
+            value: {{ include "sus.fullname" . }}
+          - name: namespace
+            value: {{ include "sus.namespace" . }}
+      {{- end }}
+      steps:
+        {{- toYaml .Values.rollout.canary.steps | nindent 8 }}
+      {{- with .Values.rollout.canary.trafficRouting }}
+      trafficRouting:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  template:
+    {{- include "sus.podTemplate" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sus.fullname" . }}-canary
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+    sus-nexus.gov.br/traffic: canary
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "sus.selectorLabels" . | nindent 4 }}
+{{- if .Values.rollout.canary.analysis.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "sus.fullname" . }}-success-rate
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: service
+    - name: namespace
+  metrics:
+    - name: success-rate
+      interval: {{ .Values.rollout.canary.analysis.interval }}
+      successCondition: result[0] >= {{ .Values.rollout.canary.analysis.minSuccessRate }}
+      failureLimit: {{ .Values.rollout.canary.analysis.failureLimit }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollout.canary.analysis.prometheusAddress }}
+          query: |
+            sum(rate(http_server_requests_seconds_count{service="{{ "{{args.service}}" }}",namespace="{{ "{{args.namespace}}" }}",status!~"5.."}[2m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{service="{{ "{{args.service}}" }}",namespace="{{ "{{args.namespace}}" }}"}[2m])), 1e-9)
+    - name: latency-p99
+      interval: {{ .Values.rollout.canary.analysis.interval }}
+      successCondition: result[0] <= {{ .Values.rollout.canary.analysis.maxP99Seconds }}
+      failureLimit: {{ .Values.rollout.canary.analysis.failureLimit }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollout.canary.analysis.prometheusAddress }}
+          query: |
+            histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{service="{{ "{{args.service}}" }}",namespace="{{ "{{args.namespace}}" }}"}[2m])))
+{{- end }}
+{{- end }}
+{{- end }}

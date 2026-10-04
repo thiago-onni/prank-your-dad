@@ -1,0 +1,1849 @@
+{
+  "id": "sus-nexus",
+  "realm": "sus-nexus",
+  "displayName": "SUS Nexus (dev)",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "maxFailureWaitSeconds": 900,
+  "defaultLocale": "pt-BR",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "pt-BR",
+    "en"
+  ],
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "passwordPolicy": "length(12) and notUsername(undefined) and notEmail(undefined)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "webAuthnPolicyRpEntityName": "SUS Nexus",
+  "browserFlow": "browser",
+  "attributes": {
+    "_dev_note_mfa": "MFA desabilitado SOMENTE em dev (ver comentário em platform/compose/keycloak/README.md). Obrigatório em hml/prod.",
+    "frontendUrl": "http://localhost:8180",
+    "cibaBackchannelTokenDeliveryMode": "poll"
+  },
+  "roles": {
+    "realm": [
+      {
+        "id": "ff241cb7-9e0c-439a-bf55-77a555f96ae2",
+        "name": "admin_municipal",
+        "description": "Administrador municipal (gestão de usuários, parâmetros, break-glass)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "2e83c2c8-268f-48eb-af1f-ecc631b92070",
+        "name": "gestor",
+        "description": "Gestor: somente agregados e painéis",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "d313db5e-2fc2-4e00-81d6-63bd570b19b6",
+        "name": "profissional_aps",
+        "description": "Profissional da APS: cidadãos vinculados à sua equipe",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "0668c7fa-92aa-4f30-86cb-5fe33fbf73ad",
+        "name": "acs",
+        "description": "Agente comunitário de saúde: dados mínimos da microárea",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "4e7ee469-4ca9-401a-abc3-d9457d60629c",
+        "name": "regulador",
+        "description": "Regulador: filas e solicitações sob sua responsabilidade",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "ee4e966e-48e5-47be-9c6b-c3794102f388",
+        "name": "agendador",
+        "description": "Agendador: identificação, contato, agenda",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "63f86e1f-7448-446e-9d51-221dc5668bda",
+        "name": "profissional_hospitalar",
+        "description": "Profissional hospitalar: episódios e alta",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "791cdcc6-5520-4270-a9a5-22721153e5b0",
+        "name": "auditor",
+        "description": "Auditor: trilhas de acesso e auditoria (somente leitura)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "21c318e5-cbac-4ac0-8423-6af9a0791453",
+        "name": "dpo",
+        "description": "Encarregado de dados (LGPD)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "15264580-7c67-4519-8e5c-ad0e7cfcc969",
+        "name": "operador_integracao",
+        "description": "Operador de integração: conectores, DLQ, reconciliação",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "93a4658b-6d36-41ae-94e2-d37ee3dc4e63",
+        "name": "cadastro_mestre",
+        "description": "Cadastro mestre: MPI, merge/unmerge",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      },
+      {
+        "id": "bcdc361e-0f70-4eba-97f1-9d4acfe4bc7d",
+        "name": "agente_ia",
+        "description": "Agente de IA (service account do ai-service)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "sus-nexus",
+        "attributes": {}
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "e0e7e7e6-0fb3-4896-88c5-f66f5c3ba1ab",
+      "name": "ibge_3143302",
+      "path": "/ibge_3143302",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "municipality_name": [
+          "Montes Claros/MG"
+        ]
+      },
+      "realmRoles": [],
+      "subGroups": []
+    }
+  ],
+  "defaultRole": {
+    "id": "5a370e38-bf6c-4a40-aaf8-43401ebb0baf",
+    "name": "default-roles-sus-nexus",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false,
+    "containerId": "sus-nexus"
+  },
+  "clientScopes": [
+    {
+      "id": "7e8cdfd8-0fff-47ea-bd94-3d6be1df630c",
+      "name": "municipality",
+      "description": "Claims de tenancy: municipality_id, cnes, ine, microareas",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "id": "05357daa-0fe1-4be2-a1aa-d579e668bc58",
+          "name": "municipality_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "municipality_id",
+            "claim.name": "municipality_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "id": "fffbdaaf-6401-446b-b403-4e8eb9b05ae5",
+          "name": "cnes",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "cnes",
+            "claim.name": "cnes",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "id": "d04cc5c6-3d7f-45f4-8861-fb0faf18c162",
+          "name": "teams",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "ine",
+            "claim.name": "teams",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "id": "cf0329c9-040f-464f-a3d6-08d2cab4ed44",
+          "name": "microareas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "microarea",
+            "claim.name": "microareas",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "id": "3a6f582c-408b-4c4f-af88-683ab78f5466",
+          "name": "cpf_hash",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "cpf_hash",
+            "claim.name": "cpf_hash",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "a3930662-6627-4e5a-a91a-dd4b6f38be2b",
+      "name": "roles",
+      "description": "Papéis do realm",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "id": "023ddfde-2211-4cd9-b8ef-c1761f743539",
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "01e4604c-9111-4d48-b31b-81c4db122949",
+      "name": "patient/*.read",
+      "description": "SMART: leitura de recursos do paciente em contexto",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "cc587cd0-388f-4b2f-9786-bce42dfc3d2f",
+      "name": "patient/*.write",
+      "description": "SMART: escrita de recursos do paciente em contexto",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "75b67b0f-aa77-409a-a0af-a6e800c1a649",
+      "name": "user/*.read",
+      "description": "SMART: leitura conforme permissões do usuário",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "8f5b487b-fadb-422d-af3b-bde425928b76",
+      "name": "user/*.write",
+      "description": "SMART: escrita conforme permissões do usuário",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "c4e647aa-dca7-4822-9c73-1420b1d58cdc",
+      "name": "system/*.read",
+      "description": "SMART backend services: leitura",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "75c868c5-ce8a-4655-beb5-280d0ea6d3b0",
+      "name": "system/*.write",
+      "description": "SMART backend services: escrita",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "cb4e25e2-995e-4b9f-a64a-edd4880947d9",
+      "name": "launch/patient",
+      "description": "SMART: contexto de paciente no launch",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "b39e4211-36ea-483c-8fc5-0c2c2a9af9f0",
+      "name": "fhirUser",
+      "description": "SMART: identidade FHIR do usuário",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    },
+    {
+      "id": "18a6ab3e-fc29-4c5c-826c-4bf50bc8074c",
+      "name": "online_access",
+      "description": "SMART: refresh token enquanto sessão ativa",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": []
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "openid",
+    "profile",
+    "email",
+    "roles",
+    "municipality"
+  ],
+  "defaultOptionalClientScopes": [
+    "offline_access",
+    "fhirUser",
+    "launch/patient",
+    "patient/*.read",
+    "user/*.read"
+  ],
+  "clients": [
+    {
+      "id": "fbc08317-0afb-4b15-a4bc-cc31050d4473",
+      "clientId": "web-shell",
+      "name": "Web Shell (BFF Next.js)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://*.sus-nexus.local/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "login_theme": "keycloak",
+        "access.token.lifespan": "900"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "municipality"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "launch/patient",
+        "fhirUser"
+      ],
+      "protocolMappers": [
+        {
+          "id": "280afec9-ca73-486e-a80e-6aa0788805d8",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "web-shell-dev-secret"
+    },
+    {
+      "id": "7a90d881-8601-4e1c-b8f8-6de068328f77",
+      "clientId": "core-municipal",
+      "name": "Core Municipal (resource server)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.read",
+        "system/*.write"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "7ecd57c7-7b26-4eba-80a5-d195cc5b4740",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "core-municipal-dev-secret"
+    },
+    {
+      "id": "cdf0d42d-27c0-42d7-88e4-717ff222d4c9",
+      "clientId": "fhir-gateway",
+      "name": "FHIR Gateway R4 (resource server)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [
+        "patient/*.read",
+        "patient/*.write",
+        "user/*.read",
+        "user/*.write",
+        "system/*.write",
+        "launch/patient",
+        "fhirUser"
+      ],
+      "protocolMappers": [
+        {
+          "id": "67d2eea4-656a-4d4c-8021-ce5a74f32d9f",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "fhir-gateway-dev-secret"
+    },
+    {
+      "id": "d7b50238-2fa4-4995-82fa-4fe28148e454",
+      "clientId": "ai-service",
+      "name": "AI Service (agentes) — client credentials + token exchange",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "standard.token.exchange.enabled": "true",
+        "standard.token.exchange.enableRefreshRequestedTokenType": "NO"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "47bae59b-373d-4b3b-9d50-c21a0b3e4685",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "ai-service-dev-secret"
+    },
+    {
+      "id": "f357ad13-b8b7-4977-99a1-7a55c2457719",
+      "clientId": "fhir-partner-example",
+      "name": "Parceiro externo FHIR (exemplo: client credentials, SMART backend)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "e4bd552f-8e97-4eab-a866-d63f64434460",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "fhir-partner-dev-secret"
+    },
+    {
+      "id": "761816a8-b2aa-40cb-95e4-efcbcab8bb18",
+      "clientId": "connector-pec",
+      "name": "Conector PEC (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "32405d14-6310-447e-acc6-c445656bbf76",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-pec-dev-secret"
+    },
+    {
+      "id": "c8102216-943e-4d21-949e-667d39af6a90",
+      "clientId": "connector-agenda",
+      "name": "Conector AGENDA (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "ca1fe004-73e8-4e9c-af1d-c26e7717ebdc",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-agenda-dev-secret"
+    },
+    {
+      "id": "1e589029-13ef-4541-9810-3d3e1c63653b",
+      "clientId": "connector-sisreg",
+      "name": "Conector SISREG (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "e45f4940-06a3-4169-b68d-10112cf906c4",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-sisreg-dev-secret"
+    },
+    {
+      "id": "60cf2a37-17d5-425f-bd76-400b485463dc",
+      "clientId": "connector-cnes",
+      "name": "Conector CNES (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "aed7b0e1-7701-44eb-b54f-d59bb956aae8",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-cnes-dev-secret"
+    },
+    {
+      "id": "9f3f7713-b76b-4fce-9548-66f87c34145e",
+      "clientId": "connector-cadsus",
+      "name": "Conector CADSUS (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "fd84e245-900e-4a93-94cc-faf467bc5de5",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-cadsus-dev-secret"
+    },
+    {
+      "id": "f8e51b99-9abb-47fb-ac48-c065177eb4b3",
+      "clientId": "connector-his",
+      "name": "Conector HIS (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "0645aba0-42f4-4426-a14b-068063f8ed04",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-his-dev-secret"
+    },
+    {
+      "id": "d465e77b-4461-47cb-86a8-17591076fc3a",
+      "clientId": "connector-lis",
+      "name": "Conector LIS (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "cb5eb8ac-093d-4bbb-91a6-d2d5c13e9f08",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-lis-dev-secret"
+    },
+    {
+      "id": "c538d933-a9af-4fbd-85a9-ddc6d7570fad",
+      "clientId": "connector-files",
+      "name": "Conector FILES (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "d909b950-7758-4976-b97e-ef3694bd5123",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-files-dev-secret"
+    },
+    {
+      "id": "b692b560-8249-5e9a-ac51-115b90d5ed0e",
+      "clientId": "connector-ris",
+      "name": "Conector RIS (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "0abb835b-afa9-5f14-9f17-afa8cb68b016",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-ris-dev-secret"
+    },
+    {
+      "id": "57ca4a6b-142f-5ec0-a77d-39da71579a4b",
+      "clientId": "connector-esus-regulacao",
+      "name": "Conector e-SUS Regulação (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "ec533512-d076-5198-b42a-567cec43cfe2",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-esus-regulacao-dev-secret"
+    },
+    {
+      "id": "5f186bf1-8457-52c7-aeaf-7e282b42ced3",
+      "clientId": "connector-sia",
+      "name": "Conector SIA/SIH — produção e retornos (client credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "post.logout.redirect.uris": "+",
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "roles",
+        "municipality",
+        "system/*.write",
+        "system/*.read"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "id": "67dc3c00-3cca-5dfd-ac84-587c4356bf17",
+          "name": "audience-core",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "core-municipal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "secret": "connector-sia-dev-secret"
+    }
+  ],
+  "users": [
+    {
+      "id": "60e64a0d-de0b-4eea-8778-8683f381f97a",
+      "username": "admin.municipal",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Municipal",
+      "email": "admin.municipal@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin_municipal",
+        "gestor"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "c87c2a44-f342-4b20-aedf-afef0feb8fe7",
+      "username": "gestor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Gestora",
+      "lastName": "Municipal",
+      "email": "gestor@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "gestor"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "0b506145-e440-421c-8260-aebf1d72b3e4",
+      "username": "prof.aps",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Profissional",
+      "lastName": "APS",
+      "email": "prof.aps@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "profissional_aps"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "3494c36b-36b2-4a46-813d-9238725d86c9",
+      "username": "acs",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Agente",
+      "lastName": "Comunitario",
+      "email": "acs@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ],
+        "microarea": [
+          "01",
+          "02"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "acs"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "2393041e-72a4-4672-a0ba-5e14b41fccdb",
+      "username": "regulador",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Regulador",
+      "lastName": "Central",
+      "email": "regulador@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "regulador"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "62fb194e-743f-453c-b00d-da04fe27684a",
+      "username": "agendador",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Agendador",
+      "lastName": "Rede",
+      "email": "agendador@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agendador"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "b5be1274-d81a-4c8d-a52a-574aee305b59",
+      "username": "prof.hospitalar",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Profissional",
+      "lastName": "Hospitalar",
+      "email": "prof.hospitalar@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2214733"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "profissional_hospitalar"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "866300b9-29bb-440c-b4ba-0207bfe8a610",
+      "username": "auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Auditor",
+      "lastName": "Interno",
+      "email": "auditor@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "auditor"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "8226b9d7-622f-4053-95e3-2bab033af034",
+      "username": "dpo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Encarregado",
+      "lastName": "Dados",
+      "email": "dpo@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dpo"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "791f88cd-baea-4e4b-979a-2922ba1c660d",
+      "username": "operador.integracao",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Operador",
+      "lastName": "Integracao",
+      "email": "operador.integracao@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "0d047155-10db-42e2-b65b-f38e566a5e7c",
+      "username": "cadastro.mestre",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Cadastro",
+      "lastName": "Mestre",
+      "email": "cadastro.mestre@sus-nexus.local",
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ],
+        "cnes": [
+          "2110725"
+        ],
+        "ine": [
+          "0001234567"
+        ],
+        "locale": [
+          "pt-BR"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sus-nexus-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "cadastro_mestre"
+      ],
+      "requiredActions": [],
+      "groups": [
+        "/ibge_3143302"
+      ]
+    },
+    {
+      "id": "66aed16f-f3d8-41dc-b30e-056510bf23f6",
+      "username": "service-account-ai-service",
+      "enabled": true,
+      "serviceAccountClientId": "ai-service",
+      "realmRoles": [
+        "agente_ia"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "77df3bfe-1286-4a61-af02-7575ebfeca2e",
+      "username": "service-account-core-municipal",
+      "enabled": true,
+      "serviceAccountClientId": "core-municipal",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "4a70b11a-cc1c-43e7-abae-fe6fc3922c38",
+      "username": "service-account-fhir-gateway",
+      "enabled": true,
+      "serviceAccountClientId": "fhir-gateway",
+      "realmRoles": [],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "c5c54b63-534e-4d22-b032-fa5a9254604a",
+      "username": "service-account-connector-pec",
+      "enabled": true,
+      "serviceAccountClientId": "connector-pec",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "37f79b2c-91ed-4c75-99fd-6926494697fc",
+      "username": "service-account-connector-agenda",
+      "enabled": true,
+      "serviceAccountClientId": "connector-agenda",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "b245fabd-eb01-4029-8c7f-b32d7de31666",
+      "username": "service-account-connector-sisreg",
+      "enabled": true,
+      "serviceAccountClientId": "connector-sisreg",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "0d5e9e88-6dbb-42a9-bd85-28bc78612097",
+      "username": "service-account-connector-cnes",
+      "enabled": true,
+      "serviceAccountClientId": "connector-cnes",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "6714a6bc-419f-4623-aebb-453500c2034d",
+      "username": "service-account-connector-cadsus",
+      "enabled": true,
+      "serviceAccountClientId": "connector-cadsus",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "78e7f5c9-4526-422a-a187-a2c8d3ae3047",
+      "username": "service-account-connector-his",
+      "enabled": true,
+      "serviceAccountClientId": "connector-his",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "1d40641e-e5b7-4d86-850f-04f98e128fd6",
+      "username": "service-account-connector-lis",
+      "enabled": true,
+      "serviceAccountClientId": "connector-lis",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "98a141d2-91de-4c46-9663-f8ffaaf0d7aa",
+      "username": "service-account-connector-files",
+      "enabled": true,
+      "serviceAccountClientId": "connector-files",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "ba6a3d85-6e8a-551f-8007-cc8d4c4b8d0b",
+      "username": "service-account-connector-ris",
+      "enabled": true,
+      "serviceAccountClientId": "connector-ris",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "df41ea84-ab69-5a85-bf63-61639cf30401",
+      "username": "service-account-connector-esus-regulacao",
+      "enabled": true,
+      "serviceAccountClientId": "connector-esus-regulacao",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    },
+    {
+      "id": "53034376-8c42-59af-8f72-66d1c36e726f",
+      "username": "service-account-connector-sia",
+      "enabled": true,
+      "serviceAccountClientId": "connector-sia",
+      "realmRoles": [
+        "operador_integracao"
+      ],
+      "attributes": {
+        "municipality_id": [
+          "ibge_3143302"
+        ]
+      }
+    }
+  ],
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "CODE_TO_TOKEN",
+    "CLIENT_LOGIN",
+    "CLIENT_LOGIN_ERROR",
+    "TOKEN_EXCHANGE",
+    "TOKEN_EXCHANGE_ERROR",
+    "UPDATE_PASSWORD",
+    "REMOVE_TOTP",
+    "UPDATE_TOTP"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "smtpServer": {},
+  "keycloakVersion": "26.2.0"
+}

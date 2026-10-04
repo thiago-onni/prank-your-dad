@@ -1,0 +1,149 @@
+# SLOs da seção 13.3 do plano com alertas multi-window multi-burn-rate (Google SRE Workbook).
+# Error budget = 1 - SLO. Burn rate X = consome o orçamento de 30 dias em 30/X dias.
+#   page:   14.4x (1h/5m)  ou 6x (6h/30m)
+#   ticket: 3x (1d/2h)     ou 1x (3d/6h)
+# Fase atual é parametrizada pela label `slo` (F1 → 0.995 MPI; ajuste nas regras de gravação).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sus-nexus-slo-burn-rate
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+    sus-nexus.gov.br/rules: slo
+spec:
+  groups:
+    # ------------------------------------------------------------------------------------------------
+    # SLO 1 — API de cidadão/MPI: disponibilidade (não-5xx) — F1 99,5% · F3 99,7% · F4 99,9%
+    # ------------------------------------------------------------------------------------------------
+    - name: sus.slo.mpi.recording
+      interval: 30s
+      rules:
+        - record: sus:slo_mpi:target
+          expr: "0.995"
+          labels: { slo: mpi-availability, phase: F1 }
+        - record: sus:slo_mpi:errors_total:rate5m
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[5m]))
+        - record: sus:slo_mpi:requests_total:rate5m
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[5m]))
+        - record: sus:slo_mpi:error_ratio:rate5m
+          expr: sus:slo_mpi:errors_total:rate5m / clamp_min(sus:slo_mpi:requests_total:rate5m, 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate30m
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[30m])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[30m])), 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate1h
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[1h])), 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate2h
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[2h])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[2h])), 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate6h
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[6h])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[6h])), 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate1d
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[1d])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[1d])), 1e-9)
+        - record: sus:slo_mpi:error_ratio:rate3d
+          expr: sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[3d])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[3d])), 1e-9)
+        - record: sus:slo_mpi:burn_rate_1h
+          expr: sus:slo_mpi:error_ratio:rate1h / (1 - 0.995)
+        - record: sus:slo_mpi:burn_rate_6h
+          expr: sus:slo_mpi:error_ratio:rate6h / (1 - 0.995)
+        - record: sus:slo_mpi:error_budget_remaining_30d
+          expr: 1 - ((sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*",status=~"5.."}[30d])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(citizens|mpi|identifiers).*"}[30d])), 1e-9)) / (1 - 0.995))
+
+    - name: sus.slo.mpi.alerts
+      rules:
+        - alert: SusSloMpiBurnRateCritical
+          expr: |
+            (sus:slo_mpi:error_ratio:rate1h > (14.4 * (1 - 0.995)) and sus:slo_mpi:error_ratio:rate5m > (14.4 * (1 - 0.995)))
+            or
+            (sus:slo_mpi:error_ratio:rate6h > (6 * (1 - 0.995)) and sus:slo_mpi:error_ratio:rate30m > (6 * (1 - 0.995)))
+          for: 2m
+          labels: { severity: critical, slo: mpi-availability, team: core }
+          annotations:
+            summary: "API de cidadão/MPI queimando error budget rápido (burn rate ≥ 14.4x/1h ou 6x/6h)"
+            description: "Erro 5xx {{ $value | humanizePercentage }} na API /api/v1/citizens|mpi. Orçamento de 30d esgota em < 2 dias nesse ritmo."
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/slo-mpi.md
+        - alert: SusSloMpiBurnRateWarning
+          expr: |
+            (sus:slo_mpi:error_ratio:rate1d > (3 * (1 - 0.995)) and sus:slo_mpi:error_ratio:rate2h > (3 * (1 - 0.995)))
+            or
+            (sus:slo_mpi:error_ratio:rate3d > (1 * (1 - 0.995)) and sus:slo_mpi:error_ratio:rate6h > (1 * (1 - 0.995)))
+          for: 15m
+          labels: { severity: warning, slo: mpi-availability, team: core }
+          annotations:
+            summary: "API de cidadão/MPI consumindo error budget acima do esperado (burn rate 3x/1d ou 1x/3d)"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/slo-mpi.md
+        - alert: SusSloMpiErrorBudgetLow
+          expr: sus:slo_mpi:error_budget_remaining_30d < 0.2
+          for: 30m
+          labels: { severity: warning, slo: mpi-availability, team: core }
+          annotations:
+            summary: "Menos de 20% do error budget mensal da API MPI restante — congelar mudanças não essenciais"
+
+    # ------------------------------------------------------------------------------------------------
+    # SLO 2 — Eventos críticos publicados ≤ 60 s (outbox → Kafka) — F1 99% · F3 99,5% · F4 99,9%
+    # ------------------------------------------------------------------------------------------------
+    - name: sus.slo.events.recording
+      interval: 30s
+      rules:
+        - record: sus:slo_events:slow_ratio:rate5m
+          expr: 1 - (sum(rate(sus_outbox_publish_latency_seconds_bucket{le="60"}[5m])) / clamp_min(sum(rate(sus_outbox_publish_latency_seconds_count[5m])), 1e-9))
+        - record: sus:slo_events:slow_ratio:rate1h
+          expr: 1 - (sum(rate(sus_outbox_publish_latency_seconds_bucket{le="60"}[1h])) / clamp_min(sum(rate(sus_outbox_publish_latency_seconds_count[1h])), 1e-9))
+        - record: sus:slo_events:slow_ratio:rate6h
+          expr: 1 - (sum(rate(sus_outbox_publish_latency_seconds_bucket{le="60"}[6h])) / clamp_min(sum(rate(sus_outbox_publish_latency_seconds_count[6h])), 1e-9))
+        - record: sus:slo_events:slow_ratio:rate30m
+          expr: 1 - (sum(rate(sus_outbox_publish_latency_seconds_bucket{le="60"}[30m])) / clamp_min(sum(rate(sus_outbox_publish_latency_seconds_count[30m])), 1e-9))
+        - record: sus:slo_events:burn_rate_1h
+          expr: sus:slo_events:slow_ratio:rate1h / (1 - 0.99)
+    - name: sus.slo.events.alerts
+      rules:
+        - alert: SusSloEventPublishLatencyBurn
+          expr: |
+            (sus:slo_events:slow_ratio:rate1h > (14.4 * (1 - 0.99)) and sus:slo_events:slow_ratio:rate5m > (14.4 * (1 - 0.99)))
+            or
+            (sus:slo_events:slow_ratio:rate6h > (6 * (1 - 0.99)) and sus:slo_events:slow_ratio:rate30m > (6 * (1 - 0.99)))
+          for: 5m
+          labels: { severity: critical, slo: events-latency, team: platform }
+          annotations:
+            summary: "Eventos críticos levando > 60 s do outbox ao Kafka (burn rate alto)"
+            description: "Verifique Debezium (conector core-outbox), slot de replicação e lag do Kafka Connect."
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/outbox-latency.md
+        - alert: SusOutboxConnectorDown
+          expr: min(kafka_connect_connector_status{connector="core-outbox"}) < 1 or absent(kafka_connect_connector_status{connector="core-outbox"})
+          for: 2m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "Conector Debezium core-outbox não está RUNNING — nenhum evento sai do core"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/outbox-latency.md
+
+    # ------------------------------------------------------------------------------------------------
+    # SLO 3 — Alta hospitalar processada ≤ 5 min (F3 99% · F4 99,5%) e tarefa pós-alta ≤ 15 min (F3 95%)
+    # ------------------------------------------------------------------------------------------------
+    - name: sus.slo.discharge.alerts
+      rules:
+        - alert: SusSloDischargeProcessingSlow
+          expr: |
+            (1 - (sum(rate(sus_discharge_processing_seconds_bucket{le="300"}[1h])) / clamp_min(sum(rate(sus_discharge_processing_seconds_count[1h])), 1e-9))) > (6 * (1 - 0.99))
+          for: 10m
+          labels: { severity: critical, slo: discharge-5min, team: care }
+          annotations:
+            summary: "Altas hospitalares demorando > 5 min para processar (burn rate 6x)"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/discharge-pipeline.md
+        - alert: SusSloPostDischargeTaskSlow
+          expr: |
+            (1 - (sum(rate(sus_post_discharge_task_seconds_bucket{le="900"}[6h])) / clamp_min(sum(rate(sus_post_discharge_task_seconds_count[6h])), 1e-9))) > (3 * (1 - 0.95))
+          for: 30m
+          labels: { severity: warning, slo: post-discharge-task-15min, team: care }
+          annotations:
+            summary: "Tarefas pós-alta não criadas em ≤ 15 min (burn rate 3x sobre SLO 95%)"
+
+    # ------------------------------------------------------------------------------------------------
+    # SLO 4 — Agenda e regulação (F3+ 99,5%)
+    # ------------------------------------------------------------------------------------------------
+    - name: sus.slo.scheduling.alerts
+      rules:
+        - alert: SusSloSchedulingRegulationBurn
+          expr: |
+            (sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(appointments|regulation|schedule).*",status=~"5.."}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{service="core-municipal",uri=~"/api/v1/(appointments|regulation|schedule).*"}[1h])), 1e-9)) > (14.4 * (1 - 0.995))
+          for: 5m
+          labels: { severity: critical, slo: scheduling-availability, team: core }
+          annotations:
+            summary: "APIs de agenda/regulação com burn rate ≥ 14.4x"

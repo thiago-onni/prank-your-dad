@@ -1,0 +1,37 @@
+{
+  "domains": {
+    "identity": {"default_sensitivity": "restricted", "clinical": false, "description": "Identificação, contato, endereço, identificadores (CPF/CNS)."},
+    "aps": {"default_sensitivity": "restricted", "clinical": true, "description": "Atendimentos, problemas, diagnósticos e prescrições da APS."},
+    "schedule": {"default_sensitivity": "internal", "clinical": false, "description": "Agenda, agendamentos e status operacional."},
+    "regulation": {"default_sensitivity": "restricted", "clinical": true, "description": "Solicitações e decisões de regulação."},
+    "exam": {"default_sensitivity": "restricted", "clinical": true, "description": "Pedidos e resultados de exames."},
+    "hospital": {"default_sensitivity": "restricted", "clinical": true, "description": "Episódios hospitalares, internações e altas."},
+    "careplan": {"default_sensitivity": "restricted", "clinical": true, "description": "Planos de cuidado e linhas de cuidado."},
+    "task": {"default_sensitivity": "internal", "clinical": false, "description": "Tarefas e pendências operacionais."},
+    "production": {"default_sensitivity": "internal", "clinical": false, "description": "Produção (BPA/APAC/AIH) e pré-auditoria."},
+    "communication": {"default_sensitivity": "restricted", "clinical": false, "description": "Mensagens e lembretes ao cidadão."}
+  },
+  "sensitivity": {
+    "levels": ["public", "internal", "restricted", "highly_restricted"],
+    "at_most": {
+      "public": ["public"],
+      "internal": ["public", "internal"],
+      "restricted": ["public", "internal", "restricted"],
+      "highly_restricted": ["public", "internal", "restricted", "highly_restricted"]
+    }
+  },
+  "resource_types": {
+    "aggregate": ["aggregate_report", "indicator", "dashboard", "production_summary"],
+    "management": ["tenant_config", "user", "connector", "policy", "role_assignment", "agent_config"],
+    "citizen_individual": ["citizen", "identifier", "timeline_event", "appointment", "task", "care_plan", "regulation_request", "merge_case"],
+    "integration": ["integration_message", "dlq_message", "reconciliation_report"],
+    "audit": ["audit_log", "access_log", "decision_log"],
+    "production": ["production_record", "production_evidence"]
+  },
+  "redactions": {
+    "acs": ["diagnoses", "results", "documents"],
+    "agendador": ["diagnoses", "results", "documents", "clinical_notes"],
+    "auditor": ["clinical_notes"],
+    "operador_integracao": ["payload_sensitive"]
+  }
+}

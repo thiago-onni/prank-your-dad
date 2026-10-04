@@ -1,0 +1,178 @@
+# ApplicationSet por ambiente × componente. Cada Application aponta para o chart umbrella com
+# values-<env>.yaml e habilita apenas o seu bloco (helm.values). Sync waves:
+#   20 data (CNPG, Strimzi, Kafka Connect, MinIO, Redis, Apicurio)
+#   30 security (Keycloak, OPA, NetworkPolicies default-deny)
+#   25 analytics (Trino — lakehouse, Fase 4; só nos ambientes com `lakehouse: "true"`)
+#   35 workflows (Temporal)
+#   40 core → 50 fhir/ai → 60 web/connectors
+#
+# dev/hml: automated sync (prune+selfHeal) via templatePatch. prod: sem automated (sync manual pelo SRE
+# após merge do PR em platform/ com 2 aprovações — ver README.md "Promoção").
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sus-nexus-envs
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                # lakehouse: liga o Iceberg sink (componente data) e o Trino (componente analytics) — Fase 4
+                - { env: dev, cluster: in-cluster, revision: main, automated: "true", lakehouse: "true" }
+                - { env: hml, cluster: hml, revision: main, automated: "true", lakehouse: "false" }
+                - { env: prod, cluster: prod, revision: main, automated: "false", lakehouse: "false" }
+          - list:
+              elements:
+                - component: data
+                  wave: "20"
+                  namespace: data
+                  enable: |
+                    cnpg: { enabled: true }
+                    strimzi: { enabled: true }
+                    kafkaConnect: { enabled: true }
+                    minio: { enabled: true }
+                    redis: { enabled: true }
+                    apicurio: { enabled: true }
+                - component: analytics
+                  wave: "25"
+                  namespace: data
+                  enable: |
+                    # Trino é ligado abaixo conforme o campo `lakehouse` do ambiente
+                - component: security
+                  wave: "30"
+                  namespace: security
+                  enable: |
+                    keycloak: { enabled: true }
+                    opa: { enabled: true }
+                    networkPolicies: { defaultDeny: true }
+                - component: workflows
+                  wave: "35"
+                  namespace: workflows
+                  enable: |
+                    temporal: { enabled: true }
+                - component: core
+                  wave: "40"
+                  namespace: core
+                  enable: |
+                    core: { enabled: true }
+                - component: fhir
+                  wave: "50"
+                  namespace: fhir
+                  enable: |
+                    fhir: { enabled: true }
+                - component: ai
+                  wave: "50"
+                  namespace: ai
+                  enable: |
+                    ai: { enabled: true }
+                - component: web
+                  wave: "60"
+                  namespace: web
+                  enable: |
+                    web: { enabled: true }
+                - component: connectors
+                  wave: "60"
+                  namespace: connectors
+                  enable: |
+                    connector-pec: { enabled: true }
+                    connector-agenda: { enabled: true }
+                    connector-sisreg: { enabled: true }
+                    connector-cnes: { enabled: true }
+                    connector-cadsus: { enabled: true }
+                    connector-his: { enabled: true }
+                    connector-esus-regulacao: { enabled: true }
+                    connector-lis: { enabled: true }
+                    connector-ris: { enabled: true }
+                    connector-sia: { enabled: true }
+  template:
+    metadata:
+      name: "sus-nexus-{{ .env }}-{{ .component }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{ .wave }}"
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: sus-nexus-deploys
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: sus-nexus-deploys
+      labels:
+        sus-nexus.gov.br/layer: application
+        sus-nexus.gov.br/env: "{{ .env }}"
+        sus-nexus.gov.br/component: "{{ .component }}"
+      finalizers: [resources-finalizer.argocd.argoproj.io]
+    spec:
+      project: "sus-nexus-{{ .env }}"
+      source:
+        repoURL: https://github.com/sus-nexus/sus-nexus.git
+        targetRevision: "{{ .revision }}"
+        path: sus-nexus/platform/helm/sus-nexus
+        helm:
+          releaseName: sus-nexus
+          valueFiles:
+            - values.yaml
+            - "values-{{ .env }}.yaml"
+          # Todos os blocos ficam desligados por padrão (values.yaml); values-<env>.yaml liga os do ambiente;
+          # aqui religamos SOMENTE o bloco deste Application (maior precedência).
+          values: |
+            core: { enabled: false }
+            fhir: { enabled: false }
+            web: { enabled: false }
+            ai: { enabled: false }
+            connector-pec: { enabled: false }
+            connector-agenda: { enabled: false }
+            connector-sisreg: { enabled: false }
+            connector-cnes: { enabled: false }
+            connector-cadsus: { enabled: false }
+            connector-his: { enabled: false }
+            connector-esus-regulacao: { enabled: false }
+            connector-lis: { enabled: false }
+            connector-ris: { enabled: false }
+            connector-sia: { enabled: false }
+            cnpg: { enabled: false }
+            strimzi: { enabled: false }
+            kafkaConnect: { enabled: false }
+            minio: { enabled: false }
+            redis: { enabled: false }
+            apicurio: { enabled: false }
+            keycloak: { enabled: false }
+            opa: { enabled: false }
+            networkPolicies: { defaultDeny: false }
+            temporal: { enabled: false }
+            lakehouse: { enabled: {{ .lakehouse }} }
+            trino: { enabled: {{ and (eq .component "analytics") (eq .lakehouse "true") }} }
+            {{ .enable }}
+          skipCrds: true
+      destination:
+        name: "{{ .cluster }}"
+        namespace: "{{ .namespace }}"
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 3
+          backoff: { duration: 30s, factor: 2, maxDuration: 5m }
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jqPathExpressions: ['.spec.replicas']   # HPA controla
+        - group: argoproj.io
+          kind: Rollout
+          jqPathExpressions: ['.spec.replicas']
+        - group: kafka.strimzi.io
+          kind: KafkaTopic
+          jqPathExpressions: ['.spec.replicas']   # evitar fight com Cruise Control / rebalance
+  # Sync automático só fora de prod (templatePatch permite estrutura condicional)
+  templatePatch: |
+    {{- if eq .automated "true" }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+    {{- end }}

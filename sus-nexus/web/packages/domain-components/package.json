@@ -1,0 +1,37 @@
+{
+  "name": "@sus-nexus/domain-components",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Componentes de domínio do SUS Nexus (CitizenHeader, TimelineEvent, HumanApprovalPanel, ...) tipados pelo OpenAPI",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fhir": "./src/lib/fhir.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@sus-nexus/api-client": "workspace:*",
+    "@sus-nexus/design-system": "workspace:*",
+    "lucide-react": "0.577.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.10.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "26.1.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vitest": "3.2.7",
+    "vitest-axe": "0.1.0"
+  }
+}

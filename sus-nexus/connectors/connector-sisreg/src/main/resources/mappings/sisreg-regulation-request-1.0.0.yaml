@@ -1,0 +1,85 @@
+# Exportação de solicitações do SISREG (colunas canônicas de layouts/sisreg-layouts.yaml) →
+# RegulationRequestRegistration (POST /api/v1/regulation/requests, upsert por source_record_id).
+# kind e citizen_ref são preenchidos pelo conector (SisregRules). Tabelas versionadas: ajuste aqui,
+# nunca no código.
+mapping_set: sisreg-regulation-request
+version: "1.0.0"
+entity_type: regulation_request
+lookups:
+  situacao:
+    PENDENTE: requested
+    SOLICITADA: requested
+    SOLICITADO: requested
+    EM FILA: requested
+    FILA DE ESPERA: requested
+    AGUARDANDO: requested
+    EM ANALISE: under_review
+    EM REGULACAO: under_review
+    PENDENCIA: pending_documents
+    PENDENTE DE DOCUMENTO: pending_documents
+    DEVOLVIDA: returned
+    DEVOLVIDO: returned
+    RETORNADA: returned
+    AUTORIZADA: authorized
+    AUTORIZADO: authorized
+    APROVADA: authorized
+    AGENDADA: scheduled
+    AGENDADO: scheduled
+    MARCADA: scheduled
+    CONFIRMADA: scheduled
+    NEGADA: denied
+    NEGADO: denied
+    REJEITADA: denied
+    CANCELADA: cancelled
+    CANCELADO: cancelled
+    FALTA: no_show
+    FALTOU: no_show
+    NAO COMPARECEU: no_show
+    REALIZADA: performed
+    REALIZADO: performed
+    EXECUTADA: performed
+    ATENDIDA: performed
+    VENCIDA: expired
+    VENCIDO: expired
+    EXPIRADA: expired
+  prioridade:
+    VERMELHA: emergency
+    VERMELHO: emergency
+    EMERGENCIA: emergency
+    "0": emergency
+    AMARELA: urgent
+    AMARELO: urgent
+    URGENCIA: urgent
+    URGENTE: urgent
+    "1": urgent
+    VERDE: priority
+    PRIORIDADE: priority
+    PRIORITARIA: priority
+    PRIORITARIO: priority
+    "2": priority
+    AZUL: elective
+    ELETIVA: elective
+    ELETIVO: elective
+    ROTINA: elective
+    "3": elective
+fields:
+  - { target: source.system, constant: SISREG }
+  - { target: source.connector, constant: connector-sisreg }
+  - { source: codigo_solicitacao, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: data_atualizacao, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: cnes_solicitante, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: situacao, target: status, transforms: [trim, unaccent, upper, { lookup: { table: situacao, default: requested } }], required: true }
+  - { source: classificacao_risco, target: priority, transforms: [trim, unaccent, upper, blank_to_null, { lookup: { table: prioridade, default: elective } }] }
+  - { source: data_solicitacao, target: requested_at, transforms: [{ date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }], required: true }
+  - { source: codigo_procedimento, target: requested_service_code, transforms: [digits, blank_to_null], required: true }
+  - { target: code_system, constant: SIGTAP }
+  - { source: especialidade, target: specialty, transforms: [trim, blank_to_null] }
+  - { source: cnes_solicitante, target: requesting_cnes, transforms: [digits, blank_to_null] }
+  - { source: profissional_solicitante, target: requesting_professional_id, transforms: [trim, blank_to_null] }
+  - { source: cbo_profissional, target: requesting_professional_cbo, transforms: [digits, blank_to_null] }
+  - { source: justificativa, target: justification_present, transforms: [blank_to_null, { to_boolean: { true_values: ["S", "SIM", "1", "TRUE"] } }] }
+  - { source: cnes_executante, target: provider_cnes, transforms: [digits, blank_to_null] }
+  - { source: data_agendamento, target: scheduled_at, transforms: [blank_to_null, { date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }] }
+  - { source: regulador, target: regulator_id, transforms: [trim, blank_to_null] }
+  - { source: motivo, target: decision_reason, transforms: [trim, blank_to_null, { substring: { start: 0, end: 500 } }] }
+  - { source: data_situacao, target: occurred_at, transforms: [blank_to_null, { date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }] }

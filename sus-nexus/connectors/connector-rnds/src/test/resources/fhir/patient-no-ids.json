@@ -1,0 +1,9 @@
+{
+  "resourceType": "Patient",
+  "id": "01JFBF5KZNWJ47TAN9ZT24MNPZ",
+  "identifier": [
+    { "system": "http://sus-nexus.gov.br/fhir/NamingSystem/municipal-citizen-id", "value": "cit_01JFBF5KZNWJ47TAN9ZT24MNPZ" }
+  ],
+  "name": [ { "text": "JOAO SEM DOCUMENTO TESTE" } ],
+  "birthDate": "1980-01-01"
+}

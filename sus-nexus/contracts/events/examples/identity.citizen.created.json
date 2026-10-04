@@ -1,0 +1,42 @@
+{
+  "event_id": "evt_01JCB6NATW4X5Y6Z7A8B9C0D1E",
+  "event_type": "sus.identity.citizen.created",
+  "event_version": "1.0",
+  "occurred_at": "2026-10-03T14:00:00-03:00",
+  "published_at": "2026-10-03T14:00:03-03:00",
+  "tenant": {
+    "municipality_id": "ibge_3143302",
+    "health_secretariat_id": "sms_001"
+  },
+  "subject": {
+    "municipal_citizen_id": "cit_01JCB6NATW4X5Y6Z7A8B9C0D1F",
+    "identifiers": [
+      { "system": "CNS", "value_masked": "***********5678", "value_hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" }
+    ]
+  },
+  "source": {
+    "system": "ESUS_APS_PEC",
+    "connector": "connector-pec",
+    "source_record_id": "PEC-CID-000123",
+    "source_record_version": "3",
+    "cnes": "1234567"
+  },
+  "data": {
+    "action": "created",
+    "municipal_citizen_id": "cit_01JCB6NATW4X5Y6Z7A8B9C0D1F",
+    "registration_state": "validated",
+    "match": { "method": "deterministic_cns", "classification": "confirmed", "rule_version": "mpi-rules-1.0" },
+    "linked_identifier_systems": ["CNS", "PEC"],
+    "territory": { "health_unit_cnes": "1234567", "team_ine": "0000123456", "microarea": "03" }
+  },
+  "privacy": {
+    "classification": "restricted",
+    "purpose": ["identity_management", "care_coordination"]
+  },
+  "trace": {
+    "correlation_id": "corr_7a92bf0c",
+    "causation_id": "msg_01JCB6N9ZZZZZZZZZZZZZZZZZZ",
+    "schema_version": "1.0.0"
+  },
+  "replay": false
+}

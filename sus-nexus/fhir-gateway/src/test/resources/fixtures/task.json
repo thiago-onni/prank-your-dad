@@ -1,0 +1,14 @@
+{
+  "resourceType": "Task",
+  "meta": {"profile": ["http://sus-nexus.gov.br/fhir/StructureDefinition/SUSNexusTask"]},
+  "status": "requested",
+  "businessStatus": {"coding": [{"system": "http://sus-nexus.gov.br/fhir/CodeSystem/task-business-status", "code": "open"}]},
+  "intent": "order",
+  "priority": "routine",
+  "code": {"coding": [{"system": "https://sus-nexus.gov.br/fhir/CodeSystem/task-type", "code": "active_search"}], "text": "Busca ativa"},
+  "description": "Entrar em contato com o cidadão para reagendar",
+  "for": {"reference": "Patient/PAT1"},
+  "authoredOn": "2026-09-02T08:00:00-03:00",
+  "owner": {"reference": "Organization/ORG1"},
+  "basedOn": [{"reference": "ServiceRequest/SR1"}]
+}

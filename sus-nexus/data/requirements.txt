@@ -1,0 +1,9 @@
+# Ferramentas da camada analítica (sus-nexus/data). CI: pip install -r sus-nexus/data/requirements.txt
+# Validado com dbt-core 1.12, dbt-duckdb 1.11, duckdb 1.5, sqlfluff 4.4.
+dbt-core>=1.10,<1.13           # sintaxe `arguments:` nos testes genéricos exige >= 1.10
+dbt-duckdb>=1.9,<1.12
+numpy>=1.26                    # UDFs Python do plugin dbt-duckdb (ci/duckdb_plugins/sus_nexus_udfs.py)
+jsonschema>=4.21               # validação das fixtures contra contracts/events
+sqlfluff>=3.3,<5
+sqlfluff-templater-dbt>=3.3,<5
+# Execução no lakehouse: pip install "dbt-trino>=1.9,<1.11"

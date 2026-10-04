@@ -1,0 +1,25 @@
+extends: default
+ignore: |
+  helm/charts/*/templates/
+  helm/sus-nexus/templates/
+  helm/sus-nexus/charts/
+  terraform/**/generated/
+  rendered/
+rules:
+  line-length: disable   # PromQL/valores inline longos são aceitos; legibilidade é revisada no PR
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  truthy:
+    allowed-values: ["true", "false", "on", "off", "yes", "no"]
+    check-keys: false
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  octal-values:
+    forbid-implicit-octal: true

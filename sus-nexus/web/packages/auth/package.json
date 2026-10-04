@@ -1,0 +1,32 @@
+{
+  "name": "@sus-nexus/auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BFF OIDC (Auth.js v5 + Keycloak) para Next.js: sessão em cookie httpOnly, refresh no servidor, token nunca chega ao navegador; modo mock para desenvolvimento",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./client": "./src/client.tsx"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "next-auth": "5.0.0-beta.32"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "26.1.0",
+    "next": "15.5.27",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vitest": "3.2.7"
+  }
+}

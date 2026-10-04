@@ -1,0 +1,35 @@
+# kube-vip (ARP) — VIP do API server. Copiar para /var/lib/rancher/rke2/server/manifests/ no primeiro server.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-vip
+  namespace: kube-system
+spec:
+  hostNetwork: true
+  containers:
+    - name: kube-vip
+      image: ghcr.io/kube-vip/kube-vip:v0.8.7
+      args: ["manager"]
+      env:
+        - { name: vip_arp, value: "true" }
+        - { name: port, value: "6443" }
+        - { name: vip_interface, value: "" }
+        - { name: vip_cidr, value: "32" }
+        - { name: cp_enable, value: "true" }
+        - { name: cp_namespace, value: kube-system }
+        - { name: svc_enable, value: "false" }
+        - { name: vip_leaderelection, value: "true" }
+        - { name: vip_leaseduration, value: "5" }
+        - { name: vip_renewdeadline, value: "3" }
+        - { name: vip_retryperiod, value: "1" }
+        - { name: address, value: "${api_vip}" }
+      securityContext:
+        capabilities:
+          add: [NET_ADMIN, NET_RAW]
+      volumeMounts:
+        - mountPath: /etc/kubernetes/admin.conf
+          name: kubeconfig
+  volumes:
+    - name: kubeconfig
+      hostPath:
+        path: /etc/rancher/rke2/rke2.yaml

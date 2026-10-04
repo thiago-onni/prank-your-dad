@@ -1,0 +1,171 @@
+# Modelo de informação RNDS: Resultado de Exame Laboratorial (REL) — mapeamento declarativo versionado.
+#
+# FONTES OFICIAIS (consultadas em 2026-10-04; ver connector-rnds/README.md, "Fontes"):
+#  [G]  Guia de Integração da RNDS — https://rnds-guia.saude.gov.br (DATASUS). O site NÃO é acessível pela rede
+#       deste ambiente; o conteúdo foi lido no repositório-fonte do guia, https://github.com/kyriosdata/rnds
+#       (portal/docs, commit 32737e3, 2024-08-28; o guia foi transferido ao DATASUS em 2021-11 e o índice de
+#       busca confirma as mesmas páginas em rnds-guia.saude.gov.br): rel/mc-rel.md (Modelo Computacional),
+#       rel/mi-rel.md (Modelo de Informação), rel/alterar-resultado.md, publico-alvo/ti/homologar.md.
+#  [M]  DATASUS, "Manual de Integração – RNDS" v1.2 (29/07/2020) e coleção Postman oficial
+#       "SOA-RNDS_ConsumoServicos_ExemplosPostman_v4" (Portal de Serviços do DATASUS; cópia em kyriosdata/rnds/datasus).
+#  [SD] StructureDefinitions/CodeSystems/ValueSets publicados pelo MS (Simplifier "redenacionaldedadosemsaude"),
+#       cópia offline em src/test/resources/rnds-definicoes (ver ORIGEM.txt) — validados no RndsProfileValidationTest.
+#
+# ESCOPO OFICIAL: o REL documentado pela RNDS é RESTRITO A EXAMES DE COVID-19 [G rel/objetivo.md]; o ValueSet
+# BRNomeExame-1.0 só contém BRNomeExameLOINC (LOINC de SARS-CoV-2, CodeSystem "fragment") e BRNomeExameGAL [SD].
+# Outros exames (ex.: glicose LOINC 2345-7) passam na pré-validação e o validador só ADVERTE (fragment), mas o
+# EHR pode rejeitá-los — A CONFIRMAR com o DATASUS/homologação antes de habilitar o modelo para exames não-COVID.
+#
+# Ao mudar qualquer valor oficial, crie um NOVO arquivo com nova versão e aponte
+# rnds.models.resultado-exame.mapping para ele — nunca edite uma versão já usada em produção.
+model: resultado-exame
+version: 1.1.0
+status: confirmado-parcialmente   # perfis 1.x confirmados [SD]; versão 2.0 e escopo além de COVID-19: A CONFIRMAR
+description: >-
+  Bundle "document" do REL: Composition BRResultadoExameLaboratorial → Observation(s)
+  BRDiagnosticoLaboratorioClinico → Specimen BRAmostraBiologica, montados a partir do DiagnosticReport,
+  Observations e Specimens do fhir-gateway. Paciente por CNS e laboratório por CNES (referências lógicas).
+  Fonte: evento sus.exam.result.v1 (action=available, result_status final|amended).
+
+bundle:
+  type: document                      # CONFIRMADO [G mc-rel, M Postman]: "type": "document"
+  profile: null                       # CONFIRMADO: os exemplos oficiais não declaram perfil no Bundle
+  # CONFIRMADO [G mc-rel "Bundle (identifier)", erros.md EHR-ERR881]: {solicitante} = "identificador do
+  # solicitante" atribuído pela RNDS na aprovação do acesso (Portal de Serviços) — NÃO é o CNES.
+  identifier_system: "http://www.saude.gov.br/fhir/r4/NamingSystem/BRRNDS-{solicitante}"
+  # CONFIRMADO [G alterar-resultado.md]: o Bundle substituto usa o MESMO identifier.value do original;
+  # valor único por resultado no laboratório (repetir sem relatesTo → 422 EHR-ERR866).
+  identifier_value: source_id
+
+composition:
+  # CONFIRMADO [SD BRResultadoExameLaboratorial v1.1, 2020-06-09; G homologar.md]. O exemplo do guia de
+  # jun/2021 cita "-2.0" (definição não acessível aqui): A CONFIRMAR qual versão o EHR exige hoje.
+  profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRResultadoExameLaboratorial-1.1"
+  type:                               # CONFIRMADO [SD BRTipoDocumento 201701A: REL]; display proibido (0..0)
+    system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTipoDocumento"
+    code: "REL"
+    display: null
+  category: null                      # perfil: category 0..0
+  title: "Resultado de Exame Laboratorial"   # CONFIRMADO: fixedString do perfil
+  section_title: null                 # perfil: section.title 0..0
+
+# Sistemas dos identificadores LIDOS no fhir-gateway. CONFIRMADO [M Postman v4 / G conhecer.md]: são os
+# NamingSystems da RNDS usados nas buscas (Patient?identifier=http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf|…).
+identifier_systems:
+  cns: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns"
+  cpf: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf"
+  cnes: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes"
+
+# Sistemas dos identificadores DENTRO do Bundle. CONFIRMADO [SD: fixedUri; G mc-rel; M Postman]: o REL usa a URL
+# do perfil como system — subject = BRIndividuo-1.0 com o CNS; author/performer = BREstabelecimentoSaude-1.0 com
+# o CNES. CPF do paciente: o modelo de informação exige CNS [G mi-rel: "CNS 1..1"] → não enviado (A CONFIRMAR).
+target_systems:
+  patient_cns: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRIndividuo-1.0"
+  patient_cpf: null
+  cnes: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BREstabelecimentoSaude-1.0"
+
+code_systems: {}
+
+observation:
+  status: final                       # CONFIRMADO [G erros.md (422) EHR-ERR924; SD BREstadoObservacao-1.0]
+  # CONFIRMADO [SD BRCategoriaExame-1.0 → BRSubgrupoTabelaSUS; G mc-rel: 0214 teste rápido, 0202 laboratório
+  # clínico]. Derivado dos 4 primeiros dígitos do código SIGTAP (grupo+subgrupo) do DiagnosticReport/ServiceRequest.
+  category_system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRSubgrupoTabelaSUS"
+  category_from_system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTabelaSUS"
+  default_category: null
+  # CONFIRMADO [SD BRNomeExame-1.0; G mc-rel]: códigos LOINC vão no CodeSystem BRNomeExameLOINC (subconjunto
+  # LOINC da RNDS); BRNomeExameGAL só para laboratórios públicos da rede GAL.
+  code_system_map:
+    "http://loinc.org": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameLOINC"
+    "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameLOINC": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameLOINC"
+    "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameGAL": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameGAL"
+  qualitative_system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRResultadoQualitativoExame"   # CONFIRMADO [SD]
+  specimen_type_systems:              # CONFIRMADO [SD BRTipoAmostra-1.0]
+    - "http://terminology.hl7.org/CodeSystem/v2-0487"
+    - "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTipoAmostraGAL"
+
+replacement:                          # CONFIRMADO [G alterar-resultado.md, mc-rel; M Postman "Substituir documento"]
+  code: replaces
+  target_reference: "Composition/{protocolo}"
+
+resources:
+  Observation:
+    mode: entry
+    # CONFIRMADO [SD v1.0, 2020-03-30]; guia jun/2021 cita "-2.0" (permite effectiveDateTime) — A CONFIRMAR
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRDiagnosticoLaboratorioClinico-1.0"
+  Specimen:
+    mode: entry
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRAmostraBiologica-1.0"   # CONFIRMADO [SD]
+  DiagnosticReport:
+    mode: omit                        # fonte de status/issued/performer/código; não vai no Bundle [G mc-rel]
+    profile: null
+  Patient:
+    mode: logical                     # subject.identifier (CNS) [SD: subject.reference 0..0]
+    profile: null
+  Organization:
+    mode: logical                     # author/performer.identifier (CNES) [SD: reference 0..0]
+    profile: null
+  Practitioner:
+    mode: omit                        # performer é 1..1 e usamos o estabelecimento (CNES)
+    profile: null
+  ServiceRequest:
+    mode: omit                        # só completa o código SIGTAP (categoria)
+    profile: null
+
+strip:
+  extension_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  identifier_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  # BRDiagnosticoLaboratorioClinico-1.0: effective[x] 0..0 (remover esta linha ao migrar para a v2.0)
+  elements:
+    - Observation.effective
+
+# Pré-validação (antes de qualquer chamada externa). Falha → DLQ com motivo, sem envio.
+required:
+  - name: solicitante_id                # rnds.solicitante-id (identificador do solicitante, não o CNES)
+    check: present
+    facts: [requester.solicitante_id]
+  - name: patient_cns
+    check: cns
+    facts: [patient.cns]
+  - name: performer_cnes
+    check: cnes
+    facts: [performer.cnes]
+  - name: observations
+    check: min_count
+    facts: [observations.count]
+    values: ["1"]
+  - name: exam_code
+    check: present
+    facts: [exam.code]
+  - name: exam_code_system
+    check: one_of
+    facts: [exam.code_system]
+    values:
+      - "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameLOINC"
+      - "http://www.saude.gov.br/fhir/r4/CodeSystem/BRNomeExameGAL"
+  - name: exam_category
+    check: present
+    facts: [observation.category]
+  - name: result_value
+    check: present
+    facts: [observation.value]
+  - name: method
+    check: present
+    facts: [observation.method]
+  - name: reference_range
+    check: present
+    facts: [observation.reference_range]
+  - name: specimen_type
+    check: present
+    facts: [observation.specimen_type]
+  - name: issued
+    check: datetime
+    facts: [exam.issued]
+  - name: final_status
+    check: one_of
+    facts: [report.status]
+    values: [final, amended]

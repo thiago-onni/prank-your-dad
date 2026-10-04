@@ -1,0 +1,16 @@
+SUS Nexus {{ .Chart.Version }} — ambiente {{ .Values.global.environment }}
+
+Blocos habilitados:
+  core={{ .Values.core.enabled }} fhir={{ .Values.fhir.enabled }} web={{ .Values.web.enabled }} ai={{ .Values.ai.enabled }}
+  connector-pec={{ (index .Values "connector-pec").enabled }}
+  cnpg={{ .Values.cnpg.enabled }} strimzi={{ .Values.strimzi.enabled }} kafkaConnect={{ .Values.kafkaConnect.enabled }}
+  apicurio={{ .Values.apicurio.enabled }} keycloak={{ .Values.keycloak.enabled }} opa={{ .Values.opa.enabled }}
+  minio={{ .Values.minio.enabled }} redis={{ .Values.redis.enabled }} temporal={{ .Values.temporal.enabled }}
+
+Namespaces: {{ .Values.global.namespaces | toJson }}
+
+Lembretes:
+  - Operadores (CNPG, Strimzi, Keycloak, MinIO, ESO, cert-manager, Kyverno, APISIX) são instalados pelo
+    Argo CD (platform/argocd/apps/operators) ANTES deste chart (sync waves).
+  - Segredos vêm do OpenBao via ExternalSecret (ClusterSecretStore "{{ .Values.global.secretStore.name }}").
+  - Tópicos Kafka: templates/kafka-topics.generated.yaml (gerado de contracts/events/topics.yaml).

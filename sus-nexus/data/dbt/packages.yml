@@ -1,0 +1,4 @@
+packages:
+  # via git (hub.getdbt.com pode estar bloqueado em redes da prefeitura)
+  - git: "https://github.com/dbt-labs/dbt-utils.git"
+    revision: "1.3.0"

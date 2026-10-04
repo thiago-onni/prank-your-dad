@@ -1,0 +1,35 @@
+# sqlfluff — dialeto Trino (o SQL dos modelos é portável Trino/DuckDB via macros em macros/cross_db.sql).
+# O templater dbt compila com o perfil DuckDB (sem infraestrutura); o lint usa regras básicas de layout,
+# capitalização e ambiguidade.
+[sqlfluff]
+templater = dbt
+dialect = trino
+max_line_length = 140
+rules = LT01, LT02, LT04, LT05, LT06, LT12, CP01, CP02, CP03, AL01, AL02, AM01, AM02, ST02, ST03, RF01
+large_file_skip_byte_limit = 50000
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = duckdb
+target = ci
+
+[sqlfluff:indentation]
+tab_space_size = 4
+indented_joins = false
+implicit_indents = allow
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:aliasing.table]
+aliasing = explicit
+
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit

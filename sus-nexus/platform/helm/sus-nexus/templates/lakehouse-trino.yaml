@@ -1,0 +1,119 @@
+{{- if .Values.trino.enabled }}
+{{- /* O chart oficial do Trino é instalado no namespace do release (Argo: componente analytics → data). */}}
+{{- $ns := .Release.Namespace }}
+# Regras de acesso do Trino (file-based): cópia de platform/compose/trino/rules.json
+# (helm/scripts/sync-lakehouse-files.sh). Colunas identificáveis negadas fora de marts_identified.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-access-rules
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+data:
+  rules.json: |-
+    {{- .Files.Get "files/trino-rules.json" | nindent 4 }}
+---
+# Credenciais dos catálogos (variáveis ${ENV:...} nos arquivos de catálogo do Trino)
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: trino-lakehouse-credentials
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: trino-lakehouse-credentials
+  data:
+    - secretKey: ICEBERG_CATALOG_USER
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-db", property: username }
+    - secretKey: ICEBERG_CATALOG_PASSWORD
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-db", property: password }
+    - secretKey: LAKEHOUSE_S3_ACCESS_KEY
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-s3", property: access_key }
+    - secretKey: LAKEHOUSE_S3_SECRET_KEY
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-s3", property: secret_key }
+    - secretKey: CORE_REPLICA_USER
+      remoteRef: { key: "{{ .Values.global.environment }}/data/core-db-analytics-ro", property: username }
+    - secretKey: CORE_REPLICA_PASSWORD
+      remoteRef: { key: "{{ .Values.global.environment }}/data/core-db-analytics-ro", property: password }
+{{- if and .Values.lakehouse.enabled .Values.lakehouse.bootstrap.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-bootstrap
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+data:
+  bronze-ddl.sql: |-
+    {{- .Files.Get "files/bronze-ddl.sql" | nindent 4 }}
+  bootstrap-lakehouse.sh: |-
+    {{- .Files.Get "files/bootstrap-lakehouse.sh" | nindent 4 }}
+---
+# Cria schemas e tabelas bronze (Iceberg) via Trino — idempotente (CREATE ... IF NOT EXISTS).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lakehouse-bootstrap-{{ .Release.Revision }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: {{ .Values.lakehouse.bootstrap.image }}
+          command: ["/bin/bash", "/scripts/bootstrap-lakehouse.sh"]
+          env:
+            - name: TRINO_SERVER
+              value: http://{{ .Values.trino.fullnameOverride | default "trino" }}.{{ $ns }}.svc.cluster.local:8080
+            - name: TRINO_USER
+              value: admin
+            - name: BRONZE_DOMAINS
+              value: {{ join " " .Values.lakehouse.connector.domains | quote }}
+            - name: HOME
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: lakehouse-bootstrap
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

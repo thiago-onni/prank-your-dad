@@ -1,0 +1,24 @@
+# Configuração do gitleaks (SEC-005). Estende as regras padrão e lista apenas falsos positivos conhecidos.
+# Qualquer segredo real deve viver no OpenBao/External Secrets — nunca no repositório.
+title = "sus-nexus"
+
+[extend]
+useDefault = true
+
+[allowlist]
+regexTarget = "line"
+description = "Falsos positivos: exemplos de desenvolvimento, URLs e nomes de Secrets Kubernetes"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''sus-nexus/platform/compose/\.env\.example$''',
+  '''sus-nexus/platform/compose/keycloak/realm-sus-nexus\.json$''',
+]
+regexes = [
+  # URL do schema registry no Kafka UI (KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://apicurio:8080/...)
+  '''SCHEMAREGISTRY: http://apicurio:\d+/''',
+  # Chaves de values do chart Harbor que referenciam o NOME de um Secret, não o valor
+  '''existingSecretAdminPassword(Key)?\s*=\s*"[a-z-]+"''',
+  # Placeholders de desenvolvimento explicitamente marcados
+  '''troque-por-um-segredo''',
+  '''sus-nexus-dev''',
+]

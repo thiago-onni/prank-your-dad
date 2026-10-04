@@ -1,0 +1,5 @@
+id_retorno;situacao;id_registro_barramento;sistema_origem_registro;id_registro_origem;lote;data_processamento;codigo_motivo;motivo;valor_pago;quantidade_aprovada;protocolo
+RET-1;Rejeitado;;ESUS_APS_PEC;PRD-0001;;30/09/2026 10:00;0175;Procedimento incompatível com o serviço/classificação do CNES;;;
+RET-2;PAGO;prod_01JM9S346Q3D25VT4F5V37E3S3;;;;30/09/2026;;;10,50;1;PROT-9
+RET-3;Transmitido;;;;BATCH-202609-01;29/09/2026;;;;;PROT-1
+RET-4;Abduzido;prod_01JM9S346Q3D25VT4F5V37E3S3;;;;30/09/2026;;;;;

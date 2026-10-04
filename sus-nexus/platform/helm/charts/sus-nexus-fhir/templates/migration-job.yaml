@@ -1,0 +1,70 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.migration.enabled }}
+# Migração Flyway como Job pré-rollout (helm hook) — padrão expand/contract (PLANO 4.2.5).
+# Com Argo CD, a annotation argocd.argoproj.io/hook: PreSync produz o mesmo efeito.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "sus.fullname" . }}-migrate-{{ .Release.Revision }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+    sus-nexus.gov.br/role: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "sus.selectorLabels" . | nindent 8 }}
+        sus-nexus.gov.br/role: migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "sus.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with (.Values.global.imagePullSecrets | default .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ .Values.migration.image | default (include "sus.image" .) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- with .Values.migration.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.migration.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            {{- toYaml .Values.migration.env | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "sus.configMapName" . }}
+            {{- if .Values.externalSecret.enabled }}
+            - secretRef:
+                name: {{ include "sus.secretName" . }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

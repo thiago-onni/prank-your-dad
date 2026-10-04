@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sus-nexus.gov.br/events/task/task/1.0.0",
+  "title": "sus.task.* — data",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "task_id", "task_type", "status", "priority"],
+  "properties": {
+    "action": { "type": "string", "enum": ["created", "assigned", "completed", "escalated", "sla_breached", "cancelled"] },
+    "task_id": { "type": "string", "pattern": "^task_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "task_type": {
+      "type": "string",
+      "enum": ["mpi_review", "active_search", "no_show_recovery", "exam_not_scheduled", "exam_result_followup", "post_discharge_followup", "regulation_pending_document", "production_issue", "integration_error", "care_gap", "generic"]
+    },
+    "status": { "type": "string", "enum": ["open", "assigned", "in_progress", "completed", "cancelled", "escalated"] },
+    "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+    "assignee": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["user", "team", "health_unit", "queue"] },
+        "id": { "type": "string" }
+      }
+    },
+    "due_at": { "type": "string", "format": "date-time" },
+    "sla_policy_id": { "type": "string" },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["workflow", "agent", "user", "rule", "connector"] },
+        "id": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "outcome": { "type": "string" },
+    "reason": { "type": "string", "maxLength": 500 }
+  }
+}

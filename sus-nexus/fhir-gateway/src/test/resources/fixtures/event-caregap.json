@@ -1,0 +1,23 @@
+{
+  "event_id": "evt_01J0000000000000000000GAPK",
+  "event_type": "sus.caregap.detected",
+  "event_version": "1.0",
+  "occurred_at": "2026-10-06T03:00:00-03:00",
+  "tenant": {"municipality_id": "ibge_3143302"},
+  "subject": {"municipal_citizen_id": "cit_01HZX4Y5K6M7N8P9Q0R1S2T3U4"},
+  "source": {"system": "CARE_ENGINE", "connector": "core", "source_record_id": "gap-rule-7", "cnes": "2112345"},
+  "data": {
+    "action": "detected",
+    "care_gap_id": "gap_01J0000000000000000000GAPK",
+    "care_plan_id": "cp_01J0000000000000000000CPL1",
+    "care_line": "hipertensao",
+    "gap_kind": "return_overdue",
+    "expected_by": "2026-10-01T12:00:00-03:00",
+    "days_overdue": 40,
+    "protocol_version": "2.1",
+    "detected_at": "2026-10-06T03:00:00-03:00"
+  },
+  "privacy": {"classification": "restricted", "purpose": ["care_coordination"]},
+  "trace": {"correlation_id": "corr_kafka_gap", "schema_version": "1.0.0"},
+  "replay": false
+}
