@@ -1,0 +1,125 @@
+openapi: 3.1.0
+info:
+  title: SUS Nexus — Extensões de ingestão do core (propostas pelos conectores)
+  version: 0.1.0
+  description: |
+    Endpoints de ingestão em lote que os conectores de referência/terminologia utilizam e que ainda
+    NÃO constam em contracts/openapi/core-municipal.yaml (que só expõe leitura de reference/terminology).
+    Devem ser incorporados ao contrato do core na Fase 1. Convenções: Bearer JWT (client credentials do
+    conector), headers X-Tenant-Id, X-Correlation-Id, X-Purpose-Of-Use=integration_operations e
+    Idempotency-Key (SHA-256 das chaves dos itens do lote). Erros em RFC 9457.
+paths:
+  /api/v1/reference/health-units/upsert:
+    post:
+      tags: [reference]
+      summary: Upsert em lote de unidades de saúde (chave natural = cnes)
+      operationId: upsertHealthUnits
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthUnitUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+  /api/v1/terminology/{system}/codes/upsert:
+    post:
+      tags: [terminology]
+      summary: Upsert em lote de códigos de um sistema (SIGTAP, CID10, CBO, CIAP2) por competência
+      operationId: upsertCodes
+      parameters:
+        - name: system
+          in: path
+          required: true
+          schema: { type: string, enum: [SIGTAP, CID10, CBO, CIAP2] }
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/correlationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CodeUpsertBatch' }
+      responses:
+        '200':
+          description: Lote aplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpsertResult' }
+components:
+  parameters:
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, maxLength: 128 }
+    correlationId:
+      name: X-Correlation-Id
+      in: header
+      required: true
+      schema: { type: string }
+  schemas:
+    SourceRef:
+      type: object
+      required: [system, connector, source_record_id]
+      properties:
+        system: { type: string }
+        connector: { type: string }
+        source_record_id: { type: string, description: Nome do arquivo/lote de origem }
+        source_record_version: { type: string, description: Hash ou versão do arquivo }
+        cnes: { type: string }
+    HealthUnitUpsert:
+      type: object
+      required: [cnes, name]
+      properties:
+        cnes: { type: string, pattern: '^[0-9]{7}$' }
+        name: { type: string }
+        kind_code: { type: string }
+        kind_description: { type: string }
+        address: { type: string }
+        city_ibge: { type: string }
+        active: { type: boolean }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        attributes: { type: object, additionalProperties: true }
+    HealthUnitUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, pattern: '^[0-9]{6}$' }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/HealthUnitUpsert' }
+    CodeUpsert:
+      type: object
+      required: [code, display]
+      properties:
+        code: { type: string }
+        display: { type: string }
+        competence_from: { type: string }
+        competence_to: { type: string }
+        attributes: { type: object, additionalProperties: true }
+    CodeUpsertBatch:
+      type: object
+      required: [source, items]
+      properties:
+        source: { $ref: '#/components/schemas/SourceRef' }
+        competence: { type: string, description: Competência do arquivo (AAAAMM) }
+        version: { type: string, description: Versão do layout/mapeamento usado }
+        items:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/CodeUpsert' }
+    UpsertResult:
+      type: object
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        rejected: { type: integer }

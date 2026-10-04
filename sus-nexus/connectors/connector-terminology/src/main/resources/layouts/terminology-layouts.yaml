@@ -1,0 +1,71 @@
+# Layouts de arquivos de terminologia. Versão = field_mapping_version do conector.
+#
+# SIGTAP: as posições abaixo seguem o arquivo tb_procedimento_layout.txt distribuído junto com a
+# competência (ftp://ftp2.datasus.gov.br/public/sistemas/tup/downloads/). Se a competência em uso
+# trouxer um layout diferente, AJUSTE AQUI (start/end são 1-based e inclusivos) e incremente a versão.
+version: "1.0.0"
+tables:
+  - name: tb_procedimento
+    system: SIGTAP
+    file_pattern: "(?i)tb_procedimento.*\\.txt"
+    format: fixed-width
+    charset: ISO-8859-1
+    columns:
+      - { name: CO_PROCEDIMENTO, start: 1, end: 10 }
+      - { name: NO_PROCEDIMENTO, start: 11, end: 260 }
+      - { name: TP_COMPLEXIDADE, start: 261, end: 261 }
+      - { name: TP_SEXO, start: 262, end: 262 }
+      - { name: QT_MAXIMA_EXECUCAO, start: 263, end: 266 }
+      - { name: QT_DIAS_PERMANENCIA, start: 267, end: 270 }
+      - { name: QT_PONTOS, start: 271, end: 274 }
+      - { name: VL_IDADE_MINIMA, start: 275, end: 278 }
+      - { name: VL_IDADE_MAXIMA, start: 279, end: 282 }
+      - { name: VL_SH, start: 283, end: 292 }
+      - { name: VL_SA, start: 293, end: 302 }
+      - { name: VL_SP, start: 303, end: 312 }
+      - { name: CO_FINANCIAMENTO, start: 313, end: 314 }
+      - { name: CO_RUBRICA, start: 315, end: 320 }
+      - { name: QT_TEMPO_PERMANENCIA, start: 321, end: 324 }
+      - { name: DT_COMPETENCIA, start: 325, end: 330 }
+    fields: { code: CO_PROCEDIMENTO, display: NO_PROCEDIMENTO, competence: DT_COMPETENCIA }
+    attributes: [TP_COMPLEXIDADE, TP_SEXO, QT_MAXIMA_EXECUCAO, VL_SH, VL_SA, VL_SP, CO_FINANCIAMENTO]
+
+  # CID-10 simplificado: codigo;descricao (exportação própria ou tabela do e-SUS)
+  - name: cid10
+    system: CID10
+    file_pattern: "(?i)cid10[^/]*\\.csv"
+    format: delimited
+    delimiter: ";"
+    charset: UTF-8
+    header: true
+    fields: { code: codigo, display: descricao }
+
+  # CID-10 oficial (CID-10-SUBCATEGORIAS.CSV do DATASUS): SUBCAT;CLASSIF;RESTRSEXO;CAUSAOBITO;DESCRICAO;DESCRABREV;...
+  - name: cid10_subcategorias_oficial
+    system: CID10
+    file_pattern: "(?i)CID-10-SUBCATEGORIAS.*\\.csv"
+    format: delimited
+    delimiter: ";"
+    charset: ISO-8859-1
+    header: true
+    fields: { code: SUBCAT, display: DESCRICAO }
+    attributes: [RESTRSEXO, CAUSAOBITO, DESCRABREV]
+
+  # CBO 2002 (arquivo "CBO2002 - Ocupacao.csv": CODIGO;TITULO) ou exportação codigo;descricao
+  - name: cbo
+    system: CBO
+    file_pattern: "(?i)cbo[^/]*\\.csv"
+    format: delimited
+    delimiter: ";"
+    charset: UTF-8
+    header: true
+    fields: { code: codigo, display: descricao }
+
+  - name: ciap2
+    system: CIAP2
+    file_pattern: "(?i)ciap-?2[^/]*\\.csv"
+    format: delimited
+    delimiter: ";"
+    charset: UTF-8
+    header: true
+    fields: { code: codigo, display: descricao }

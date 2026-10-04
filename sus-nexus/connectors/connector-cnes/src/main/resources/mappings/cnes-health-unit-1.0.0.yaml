@@ -1,0 +1,42 @@
+# tbEstabelecimento (BASE_DE_DADOS_CNES) → HealthUnitUpsert
+# Colunas do CSV/DBF oficial: CO_UNIDADE;CO_CNES;NU_CNPJ_MANTENEDORA;TP_PFPJ;NIVEL_DEP;NO_RAZAO_SOCIAL;
+# NO_FANTASIA;NO_LOGRADOURO;NU_ENDERECO;NO_COMPLEMENTO;NO_BAIRRO;CO_CEP;...;TP_UNIDADE;...;CO_MUNICIPIO_GESTOR;...
+# O conector compõe ENDERECO e normaliza CO_TIPO_UNIDADE (= TP_UNIDADE) antes do mapeamento.
+mapping_set: cnes-health-unit
+version: "1.0.0"
+entity_type: health_unit
+lookups:
+  tipo_unidade:
+    "01": POSTO DE SAUDE
+    "02": CENTRO DE SAUDE/UNIDADE BASICA
+    "04": POLICLINICA
+    "05": HOSPITAL GERAL
+    "07": HOSPITAL ESPECIALIZADO
+    "15": UNIDADE MISTA
+    "20": PRONTO SOCORRO GERAL
+    "21": PRONTO SOCORRO ESPECIALIZADO
+    "22": CONSULTORIO ISOLADO
+    "36": CLINICA/CENTRO DE ESPECIALIDADE
+    "39": UNIDADE DE APOIO DIAGNOSE E TERAPIA (SADT ISOLADO)
+    "40": UNIDADE MOVEL TERRESTRE
+    "42": UNIDADE MOVEL DE NIVEL PRE-HOSPITALAR NA AREA DE URGENCIA
+    "43": FARMACIA
+    "62": HOSPITAL/DIA - ISOLADO
+    "70": CENTRO DE ATENCAO PSICOSSOCIAL
+    "71": CENTRO DE APOIO A SAUDE DA FAMILIA
+    "72": UNIDADE DE ATENCAO A SAUDE INDIGENA
+    "73": PRONTO ATENDIMENTO
+    "74": POLO ACADEMIA DA SAUDE
+    "81": CENTRAL DE REGULACAO DO ACESSO
+fields:
+  - { source: CO_CNES, target: cnes, transforms: [trim, digits], required: true }
+  - { source: NO_FANTASIA, target: name, transforms: [trim, upper], required: true }
+  - { source: CO_TIPO_UNIDADE, target: kind_code, transforms: [trim] }
+  - { source: CO_TIPO_UNIDADE, target: kind_description, transforms: [trim, { lookup: { table: tipo_unidade, default: "TIPO NAO CATALOGADO" } }] }
+  - { source: ENDERECO, target: address, transforms: [trim, blank_to_null] }
+  - { source: CO_MUNICIPIO_GESTOR, target: city_ibge, transforms: [trim, digits] }
+  - { target: active, constant: "true", transforms: [{ to_boolean: { true_values: ["TRUE"] } }] }
+  - { source: NO_RAZAO_SOCIAL, target: attributes.razao_social, transforms: [trim, upper] }
+  - { source: NU_CNPJ_MANTENEDORA, target: attributes.cnpj_mantenedora, transforms: [digits, blank_to_null] }
+  - { source: CO_UNIDADE, target: attributes.co_unidade, transforms: [trim, blank_to_null] }
+  - { source: NU_TELEFONE, target: attributes.telefone, transforms: [trim, blank_to_null] }

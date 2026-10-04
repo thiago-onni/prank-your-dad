@@ -1,0 +1,14 @@
+mapping_set: example-citizen
+version: "1.0.0"
+entity_type: citizen
+lookups:
+  sexo: { M: male, F: female }
+fields:
+  - { target: source.system, constant: EXEMPLO }
+  - { target: source.connector, constant: connector-example }
+  - { source: id, target: source.source_record_id, required: true }
+  - { source: nome, target: demographics.legal_name, transforms: [trim, upper, unaccent], required: true }
+  - { source: nascimento, target: demographics.birthdate, transforms: [{ date: { from: "dd/MM/yyyy" } }], required: true }
+  - { source: sexo, target: demographics.sex, transforms: [upper, { lookup: { table: sexo, default: unknown } }] }
+  - { target: "identifiers[0].system", constant: CPF, depends_on: cpf }
+  - { source: cpf, target: "identifiers[0].value", transforms: [digits], depends_on: cpf }

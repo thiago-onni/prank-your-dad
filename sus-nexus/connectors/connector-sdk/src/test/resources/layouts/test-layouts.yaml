@@ -1,0 +1,19 @@
+version: "2.0.0"
+tables:
+  - name: tb_teste
+    system: SIGTAP
+    file_pattern: "(?i)tb_teste.*\\.txt"
+    format: fixed-width
+    charset: ISO-8859-1
+    columns:
+      - { name: CO, start: 1, end: 10 }
+      - { name: NO, start: 11, end: 20 }
+      - { name: DT, start: 21, end: 26 }
+    fields: { code: CO, display: NO, competence: DT }
+  - name: cid10
+    system: CID10
+    file_pattern: "(?i)cid10.*\\.csv"
+    format: delimited
+    delimiter: ";"
+    header: true
+    fields: { code: codigo, display: descricao }

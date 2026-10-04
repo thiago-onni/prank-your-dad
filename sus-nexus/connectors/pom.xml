@@ -36,7 +36,7 @@
     <assertj.version>3.27.3</assertj.version>
     <wiremock.version>3.13.2</wiremock.version>
     <ulid-creator.version>5.2.4</ulid-creator.version>
-    <javadbf.version>0.4.0</javadbf.version>
+    <javadbf.version>1.14.1</javadbf.version>
     <aws-sdk.version>2.55.11</aws-sdk.version>
 
     <skipITs>true</skipITs>
@@ -78,14 +78,20 @@
         <artifactId>ulid-creator</artifactId>
         <version>${ulid-creator.version}</version>
       </dependency>
+      <!-- fork mantido do javadbf (mesmo pacote com.linuxense.javadbf, API moderna) -->
       <dependency>
-        <groupId>com.linuxense</groupId>
+        <groupId>com.github.albfernandez</groupId>
         <artifactId>javadbf</artifactId>
         <version>${javadbf.version}</version>
       </dependency>
       <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>s3</artifactId>
+        <version>${aws-sdk.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>url-connection-client</artifactId>
         <version>${aws-sdk.version}</version>
       </dependency>
     </dependencies>

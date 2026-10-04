@@ -1,0 +1,30 @@
+# tb_agendado (PEC) → AppointmentRegistration. citizen_ref é montado pelo conector (CPF → CNS → id PEC).
+# AJUSTE a tabela 'situacao' aos códigos de tb_situacao_agendado da versão do PEC em uso.
+mapping_set: pec-appointment
+version: "1.0.0"
+entity_type: appointment
+lookups:
+  situacao:
+    "1": booked
+    "2": cancelled
+    "3": noshow
+    "4": fulfilled
+    "5": confirmed
+    AGENDADO: booked
+    CANCELADO: cancelled
+    NAO_COMPARECEU: noshow
+    ATENDIDO: fulfilled
+    CONFIRMADO: confirmed
+fields:
+  - { target: source.system, constant: PEC }
+  - { target: source.connector, constant: connector-pec }
+  - { source: co_seq_agendado, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: dt_atualizado, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: nu_cnes, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: co_situacao_agendado, target: status, transforms: [trim, upper, { lookup: { table: situacao, default: booked } }], required: true }
+  - { target: kind, constant: direct }
+  - { source: nu_cnes, target: health_unit_cnes, transforms: [digits, blank_to_null] }
+  - { source: co_prof, target: professional_id, transforms: [trim, blank_to_null] }
+  - { source: dt_agendado, target: scheduled_start, transforms: [{ date: { from: "yyyy-MM-dd HH:mm:ss", to: iso-datetime } }], required: true }
+  - { source: dt_atualizado, target: occurred_at, transforms: [blank_to_null, { date: { from: "yyyy-MM-dd HH:mm:ss", to: iso-datetime } }] }
+  - { source: ds_motivo_cancelamento, target: cancellation_reason, transforms: [trim, blank_to_null] }

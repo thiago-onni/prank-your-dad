@@ -1,0 +1,17 @@
+mapping_set: test-citizen
+version: "1.0.0"
+entity_type: citizen
+lookups:
+  sexo: { M: male, F: female, I: unknown }
+fields:
+  - { target: source.system, constant: TESTE }
+  - { target: source.connector, constant: connector-test }
+  - { source: id, target: source.source_record_id, required: true }
+  - { source: nome, target: demographics.legal_name, transforms: [trim, upper, unaccent], required: true }
+  - { source: nome_mae, target: demographics.mother_name, transforms: [trim, upper] }
+  - { source: dt_nasc, target: demographics.birthdate, transforms: [ { date: { from: ddMMyyyy } } ], required: true }
+  - { source: sexo, target: demographics.sex, transforms: [ { lookup: { table: sexo, default: unknown } } ] }
+  - { target: "identifiers[0].system", constant: CPF, depends_on: cpf }
+  - { source: cpf, target: "identifiers[0].value", transforms: [digits, blank_to_null] }
+  - { source: ativo, target: demographics.deceased, transforms: [ { to_boolean: { true_values: [N] } } ] }
+  - { source: dt_cadastro, target: territory.microarea, transforms: [ { substring: { start: 0, end: 2 } } ] }

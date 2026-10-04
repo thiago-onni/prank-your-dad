@@ -1,0 +1,40 @@
+# tb_cidadao (PEC) → CitizenRegistration. Nomes de coluna em minúsculas (CSV exportado ou SELECT).
+# AJUSTE os códigos de sexo/raça à versão do PEC em uso (tb_sexo / tb_raca_cor).
+mapping_set: pec-citizen
+version: "1.0.0"
+entity_type: citizen
+lookups:
+  sexo: { M: male, F: female, MASCULINO: male, FEMININO: female, "0": female, "1": male, I: unknown }
+  raca_cor: { "1": branca, "2": preta, "3": parda, "4": amarela, "5": indigena, "99": sem_informacao, BRANCA: branca, PRETA: preta, PARDA: parda, AMARELA: amarela, INDIGENA: indigena }
+fields:
+  - { target: source.system, constant: PEC }
+  - { target: source.connector, constant: connector-pec }
+  - { source: co_seq_cidadao, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: dt_atualizado, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: nu_cnes, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: no_cidadao, target: demographics.legal_name, transforms: [trim, upper, unaccent], required: true }
+  - { source: no_social_cidadao, target: demographics.social_name, transforms: [trim, upper, unaccent, blank_to_null] }
+  - { source: no_mae, target: demographics.mother_name, transforms: [trim, upper, unaccent, blank_to_null] }
+  - { source: no_pai, target: demographics.father_name, transforms: [trim, upper, unaccent, blank_to_null] }
+  - { source: dt_nascimento, target: demographics.birthdate, transforms: [{ date: { from: "yyyy-MM-dd" } }], required: true }
+  - { source: no_sexo, target: demographics.sex, transforms: [trim, upper, { lookup: { table: sexo, default: unknown } }] }
+  - { source: co_raca_cor, target: demographics.race_color, transforms: [trim, upper, { lookup: { table: raca_cor, default: sem_informacao } }] }
+  - { source: st_faleceu, target: demographics.deceased, transforms: [{ to_boolean: { true_values: ["1", "S", "TRUE"] } }] }
+  - { source: dt_obito, target: demographics.deceased_at, transforms: [blank_to_null, { date: { from: "yyyy-MM-dd" } }] }
+  - { target: "identifiers[0].system", constant: CPF, depends_on: nu_cpf }
+  - { source: nu_cpf, target: "identifiers[0].value", transforms: [digits, blank_to_null], depends_on: nu_cpf }
+  - { target: "identifiers[1].system", constant: CNS, depends_on: nu_cns }
+  - { source: nu_cns, target: "identifiers[1].value", transforms: [digits, blank_to_null], depends_on: nu_cns }
+  - { target: "identifiers[2].system", constant: PEC }
+  - { source: co_seq_cidadao, target: "identifiers[2].value", transforms: [trim] }
+  - { source: ds_logradouro, target: address.street, transforms: [trim, upper, blank_to_null] }
+  - { source: nu_numero, target: address.number, transforms: [trim, blank_to_null] }
+  - { source: ds_complemento, target: address.complement, transforms: [trim, blank_to_null] }
+  - { source: no_bairro, target: address.district, transforms: [trim, upper, blank_to_null] }
+  - { source: co_ibge, target: address.city_ibge, transforms: [digits, blank_to_null] }
+  - { source: ds_cep, target: address.postal_code, transforms: [digits, blank_to_null] }
+  - { target: "contacts[0].kind", constant: mobile, depends_on: nu_telefone_celular }
+  - { source: nu_telefone_celular, target: "contacts[0].value", transforms: [digits], depends_on: nu_telefone_celular }
+  - { source: nu_cnes, target: territory.health_unit_cnes, transforms: [digits, blank_to_null] }
+  - { source: nu_ine, target: territory.team_ine, transforms: [digits, blank_to_null] }
+  - { source: nu_micro_area, target: territory.microarea, transforms: [trim, blank_to_null] }
