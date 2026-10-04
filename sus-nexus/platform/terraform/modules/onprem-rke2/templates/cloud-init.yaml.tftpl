@@ -1,0 +1,156 @@
+#cloud-config
+# ${hostname} — RKE2 ${node.role} (${node.tier}, zona ${node.zone})
+hostname: ${hostname}
+fqdn: ${hostname}.sus-nexus.local
+manage_etc_hosts: true
+timezone: America/Sao_Paulo
+locale: pt_BR.UTF-8
+
+users:
+  - name: ${ssh_user}
+    groups: [sudo, wheel]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+%{ if length(ssh_authorized_keys) > 0 ~}
+    ssh_authorized_keys:
+%{ for k in ssh_authorized_keys ~}
+      - ${k}
+%{ endfor ~}
+%{ endif ~}
+
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages:
+  - chrony
+  - curl
+  - jq
+  - nfs-common
+  - open-iscsi
+  - lvm2
+  - audispd-plugins
+  - auditd
+  - apparmor-utils
+
+ntp:
+  enabled: true
+  ntp_client: chrony
+  servers:
+%{ for s in ntp_servers ~}
+    - ${s}
+%{ endfor ~}
+
+write_files:
+  - path: /etc/rancher/rke2/config.yaml
+    permissions: "0600"
+    owner: root:root
+    content: |
+      ${indent(6, rke2_config)}
+%{ if registry_mirror != "" ~}
+  - path: /etc/rancher/rke2/registries.yaml
+    permissions: "0600"
+    content: |
+      mirrors:
+        docker.io:
+          endpoint: ["https://${registry_mirror}/v2/dockerhub-proxy"]
+        quay.io:
+          endpoint: ["https://${registry_mirror}/v2/quay-proxy"]
+        ghcr.io:
+          endpoint: ["https://${registry_mirror}/v2/ghcr-proxy"]
+        registry.k8s.io:
+          endpoint: ["https://${registry_mirror}/v2/k8s-proxy"]
+%{ endif ~}
+%{ if is_server ~}
+  - path: /etc/rancher/rke2/audit-policy.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: audit.k8s.io/v1
+      kind: Policy
+      omitStages: [RequestReceived]
+      rules:
+        - level: None
+          users: ["system:kube-proxy"]
+          verbs: ["watch"]
+        - level: None
+          nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/metrics", "/version"]
+        - level: Metadata
+          resources:
+            - group: ""
+              resources: ["secrets", "configmaps"]
+        - level: RequestResponse
+          verbs: ["create", "update", "patch", "delete"]
+          resources:
+            - group: ""
+            - group: "apps"
+            - group: "rbac.authorization.k8s.io"
+            - group: "kyverno.io"
+            - group: "postgresql.cnpg.io"
+            - group: "kafka.strimzi.io"
+        - level: Metadata
+  - path: /etc/rancher/rke2/rke2-pss.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: apiserver.config.k8s.io/v1
+      kind: AdmissionConfiguration
+      plugins:
+        - name: PodSecurity
+          configuration:
+            apiVersion: pod-security.admission.config.k8s.io/v1
+            kind: PodSecurityConfiguration
+            defaults:
+              enforce: restricted
+              enforce-version: latest
+              audit: restricted
+              warn: restricted
+            exemptions:
+              usernames: []
+              runtimeClasses: []
+              namespaces: [kube-system, cilium, longhorn-system, velero, minio-operator, strimzi-system, cnpg-system]
+  - path: /etc/rancher/rke2/encryption-config.yaml
+    permissions: "0600"
+    content: |
+      # Chave gerada pelo Ansible (openssl rand -base64 32) e guardada no OpenBao antes do primeiro boot
+      apiVersion: apiserver.config.k8s.io/v1
+      kind: EncryptionConfiguration
+      resources:
+        - resources: [secrets]
+          providers:
+            - aescbc:
+                keys:
+                  - name: key1
+                    secret: __REPLACED_BY_ANSIBLE__
+            - identity: {}
+%{ endif ~}
+  - path: /etc/sysctl.d/90-kubelet.conf
+    content: |
+      vm.panic_on_oom=0
+      vm.overcommit_memory=1
+      kernel.panic=10
+      kernel.panic_on_oops=1
+      net.ipv4.ip_forward=1
+      net.ipv4.conf.all.rp_filter=1
+      fs.inotify.max_user_instances=8192
+      fs.inotify.max_user_watches=1048576
+%{ if try(node.disks.fast_nvme, "") != "" ~}
+  - path: /etc/sus-nexus/disks.env
+    content: |
+      FAST_NVME=${node.disks.fast_nvme}
+      STANDARD=${try(node.disks.standard, "")}
+%{ endif ~}
+
+runcmd:
+  - sysctl --system
+  - systemctl enable --now chrony auditd iscsid
+  - mkdir -p /var/lib/rancher/rke2/server/logs
+  # Usuário etcd exigido pelo perfil CIS
+  - useradd -r -c "etcd user" -s /sbin/nologin -M etcd || true
+  - cp -f /usr/share/rke2/rke2-cis-sysctl.conf /etc/sysctl.d/60-rke2-cis.conf || true
+  - curl -sfL https://get.rke2.io | INSTALL_RKE2_VERSION="${rke2_version}" INSTALL_RKE2_TYPE="${is_server ? "server" : "agent"}" sh -
+  - sysctl --system
+  # O serviço é iniciado pelo Ansible na ordem correta (primeiro server → demais servers → agents)
+  - systemctl enable rke2-${is_server ? "server" : "agent"}.service
+
+final_message: "SUS Nexus node ${hostname} pronto para o playbook RKE2 (${rke2_version})"

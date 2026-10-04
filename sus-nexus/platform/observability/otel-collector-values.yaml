@@ -1,0 +1,134 @@
+# Values do chart open-telemetry/opentelemetry-collector (ver argocd/apps/00-operators.yaml).
+# A configuração do collector está em otel-collector-config.yaml e é colada aqui em `config`; mantenha
+# os dois iguais (CI compara: platform job `otel-config-sync`).
+mode: deployment
+replicaCount: 2
+fullnameOverride: otel-collector
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.115.1
+presets:
+  kubernetesAttributes:
+    enabled: true
+    extractAllPodLabels: false
+  kubeletMetrics:
+    enabled: false
+  logsCollection:
+    enabled: false         # logs chegam via OTLP dos apps (JSON sem PII); daemonset de stdout opcional
+extraEnvs:
+  - name: CLUSTER_NAME
+    valueFrom:
+      configMapKeyRef:
+        name: cluster-info
+        key: name
+        optional: true
+ports:
+  otlp: { enabled: true, containerPort: 4317, servicePort: 4317, protocol: TCP }
+  otlp-http: { enabled: true, containerPort: 4318, servicePort: 4318, protocol: TCP }
+  metrics: { enabled: true, containerPort: 8888, servicePort: 8888, protocol: TCP }
+  jaeger-compact: { enabled: false }
+  jaeger-thrift: { enabled: false }
+  jaeger-grpc: { enabled: false }
+  zipkin: { enabled: false }
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: "2", memory: 2Gi }
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+serviceMonitor:
+  enabled: true
+  extraLabels:
+    release: kube-prometheus-stack
+# Cole aqui o conteúdo de otel-collector-config.yaml (o chart faz merge com a config padrão; `null` remove)
+configMap:
+  create: true
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    otlp:
+      protocols:
+        grpc: { endpoint: 0.0.0.0:4317 }
+        http: { endpoint: 0.0.0.0:4318 }
+  processors:
+    memory_limiter: { check_interval: 1s, limit_percentage: 80, spike_limit_percentage: 20 }
+    transform/pii:
+      error_mode: ignore
+      log_statements:
+        - context: log
+          statements:
+            - replace_pattern(body, "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+            - replace_pattern(body, "\\b[1-2789]\\d{14}\\b", "***************")
+            - replace_pattern(body, "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<email>")
+            - replace_all_patterns(attributes, "value", "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+            - replace_all_patterns(attributes, "value", "\\b[1-2789]\\d{14}\\b", "***************")
+      trace_statements:
+        - context: span
+          statements:
+            - replace_all_patterns(attributes, "value", "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+            - replace_all_patterns(attributes, "value", "\\b[1-2789]\\d{14}\\b", "***************")
+            - replace_pattern(name, "\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}", "{cpf}")
+            - replace_pattern(attributes["url.full"], "(cpf|cns)=[^&]+", "$$1=***")
+            - replace_pattern(attributes["url.query"], "(cpf|cns)=[^&]+", "$$1=***")
+            - replace_pattern(attributes["url.path"], "/identifiers/(CPF|CNS)/[0-9.-]+", "/identifiers/$$1/***")
+    attributes/strip:
+      actions:
+        - { key: cpf, action: delete }
+        - { key: cns, action: delete }
+        - { key: citizen.cpf, action: delete }
+        - { key: citizen.cns, action: delete }
+        - { key: citizen.name, action: delete }
+        - { key: patient.name, action: delete }
+        - { key: enduser.id, action: hash }
+        - { key: http.request.header.authorization, action: delete }
+        - { key: http.request.header.cookie, action: delete }
+        - { key: db.query.text, action: hash }
+        - { key: db.statement, action: hash }
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 50000
+      policies:
+        - { name: errors, type: status_code, status_code: { status_codes: [ERROR] } }
+        - { name: slow, type: latency, latency: { threshold_ms: 2000 } }
+        - { name: baseline, type: probabilistic, probabilistic: { sampling_percentage: 10 } }
+    resource:
+      attributes:
+        - { key: cluster, value: "${env:CLUSTER_NAME}", action: upsert }
+    batch: { timeout: 5s, send_batch_size: 2048 }
+  exporters:
+    debug: null
+    prometheusremotewrite:
+      endpoint: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/write
+      resource_to_telemetry_conversion: { enabled: true }
+      tls: { insecure: true }
+    otlphttp/loki:
+      endpoint: http://loki-gateway.observability.svc.cluster.local/otlp
+      tls: { insecure: true }
+    otlp/tempo:
+      endpoint: tempo-distributor.observability.svc.cluster.local:4317
+      tls: { insecure: true }
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, attributes/strip, transform/pii, tail_sampling, resource, batch]
+        exporters: [otlp/tempo]
+      metrics:
+        receivers: [otlp, prometheus]
+        processors: [memory_limiter, k8sattributes, resource, batch]
+        exporters: [prometheusremotewrite]
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, attributes/strip, transform/pii, resource, batch]
+        exporters: [otlphttp/loki]

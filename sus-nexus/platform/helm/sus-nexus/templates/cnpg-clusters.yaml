@@ -1,0 +1,200 @@
+{{- if .Values.cnpg.enabled }}
+{{- $root := . }}
+{{- $ns := include "umbrella.ns.data" . }}
+# Credenciais do object store de backup (MinIO/S3) via ESO → OpenBao
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ include "umbrella.backupCredsSecret" . }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: {{ include "umbrella.backupCredsSecret" . }}
+  data:
+    - secretKey: ACCESS_KEY_ID
+      remoteRef: { key: "{{ .Values.global.environment }}/platform/backup-s3", property: access_key }
+    - secretKey: ACCESS_SECRET_KEY
+      remoteRef: { key: "{{ .Values.global.environment }}/platform/backup-s3", property: secret_key }
+{{- range $name, $c := .Values.cnpg.clusters }}
+{{- if $c.enabled }}
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-app-user
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ $root.Values.global.secretStore.name }}
+    kind: {{ $root.Values.global.secretStore.kind }}
+  target:
+    name: {{ $name }}-app-user
+    template:
+      type: kubernetes.io/basic-auth
+  data:
+    - secretKey: username
+      remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}", property: password }
+---
+# CloudNativePG — cluster {{ $name }} ({{ $c.database }})
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+    sus-nexus.gov.br/database: {{ $c.database }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  instances: {{ $c.instances | default $root.Values.cnpg.defaults.instances }}
+  imageName: {{ $c.imageName | default $root.Values.cnpg.defaults.imageName }}
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: {{ $c.database }}
+      owner: {{ $c.owner | default $c.database }}
+      secret:
+        name: {{ $name }}-app-user
+      encoding: UTF8
+      localeCollate: C.UTF-8
+      localeCType: C.UTF-8
+      postInitApplicationSQL:
+        {{- range ($c.extensions | default $root.Values.cnpg.defaults.extensions) }}
+        - CREATE EXTENSION IF NOT EXISTS "{{ . }}";
+        {{- end }}
+        {{- with $c.postInitSQL }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  postgresql:
+    parameters:
+      max_connections: {{ $c.maxConnections | default "200" | quote }}
+      shared_buffers: {{ $c.sharedBuffers | default "1GB" | quote }}
+      effective_cache_size: {{ $c.effectiveCacheSize | default "3GB" | quote }}
+      work_mem: "16MB"
+      maintenance_work_mem: "256MB"
+      wal_level: logical
+      max_wal_senders: "16"
+      max_replication_slots: "16"
+      wal_keep_size: "1GB"
+      log_min_duration_statement: "1000"
+      log_statement: "ddl"
+      shared_preload_libraries: "pg_stat_statements"
+      pg_stat_statements.track: "all"
+      timezone: "America/Sao_Paulo"
+    pg_hba:
+      - hostssl all all 0.0.0.0/0 scram-sha-256
+    {{- if $c.synchronous }}
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    {{- end }}
+  {{- if $c.logicalReplicationUser }}
+  managed:
+    roles:
+      - name: debezium
+        ensure: present
+        login: true
+        replication: true
+        passwordSecret:
+          name: {{ $name }}-debezium-user
+  {{- end }}
+  storage:
+    size: {{ $c.storageSize | default $root.Values.cnpg.defaults.storageSize }}
+    storageClass: {{ $c.storageClass | default $root.Values.cnpg.defaults.storageClass }}
+  walStorage:
+    size: {{ $c.walStorageSize | default $root.Values.cnpg.defaults.walStorageSize }}
+    storageClass: {{ $c.storageClass | default $root.Values.cnpg.defaults.storageClass }}
+  resources:
+    {{- toYaml ($c.resources | default $root.Values.cnpg.defaults.resources) | nindent 4 }}
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: {{ ternary "topology.kubernetes.io/zone" "kubernetes.io/hostname" $root.Values.global.multiZone }}
+    podAntiAffinityType: {{ ternary "required" "preferred" (gt (int ($c.instances | default $root.Values.cnpg.defaults.instances)) 1) }}
+  monitoring:
+    enablePodMonitor: true
+  {{- if $root.Values.cnpg.backup.enabled }}
+  backup:
+    retentionPolicy: {{ $c.backupRetention | default $root.Values.cnpg.backup.retentionPolicy | quote }}
+    target: prefer-standby
+    barmanObjectStore:
+      destinationPath: s3://{{ $root.Values.cnpg.backup.bucket }}/cnpg/{{ $root.Values.global.environment }}/{{ $name }}
+      endpointURL: {{ $root.Values.cnpg.backup.endpointURL }}
+      {{- if $root.Values.cnpg.backup.endpointCA }}
+      endpointCA:
+        name: {{ $root.Values.cnpg.backup.endpointCA.name }}
+        key: {{ $root.Values.cnpg.backup.endpointCA.key }}
+      {{- end }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ include "umbrella.backupCredsSecret" $root }}
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ include "umbrella.backupCredsSecret" $root }}
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        maxParallel: 4
+        encryption: AES256
+      data:
+        compression: gzip
+        immediateCheckpoint: false
+        jobs: 2
+        encryption: AES256
+  {{- end }}
+{{- if $root.Values.cnpg.backup.enabled }}
+---
+# Base backup agendado (WAL contínuo já é enviado pelo barmanObjectStore). PITR = base + WAL.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ $name }}-daily
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  schedule: {{ $c.backupSchedule | default $root.Values.cnpg.backup.schedule | quote }}
+  backupOwnerReference: self
+  immediate: true
+  target: prefer-standby
+  method: barmanObjectStore
+  cluster:
+    name: {{ $name }}
+{{- end }}
+{{- if $c.pooler }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ $name }}-pooler-rw
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  cluster:
+    name: {{ $name }}
+  instances: {{ $c.pooler.instances | default 2 }}
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: "1000"
+      default_pool_size: "25"
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

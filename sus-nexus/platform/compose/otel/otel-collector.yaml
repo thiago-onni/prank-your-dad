@@ -1,0 +1,108 @@
+# OTel Collector (local). Versão de cluster: platform/observability/otel-collector-config.yaml (mesmos
+# processors de remoção de PII). Mantenha os dois em sincronia.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # --- Remoção de PII (CPF / CNS / e-mail / telefone) em atributos e corpo de log -----------------
+  # CPF: 000.000.000-00 ou 11 dígitos; CNS: 15 dígitos (começa com 1, 2, 7, 8 ou 9).
+  transform/pii:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+          - replace_pattern(body, "\\b[1-2789]\\d{14}\\b", "***************")
+          - replace_pattern(body, "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<email>")
+          - replace_all_patterns(attributes, "value", "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+          - replace_all_patterns(attributes, "value", "\\b[1-2789]\\d{14}\\b", "***************")
+    trace_statements:
+      - context: span
+        statements:
+          - replace_all_patterns(attributes, "value", "\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b", "***.***.***-**")
+          - replace_all_patterns(attributes, "value", "\\b[1-2789]\\d{14}\\b", "***************")
+          - replace_pattern(name, "\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}", "{cpf}")
+          - replace_pattern(attributes["url.full"], "cpf=[^&]+", "cpf=***")
+          - replace_pattern(attributes["url.full"], "cns=[^&]+", "cns=***")
+          - replace_pattern(attributes["url.query"], "(cpf|cns)=[^&]+", "$$1=***")
+
+  # Remove atributos que nunca devem sair do processo
+  attributes/strip:
+    actions:
+      - key: cpf
+        action: delete
+      - key: cns
+        action: delete
+      - key: citizen.cpf
+        action: delete
+      - key: citizen.cns
+        action: delete
+      - key: citizen.name
+        action: delete
+      - key: patient.name
+        action: delete
+      - key: http.request.header.authorization
+        action: delete
+      - key: db.query.text
+        action: hash
+      - key: db.statement
+        action: hash
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: local
+        action: upsert
+
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      level: basic
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/strip, transform/pii, resource, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/strip, transform/pii, resource, batch]
+      exporters: [otlphttp/loki]

@@ -1,0 +1,54 @@
+# /etc/rancher/rke2/config.yaml — ${node.name} (${node.role}, tier ${node.tier}, zona ${node.zone})
+%{ if !is_first ~}
+server: ${server_url}
+%{ endif ~}
+token: ${token}
+node-name: ${node.name}
+node-ip: ${node.ip}
+profile: ${cis_profile}
+%{ if is_server ~}
+cni: ${cni}
+disable-kube-proxy: true          # Cilium em modo kube-proxy replacement
+disable:
+  - rke2-ingress-nginx             # ingress é o APISIX
+  - rke2-snapshot-controller       # CSI snapshot controller instalado pela plataforma
+tls-san:
+%{ for san in tls_sans ~}
+  - ${san}
+%{ endfor ~}
+etcd-expose-metrics: true
+etcd-snapshot-schedule-cron: "0 */6 * * *"
+etcd-snapshot-retention: 28
+etcd-s3: true
+etcd-s3-endpoint: minio.data.svc.cluster.local
+etcd-s3-bucket: backups
+etcd-s3-folder: etcd/${cluster_name}
+kube-apiserver-arg:
+  - audit-log-path=/var/lib/rancher/rke2/server/logs/audit.log
+  - audit-log-maxage=30
+  - audit-log-maxbackup=10
+  - audit-log-maxsize=100
+  - audit-policy-file=/etc/rancher/rke2/audit-policy.yaml
+  - admission-control-config-file=/etc/rancher/rke2/rke2-pss.yaml
+  - encryption-provider-config=/etc/rancher/rke2/encryption-config.yaml
+kube-controller-manager-arg:
+  - terminated-pod-gc-threshold=1000
+%{ endif ~}
+kubelet-arg:
+  - protect-kernel-defaults=true
+  - read-only-port=0
+  - streaming-connection-idle-timeout=5m
+  - max-pods=110
+  - eviction-hard=memory.available<500Mi,nodefs.available<10%
+node-label:
+%{ for k, v in labels ~}
+  - "${k}=${v}"
+%{ endfor ~}
+%{ if length(taints) > 0 ~}
+node-taint:
+%{ for t in taints ~}
+  - "${t}"
+%{ endfor ~}
+%{ endif ~}
+selinux: true
+write-kubeconfig-mode: "0600"

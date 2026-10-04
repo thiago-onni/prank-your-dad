@@ -1,0 +1,363 @@
+# Valores padrão do chart umbrella sus-nexus. Sobrescreva com values-dev.yaml / values-hml.yaml /
+# values-prod.yaml. Todos os blocos são opcionais; o Argo CD (platform/argocd) habilita subconjuntos por
+# Application (data, security, workflows, core, fhir, web, ai, connectors).
+
+global:
+  environment: dev
+  domain: dev.sus-nexus.local
+  imageRegistry: ""              # ex.: harbor.sus-nexus.local/sus-nexus
+  imagePullSecrets: []
+  multiZone: false
+  keycloakUrl: https://auth.dev.sus-nexus.local
+  keycloakRealm: sus-nexus
+  secretStore:
+    name: openbao
+    kind: ClusterSecretStore
+  namespaces:
+    core: core
+    fhir: fhir
+    connectors: connectors
+    ai: ai
+    web: web
+    data: data
+    security: security
+    workflows: workflows
+    observability: observability
+    gateway: gateway
+
+# ----------------------------------------------------------------------------------------------------
+# Componentes da aplicação (subcharts). Chaves abaixo são repassadas ao chart correspondente.
+# ----------------------------------------------------------------------------------------------------
+core:
+  enabled: false
+  namespaceOverride: core
+fhir:
+  enabled: false
+  namespaceOverride: fhir
+web:
+  enabled: false
+  namespaceOverride: web
+ai:
+  enabled: false
+  namespaceOverride: ai
+
+connector-pec:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-pec
+  image: { repository: sus-nexus/connector-pec }
+  connector: { id: pec, sourceSystem: PEC, ingestTopic: sus.ingest.pec.v1, tenantId: ibge_3143302, pollInterval: PT5M, reconciliationCron: "0 0 3 * * ?", edgeAgent: false }
+connector-agenda:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-agenda
+  image: { repository: sus-nexus/connector-agenda }
+  connector: { id: agenda, sourceSystem: AGENDA, ingestTopic: sus.ingest.agenda.v1, tenantId: ibge_3143302, pollInterval: PT2M, reconciliationCron: "0 0 3 * * ?", edgeAgent: false }
+connector-sisreg:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-sisreg
+  image: { repository: sus-nexus/connector-sisreg }
+  connector: { id: sisreg, sourceSystem: SISREG, ingestTopic: sus.ingest.agenda.v1, tenantId: ibge_3143302, pollInterval: PT15M, reconciliationCron: "0 0 4 * * ?", edgeAgent: false }
+connector-cnes:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-cnes
+  image: { repository: sus-nexus/connector-cnes }
+  connector: { id: cnes, sourceSystem: CNES, ingestTopic: sus.ingest.cnes.v1, tenantId: ibge_3143302, pollInterval: P1D, reconciliationCron: "0 0 5 * * ?", edgeAgent: false }
+connector-cadsus:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-cadsus
+  image: { repository: sus-nexus/connector-cadsus }
+  connector: { id: cadsus, sourceSystem: CADSUS, ingestTopic: sus.ingest.pec.v1, tenantId: ibge_3143302, pollInterval: PT30M, reconciliationCron: "0 0 5 * * ?", edgeAgent: false }
+connector-his:
+  enabled: false
+  namespaceOverride: connectors
+  fullnameOverride: connector-his
+  image: { repository: sus-nexus/connector-his }
+  connector: { id: his, sourceSystem: HIS, ingestTopic: sus.ingest.pec.v1, tenantId: ibge_3143302, pollInterval: PT1M, reconciliationCron: "0 0 4 * * ?", edgeAgent: true }
+
+# ----------------------------------------------------------------------------------------------------
+# Plataforma de dados
+# ----------------------------------------------------------------------------------------------------
+cnpg:
+  enabled: false
+  defaults:
+    instances: 3
+    imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+    storageClass: fast-nvme
+    storageSize: 100Gi
+    walStorageSize: 20Gi
+    extensions: [pg_trgm, unaccent, pgcrypto, uuid-ossp, pg_stat_statements]
+    resources:
+      requests: { cpu: "1", memory: 4Gi }
+      limits: { cpu: "4", memory: 8Gi }
+  backup:
+    enabled: true
+    bucket: backups
+    endpointURL: https://minio.data.svc.cluster.local
+    endpointCA: { name: minio-ca, key: ca.crt }   # null para S3 público
+    retentionPolicy: 30d
+    schedule: "0 0 2 * * *"      # CNPG usa 6 campos (segundos)
+  clusters:
+    core-db:
+      enabled: true
+      database: sus_nexus_core
+      owner: sus_nexus
+      extensions: [pg_trgm, unaccent, pgcrypto, uuid-ossp, pg_stat_statements, vector]
+      imageName: ghcr.io/tensorchord/cloudnative-pgvecto.rs:pg16-v0.3.0   # imagem com pgvector; troque por ghcr.io/cloudnative-pg/postgresql se não usar vector no core
+      storageSize: 500Gi
+      synchronous: true
+      logicalReplicationUser: true   # cria papel debezium (CDC do outbox)
+      pooler: { instances: 2 }
+      resources:
+        requests: { cpu: "2", memory: 8Gi }
+        limits: { cpu: "8", memory: 32Gi }
+      sharedBuffers: 8GB
+      effectiveCacheSize: 24GB
+      maxConnections: "300"
+    fhir-db:
+      enabled: true
+      database: sus_nexus_fhir
+      owner: sus_nexus
+      storageSize: 200Gi
+    temporal-db:
+      enabled: true
+      database: temporal
+      owner: temporal
+      postInitSQL: ["CREATE DATABASE temporal_visibility OWNER temporal;"]
+      storageSize: 100Gi
+    keycloak-db:
+      enabled: true
+      database: keycloak
+      owner: keycloak
+      instances: 2
+      storageSize: 20Gi
+    langfuse-db:
+      enabled: true
+      database: langfuse
+      owner: langfuse
+      instances: 2
+      storageSize: 50Gi
+    ai-db:
+      enabled: true
+      database: sus_nexus_ai
+      owner: sus_nexus
+      instances: 2
+      extensions: [pgcrypto, uuid-ossp, vector]
+      imageName: ghcr.io/tensorchord/cloudnative-pgvecto.rs:pg16-v0.3.0
+      storageSize: 50Gi
+    apicurio-db:
+      enabled: true
+      database: apicurio
+      owner: apicurio
+      instances: 2
+      storageSize: 10Gi
+
+strimzi:
+  enabled: false
+  namespace: ""                   # default: global.namespaces.data
+  clusterName: sus-kafka
+  kafkaVersion: "3.9.0"
+  metadataVersion: "3.9-IV0"
+  topicReplication: 3
+  topicMinInsyncReplicas: 2
+  partitionFactor: 1.0            # dev: 0.25 → 12 partições viram 3
+  nodePool:
+    name: dual
+    replicas: 3
+    storageClass: fast-nvme
+    storageSize: 500Gi
+    resources:
+      requests: { cpu: "2", memory: 8Gi }
+      limits: { cpu: "4", memory: 16Gi }
+    jvm: { xms: 4g, xmx: 4g }
+  rack: { topologyKey: topology.kubernetes.io/zone }
+  cruiseControl: { enabled: true }
+  externalListener:
+    enabled: false
+    type: loadbalancer
+    configuration: {}
+  # ACLs por serviço (KAF-010). Conectores: gerados automaticamente (templates/kafka-users.yaml).
+  users:
+    - name: core-municipal
+      acls:
+        - { type: topic, name: "sus.", patternType: prefix, operations: [Describe, Read, Write] }
+        - { type: topic, name: "core.", patternType: prefix, operations: [Describe, Read] }
+        - { type: group, name: "core-", patternType: prefix, operations: [Read, Describe] }
+        - { type: transactionalId, name: "core-", patternType: prefix, operations: [Describe, Write] }
+    - name: fhir-gateway
+      acls:
+        - { type: topic, name: "sus.identity.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.aps.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.schedule.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.regulation.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.exam.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.hospital.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.careplan.v1", patternType: literal, operations: [Describe, Read] }
+        - { type: topic, name: "sus.consent.v1", patternType: literal, operations: [Describe, Read] }
+        - { type: topic, name: "sus.audit.v1", patternType: literal, operations: [Describe, Write] }
+        - { type: topic, name: "sus.dlq.v1", patternType: literal, operations: [Describe, Write] }
+        - { type: group, name: "fhir-", patternType: prefix, operations: [Read, Describe] }
+    - name: ai-service
+      acls:
+        - { type: topic, name: "sus.task.v1", patternType: literal, operations: [Describe, Read] }
+        - { type: topic, name: "sus.regulation.", patternType: prefix, operations: [Describe, Read] }
+        - { type: topic, name: "sus.hospital.discharge.v1", patternType: literal, operations: [Describe, Read] }
+        - { type: topic, name: "sus.caregap.v1", patternType: literal, operations: [Describe, Read] }
+        - { type: topic, name: "sus.audit.v1", patternType: literal, operations: [Describe, Write] }
+        - { type: group, name: "ai-", patternType: prefix, operations: [Read, Describe] }
+    - name: kafka-ui
+      authentication: scram-sha-512
+      acls:
+        - { type: topic, name: "*", patternType: literal, operations: [Describe, DescribeConfigs, Read] }
+        - { type: group, name: "*", patternType: literal, operations: [Describe, Read] }
+        - { type: cluster, name: kafka-cluster, patternType: literal, operations: [Describe, DescribeConfigs] }
+    - name: mirrormaker2-dr
+      acls:
+        - { type: topic, name: "sus.", patternType: prefix, operations: [Describe, DescribeConfigs, Read] }
+        - { type: group, name: "mirrormaker2-", patternType: prefix, operations: [Read, Describe] }
+        - { type: cluster, name: kafka-cluster, patternType: literal, operations: [Describe, DescribeConfigs] }
+
+kafkaConnect:
+  enabled: false
+  replicas: 2
+  image: ghcr.io/sus-nexus/kafka-connect-debezium:3.0.0   # imagem Strimzi + plugin Debezium PG (build no CI images)
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 2Gi }
+
+apicurio:
+  enabled: false
+  image: apicurio/apicurio-registry:3.0.6
+  replicas: 2
+  auth: { enabled: true }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+minio:
+  enabled: false
+  image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+  mcImage: quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z
+  servers: 4
+  volumesPerServer: 4
+  volumeSize: 500Gi
+  storageClass: standard
+  lakehouseBucket: false
+  resources:
+    requests: { cpu: "1", memory: 4Gi }
+    limits: { cpu: "4", memory: 8Gi }
+  auditArchive:
+    lockMode: COMPLIANCE
+    retentionDays: 1825            # 5 anos
+  rawZone:
+    noncurrentExpireDays: 90
+  replication:
+    enabled: false
+    auditArchiveTarget: ""         # https://user:pass@minio-dr.example/audit-archive
+    backupsTarget: ""
+
+redis:
+  enabled: false
+  image: redis:7.4-alpine
+  exporterImage: oliver006/redis_exporter:v1.66.0
+  replicas: 1
+  maxmemory: 1gb
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1280Mi }
+
+# ----------------------------------------------------------------------------------------------------
+# Segurança
+# ----------------------------------------------------------------------------------------------------
+keycloak:
+  enabled: false
+  image: quay.io/keycloak/keycloak:26.2
+  instances: 2
+  hostname: auth.dev.sus-nexus.local
+  tls: { issuerName: letsencrypt-prod }
+  adminAllowCidrs: ["10.0.0.0/8"]
+  extraFeatures: []
+  additionalOptions: []
+  importDevUsers: false            # true SOMENTE em dev
+  placeholders: {}
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "2", memory: 2Gi }
+  # Mesclado sobre files/realm-sus-nexus.json (mergeOverwrite). Em hml/prod: MFA obrigatório.
+  realmOverrides:
+    displayName: SUS Nexus
+    sslRequired: all
+    attributes:
+      frontendUrl: https://auth.dev.sus-nexus.local
+      _dev_note_mfa: ""
+
+opa:
+  enabled: false
+  image: openpolicyagent/opa:0.70.0-static
+  replicas: 2
+  logLevel: info
+  bundle:
+    oci: true
+    serviceUrl: https://harbor.sus-nexus.local
+    resource: harbor.sus-nexus.local/sus-nexus/policies:latest
+    credentialsSecret: opa-bundle-credentials
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+networkPolicies:
+  defaultDeny: true
+  apiServerCidr: 10.0.0.0/8
+
+# ----------------------------------------------------------------------------------------------------
+# Temporal — chart oficial (dependência). Valores repassados integralmente.
+# ----------------------------------------------------------------------------------------------------
+temporal:
+  enabled: false
+  fullnameOverride: temporal
+  server:
+    replicaCount: 2
+    config:
+      numHistoryShards: 512
+      persistence:
+        default:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: temporal-db-rw.data.svc.cluster.local
+            port: 5432
+            database: temporal
+            user: temporal
+            existingSecret: temporal-db-credentials
+            maxConns: 20
+            maxConnLifetime: 1h
+            tls: { enabled: true, enableHostVerification: false }
+        visibility:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: temporal-db-rw.data.svc.cluster.local
+            port: 5432
+            database: temporal_visibility
+            user: temporal
+            existingSecret: temporal-db-credentials
+            maxConns: 10
+            tls: { enabled: true, enableHostVerification: false }
+    metrics:
+      serviceMonitor: { enabled: true }
+  cassandra: { enabled: false }
+  mysql: { enabled: false }
+  postgresql: { enabled: true }
+  elasticsearch: { enabled: false }
+  prometheus: { enabled: false }
+  grafana: { enabled: false }
+  schema:
+    createDatabase: { enabled: false }
+    setup: { enabled: true }
+    update: { enabled: true }
+  web:
+    enabled: true
+    replicaCount: 1

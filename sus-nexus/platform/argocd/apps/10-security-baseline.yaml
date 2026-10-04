@@ -1,0 +1,91 @@
+# Baseline de segurança do cluster (wave 10): Kyverno ClusterPolicies, cert-manager ClusterIssuers,
+# ClusterSecretStore (ESO → OpenBao). Fonte: platform/security (manifests puros).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sus-nexus-security-baseline
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            sus-nexus.gov.br/managed: "true"
+        values:
+          env: "{{ index .metadata.labels \"sus-nexus.gov.br/env\" }}"
+  template:
+    metadata:
+      name: "security-baseline-{{ .values.env }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+      labels:
+        sus-nexus.gov.br/layer: security
+        sus-nexus.gov.br/env: "{{ .values.env }}"
+    spec:
+      project: "sus-nexus-{{ .values.env }}"
+      source:
+        repoURL: https://github.com/sus-nexus/sus-nexus.git
+        targetRevision: main
+        path: sus-nexus/platform/security
+        directory:
+          recurse: true
+          include: "{kyverno/*.yaml,cert-manager/*.yaml,external-secrets/*.yaml}"
+          exclude: "{**/README.md,**/*.example.yaml}"
+      destination:
+        name: "{{ .name }}"
+        namespace: security
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+# Observabilidade: regras de alerta (PrometheusRule) e dashboards (ConfigMaps) — wave 15.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sus-nexus-observability-config
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            sus-nexus.gov.br/managed: "true"
+        values:
+          env: "{{ index .metadata.labels \"sus-nexus.gov.br/env\" }}"
+  template:
+    metadata:
+      name: "observability-config-{{ .values.env }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "15"
+      labels:
+        sus-nexus.gov.br/layer: observability
+        sus-nexus.gov.br/env: "{{ .values.env }}"
+    spec:
+      project: "sus-nexus-{{ .values.env }}"
+      source:
+        repoURL: https://github.com/sus-nexus/sus-nexus.git
+        targetRevision: main
+        path: sus-nexus/platform/observability
+        directory:
+          recurse: true
+          include: "{alert-rules/*.yaml,dashboards-configmap.yaml}"
+      destination:
+        name: "{{ .name }}"
+        namespace: observability
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

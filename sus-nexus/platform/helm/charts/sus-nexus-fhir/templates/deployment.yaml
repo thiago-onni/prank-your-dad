@@ -1,0 +1,27 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if not .Values.rollout.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+  {{- with .Values.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "sus.podTemplate" . | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,163 @@
+# dev — cluster compartilhado, namespaces por equipe, dados sintéticos. Tudo reduzido (1 réplica,
+# 1 broker, CNPG 1 instância) e usuários de dev importados no Keycloak.
+global:
+  environment: dev
+  domain: dev.sus-nexus.local
+  imageRegistry: ghcr.io/sus-nexus
+  keycloakUrl: https://auth.dev.sus-nexus.local
+  multiZone: false
+
+core:
+  enabled: true
+  replicaCount: 1
+  hpa: { enabled: false }
+  pdb: { enabled: false }
+  rollout: { enabled: false }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  config:
+    QUARKUS_LOG_LEVEL: DEBUG
+    QUARKUS_OTEL_TRACES_SAMPLER_ARG: "1.0"
+  apisix:
+    tls: { certificate: { issuerName: internal-ca } }
+fhir:
+  enabled: true
+  replicaCount: 1
+  hpa: { enabled: false }
+  pdb: { enabled: false }
+  apisix:
+    tls: { certificate: { issuerName: internal-ca } }
+web:
+  enabled: true
+  replicaCount: 1
+  hpa: { enabled: false }
+  pdb: { enabled: false }
+  apisix:
+    waf: { enabled: false }
+    tls: { certificate: { issuerName: internal-ca } }
+ai:
+  enabled: true
+  replicaCount: 1
+  hpa: { enabled: false }
+  pdb: { enabled: false }
+  apisix:
+    tls: { certificate: { issuerName: internal-ca } }
+connector-pec:
+  enabled: true
+connector-agenda:
+  enabled: true
+
+cnpg:
+  enabled: true
+  defaults:
+    instances: 1
+    storageClass: standard
+    storageSize: 20Gi
+    walStorageSize: 5Gi
+    resources:
+      requests: { cpu: 250m, memory: 1Gi }
+      limits: { cpu: "1", memory: 2Gi }
+  backup:
+    enabled: true
+    retentionPolicy: 7d
+  clusters:
+    core-db:
+      instances: 1
+      storageSize: 50Gi
+      synchronous: false
+      pooler: null
+      resources:
+        requests: { cpu: 500m, memory: 2Gi }
+        limits: { cpu: "2", memory: 4Gi }
+      sharedBuffers: 1GB
+      effectiveCacheSize: 3GB
+      maxConnections: "150"
+    fhir-db: { instances: 1, storageSize: 20Gi }
+    temporal-db: { instances: 1, storageSize: 10Gi }
+    keycloak-db: { instances: 1, storageSize: 5Gi }
+    langfuse-db: { instances: 1, storageSize: 10Gi }
+    ai-db: { instances: 1, storageSize: 10Gi }
+    apicurio-db: { instances: 1, storageSize: 5Gi }
+
+strimzi:
+  enabled: true
+  topicReplication: 1
+  topicMinInsyncReplicas: 1
+  partitionFactor: 0.25
+  nodePool:
+    replicas: 1
+    storageClass: standard
+    storageSize: 50Gi
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits: { cpu: "2", memory: 4Gi }
+    jvm: { xms: 1g, xmx: 1g }
+  rack: null
+  cruiseControl: { enabled: false }
+
+kafkaConnect:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+apicurio:
+  enabled: true
+  replicas: 1
+
+minio:
+  enabled: true
+  servers: 1
+  volumesPerServer: 4
+  volumeSize: 50Gi
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { cpu: "1", memory: 2Gi }
+  auditArchive:
+    lockMode: GOVERNANCE
+    retentionDays: 30
+
+redis:
+  enabled: true
+  maxmemory: 256mb
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 384Mi }
+
+keycloak:
+  enabled: true
+  instances: 1
+  hostname: auth.dev.sus-nexus.local
+  tls: { issuerName: internal-ca }
+  adminAllowCidrs: ["0.0.0.0/0"]
+  importDevUsers: true
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: "1", memory: 1536Mi }
+  realmOverrides:
+    displayName: SUS Nexus (dev)
+    sslRequired: external
+    attributes:
+      frontendUrl: https://auth.dev.sus-nexus.local
+      _dev_note_mfa: "MFA desabilitado SOMENTE em dev"
+
+opa:
+  enabled: true
+  replicas: 1
+  logLevel: debug
+  bundle:
+    resource: harbor.sus-nexus.local/sus-nexus/policies:dev
+
+networkPolicies:
+  defaultDeny: true
+
+temporal:
+  enabled: true
+  server:
+    replicaCount: 1
+    config:
+      numHistoryShards: 64
+  web:
+    enabled: true

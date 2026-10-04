@@ -1,0 +1,170 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.apisix.enabled }}
+# Ingress via APISIX Ingress Controller (CRD ApisixRoute v2) com OIDC (Keycloak) e rate limit por cliente.
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+  {{- with .Values.apisix.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  http:
+    - name: {{ include "sus.fullname" . }}
+      priority: {{ .Values.apisix.priority }}
+      match:
+        hosts:
+          {{- range .Values.apisix.hosts }}
+          - {{ tpl . $ | quote }}
+          {{- end }}
+        paths:
+          {{- range .Values.apisix.paths }}
+          - {{ . | quote }}
+          {{- end }}
+        {{- with .Values.apisix.methods }}
+        methods:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      backends:
+        - serviceName: {{ include "sus.fullname" . }}
+          servicePort: {{ .Values.service.port }}
+          {{- if .Values.rollout.enabled }}
+          weight: {{ .Values.apisix.canary.stableWeight }}
+        - serviceName: {{ include "sus.fullname" . }}-canary
+          servicePort: {{ .Values.service.port }}
+          weight: {{ .Values.apisix.canary.canaryWeight }}
+          {{- end }}
+      {{- with .Values.apisix.timeout }}
+      timeout:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      plugins:
+        {{- if .Values.apisix.oidc.enabled }}
+        - name: openid-connect
+          enable: true
+          {{- if .Values.apisix.oidc.secretRef }}
+          secretRef: {{ .Values.apisix.oidc.secretRef }}
+          {{- end }}
+          config:
+            discovery: {{ tpl .Values.apisix.oidc.discovery . | quote }}
+            client_id: {{ .Values.apisix.oidc.clientId | quote }}
+            {{- if not .Values.apisix.oidc.secretRef }}
+            client_secret: {{ .Values.apisix.oidc.clientSecret | quote }}
+            {{- end }}
+            bearer_only: {{ .Values.apisix.oidc.bearerOnly }}
+            use_jwks: true
+            set_access_token_header: true
+            access_token_in_authorization_header: true
+            set_id_token_header: false
+            set_userinfo_header: false
+            scope: {{ .Values.apisix.oidc.scope | quote }}
+            ssl_verify: {{ .Values.apisix.oidc.sslVerify }}
+            {{- with .Values.apisix.oidc.requiredScopes }}
+            required_scopes:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+        {{- end }}
+        {{- if .Values.apisix.rateLimit.enabled }}
+        - name: limit-count
+          enable: true
+          config:
+            count: {{ .Values.apisix.rateLimit.count }}
+            time_window: {{ .Values.apisix.rateLimit.timeWindow }}
+            key_type: var
+            key: {{ .Values.apisix.rateLimit.key | quote }}
+            rejected_code: 429
+            rejected_msg: '{"type":"about:blank","title":"Too Many Requests","status":429}'
+            policy: {{ .Values.apisix.rateLimit.policy }}
+            {{- if eq .Values.apisix.rateLimit.policy "redis-cluster" }}
+            redis_cluster_nodes:
+              {{- toYaml .Values.apisix.rateLimit.redisClusterNodes | nindent 14 }}
+            redis_cluster_name: {{ .Values.apisix.rateLimit.redisClusterName }}
+            {{- else if eq .Values.apisix.rateLimit.policy "redis" }}
+            redis_host: {{ .Values.apisix.rateLimit.redisHost }}
+            redis_port: {{ .Values.apisix.rateLimit.redisPort }}
+            {{- end }}
+        {{- end }}
+        {{- if .Values.apisix.cors.enabled }}
+        - name: cors
+          enable: true
+          config:
+            allow_origins: {{ .Values.apisix.cors.allowOrigins | quote }}
+            allow_methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            allow_headers: "Authorization,Content-Type,If-Match,Idempotency-Key,X-Correlation-Id,X-Tenant-Id"
+            expose_headers: "ETag,X-Correlation-Id"
+            allow_credential: true
+            max_age: 600
+        {{- end }}
+        - name: request-id
+          enable: true
+          config:
+            header_name: X-Correlation-Id
+            include_in_response: true
+            algorithm: uuid
+        - name: response-rewrite
+          enable: true
+          config:
+            headers:
+              set:
+                Strict-Transport-Security: "max-age=63072000; includeSubDomains; preload"
+                X-Content-Type-Options: nosniff
+                X-Frame-Options: DENY
+                Referrer-Policy: no-referrer
+                Cache-Control: no-store
+        {{- if .Values.apisix.waf.enabled }}
+        # WAF (Coraza/OWASP CRS) — plugin instalado no APISIX (PLANO 4.2.1)
+        - name: coraza-filter
+          enable: true
+          config:
+            directives: {{ .Values.apisix.waf.directives }}
+        {{- end }}
+        {{- with .Values.apisix.extraPlugins }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- if .Values.apisix.tls.enabled }}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixTls
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- range .Values.apisix.hosts }}
+    - {{ tpl . $ | quote }}
+    {{- end }}
+  secret:
+    name: {{ .Values.apisix.tls.secretName | default (printf "%s-tls" (include "sus.fullname" .)) }}
+    namespace: {{ include "sus.namespace" . }}
+{{- end }}
+{{- if .Values.apisix.tls.certificate.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.apisix.tls.secretName | default (printf "%s-tls" (include "sus.fullname" .)) }}
+  issuerRef:
+    name: {{ .Values.apisix.tls.certificate.issuerName }}
+    kind: {{ .Values.apisix.tls.certificate.issuerKind }}
+  dnsNames:
+    {{- range .Values.apisix.hosts }}
+    - {{ tpl . $ | quote }}
+    {{- end }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+{{- end }}
+{{- end }}
+{{- end }}

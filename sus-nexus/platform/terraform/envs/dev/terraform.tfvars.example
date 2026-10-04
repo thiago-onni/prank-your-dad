@@ -1,0 +1,6 @@
+# Copie para terraform.tfvars (NÃO versionar). Segredos via variáveis de ambiente TF_VAR_* ou OpenBao.
+aws_region         = "sa-east-1"
+ibge_code          = "3143302"
+api_allowed_cidrs  = ["200.0.0.0/24"] # VPN da SMS
+health_units_cidrs = ["10.100.0.0/16"]
+apisix_lb_hostname = "a1b2c3.elb.sa-east-1.amazonaws.com"

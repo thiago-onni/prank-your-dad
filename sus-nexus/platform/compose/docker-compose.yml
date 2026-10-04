@@ -1,0 +1,849 @@
+# SUS Nexus — ambiente local completo (Docker Compose)
+#
+# Perfis:
+#   infra          somente infraestrutura (Postgres, Kafka, Keycloak, OPA, ...) — para rodar os
+#                  serviços pelo IDE/`quarkus dev`
+#   core           infra + serviços da aplicação (core-municipal, fhir-gateway, web-shell, connector-pec)
+#   ai             infra + ai-service + LiteLLM + Langfuse
+#   observability  OTel Collector, Prometheus, Grafana, Loki, Tempo, Metabase
+#
+# Exemplos:
+#   docker compose --profile core up -d
+#   docker compose --profile core --profile observability up -d
+#   docker compose --profile infra up -d           # apenas dependências
+#
+# Portas: ver sus-nexus/CONVENTIONS.md (seção "Portas locais"). Variáveis em .env (copie .env.example).
+#
+# NOTA sobre Dockerfiles das aplicações: cada serviço usa `build.context` apontando para a pasta do
+# componente e `dockerfile: ${..._DOCKERFILE:-Dockerfile}`. Se o componente Quarkus usar
+# `src/main/docker/Dockerfile.jvm`, ajuste a variável correspondente no .env.
+
+name: sus-nexus
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+x-infra-profiles: &infra-profiles
+  profiles: ["infra", "core", "ai"]
+
+x-postgres-env: &postgres-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+x-kafka-env: &kafka-env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  APICURIO_REGISTRY_URL: http://apicurio:8080/apis/registry/v3
+
+x-keycloak-env: &keycloak-env
+  KEYCLOAK_URL: http://keycloak:8080
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sus-nexus}
+  OIDC_ISSUER: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
+
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,tenant.id=${TENANT_ID:-ibge_3143302}
+
+services:
+  # ---------------------------------------------------------------------------
+  # Dados
+  # ---------------------------------------------------------------------------
+  postgres:
+    <<: *infra-profiles
+    image: pgvector/pgvector:pg16
+    container_name: sus-postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=500
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+      SUS_DB_APP_USER: ${SUS_DB_APP_USER:-sus_nexus}
+      SUS_DB_APP_PASSWORD: ${SUS_DB_APP_PASSWORD:-sus_nexus}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *default-logging
+
+  redis:
+    <<: *infra-profiles
+    image: redis:7-alpine
+    container_name: sus-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+
+  kafka:
+    <<: *infra-profiles
+    image: apache/kafka:3.9.0
+    container_name: sus-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:19092,CONTROLLER://:9093,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-sus-nexus-local-kraft-0001}
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+    logging: *default-logging
+
+  # Cria os tópicos de contracts/events/topics.yaml (idempotente). Executa uma vez e sai.
+  kafka-init:
+    <<: *infra-profiles
+    image: apache/kafka:3.9.0
+    container_name: sus-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      TOPICS_FILE: /contracts/topics.yaml
+      REPLICATION_FACTOR: "1"
+      MIN_INSYNC_REPLICAS: "1"
+      CREATE_RETRY_TOPICS: "true"
+    volumes:
+      - ./kafka/create-topics.sh:/scripts/create-topics.sh:ro
+      - ../../contracts/events/topics.yaml:/contracts/topics.yaml:ro
+    restart: "no"
+    logging: *default-logging
+
+  apicurio:
+    <<: *infra-profiles
+    image: apicurio/apicurio-registry:3.0.6
+    container_name: sus-apicurio
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APICURIO_STORAGE_KIND: sql
+      APICURIO_STORAGE_SQL_KIND: postgresql
+      APICURIO_DATASOURCE_URL: jdbc:postgresql://postgres:5432/apicurio
+      APICURIO_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      APICURIO_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      QUARKUS_HTTP_CORS_ORIGINS: "*"
+      APICURIO_REST_DELETION_ARTIFACT_VERSION_ENABLED: "true"
+    ports:
+      - "${APICURIO_PORT:-8085}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging: *default-logging
+
+  # Kafka Connect + Debezium 3 (Outbox Event Router). Registre o conector com
+  # ./debezium/register-outbox-connector.sh após `platform.event_outbox` existir (migração Flyway do core).
+  connect:
+    <<: *infra-profiles
+    image: quay.io/debezium/connect:3.0.0.Final
+    container_name: sus-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVERS: kafka:19092
+      GROUP_ID: sus-connect
+      CONFIG_STORAGE_TOPIC: _connect.configs
+      OFFSET_STORAGE_TOPIC: _connect.offsets
+      STATUS_STORAGE_TOPIC: _connect.status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      ENABLE_APICURIO_CONVERTERS: "true"
+      HEAP_OPTS: -Xms256m -Xmx512m
+    ports:
+      - "${CONNECT_PORT:-8083}:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /connectors HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Segurança
+  # ---------------------------------------------------------------------------
+  keycloak:
+    <<: *infra-profiles
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: sus-keycloak
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["start-dev", "--import-realm", "--http-port=8080", "--features=token-exchange"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-postgres}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_LOG_LEVEL: info
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    logging: *default-logging
+
+  # OPA servindo sus-nexus/policies como bundle (hot-reload com --watch).
+  # A imagem oficial não tem shell: sem healthcheck (depends_on usa service_started).
+  opa:
+    <<: *infra-profiles
+    image: openpolicyagent/opa:0.70.0
+    container_name: sus-opa
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --log-level=info
+      - --log-format=json
+      - --set=decision_logs.console=true
+      - --watch
+      - --bundle
+      - /policies
+    ports:
+      - "${OPA_PORT:-8181}:8181"
+    volumes:
+      - ../../policies:/policies:ro
+    logging: *default-logging
+
+  openbao:
+    <<: *infra-profiles
+    image: openbao/openbao:2.1.0
+    container_name: sus-openbao
+    command: ["server", "-dev", "-dev-root-token-id=${OPENBAO_ROOT_TOKEN:-root}", "-dev-listen-address=0.0.0.0:8200"]
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      SKIP_SETCAP: "true"
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "${OPENBAO_PORT:-8200}:8200"
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Object storage
+  # ---------------------------------------------------------------------------
+  minio:
+    <<: *infra-profiles
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: sus-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  minio-init:
+    <<: *infra-profiles
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    container_name: sus-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/init.sh"]
+    environment:
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AUDIT_ARCHIVE_RETENTION_DAYS: ${AUDIT_ARCHIVE_RETENTION_DAYS:-30}
+    volumes:
+      - ./minio/init.sh:/scripts/init.sh:ro
+    restart: "no"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Workflows
+  # ---------------------------------------------------------------------------
+  temporal:
+    <<: *infra-profiles
+    image: temporalio/auto-setup:1.25.2
+    container_name: sus-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-postgres}
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      SKIP_DB_CREATE: "true"
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+      PROMETHEUS_ENDPOINT: 0.0.0.0:8000
+      DEFAULT_NAMESPACE: sus-nexus
+      SKIP_DEFAULT_NAMESPACE_CREATION: "false"
+      BIND_ON_IP: 0.0.0.0
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator cluster health --address temporal:7233 | grep -q SERVING"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    logging: *default-logging
+
+  temporal-ui:
+    <<: *infra-profiles
+    image: temporalio/ui:2.31.2
+    container_name: sus-temporal-ui
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+      TEMPORAL_DEFAULT_NAMESPACE: sus-nexus
+    ports:
+      - "${TEMPORAL_UI_PORT:-8233}:8080"
+    logging: *default-logging
+
+  kafka-ui:
+    <<: *infra-profiles
+    image: ghcr.io/kafbat/kafka-ui:v1.1.0
+    container_name: sus-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: sus-nexus-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://apicurio:8080/apis/ccompat/v7
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+      DYNAMIC_CONFIG_ENABLED: "false"
+    ports:
+      - "${KAFKA_UI_PORT:-8086}:8080"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Aplicação (profile core)
+  # ---------------------------------------------------------------------------
+  core-municipal:
+    profiles: ["core"]
+    build:
+      context: ../../core-municipal
+      dockerfile: ${CORE_DOCKERFILE:-Dockerfile}
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/core-municipal:${IMAGE_TAG:-local}
+    container_name: sus-core-municipal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      apicurio:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opa:
+        condition: service_started
+    environment:
+      <<: [*kafka-env, *keycloak-env, *otel-env]
+      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-dev}
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/sus_nexus_core
+      QUARKUS_DATASOURCE_USERNAME: ${SUS_DB_APP_USER:-sus_nexus}
+      QUARKUS_DATASOURCE_PASSWORD: ${SUS_DB_APP_PASSWORD:-sus_nexus}
+      QUARKUS_FLYWAY_MIGRATE_AT_START: "true"
+      QUARKUS_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
+      QUARKUS_OIDC_CLIENT_ID: core-municipal
+      QUARKUS_OIDC_CREDENTIALS_SECRET: ${CORE_OIDC_SECRET:-core-municipal-dev-secret}
+      QUARKUS_OIDC_TOKEN_ISSUER: any
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OPA_URL: http://opa:8181
+      OPA_POLICY_PATH: /v1/data/sus/authz/allow
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: sus-nexus
+      REDIS_URL: redis://redis:6379
+      QUARKUS_REDIS_HOSTS: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_RAW_ZONE: raw-zone
+      S3_BUCKET_DOCUMENTS: documents
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_TOKEN: ${OPENBAO_ROOT_TOKEN:-root}
+      TENANT_DEFAULT: ${TENANT_ID:-ibge_3143302}
+      QUARKUS_OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      QUARKUS_LOG_CONSOLE_JSON: "false"
+    ports:
+      - "${CORE_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  fhir-gateway:
+    profiles: ["core"]
+    build:
+      context: ../../fhir-gateway
+      dockerfile: ${FHIR_DOCKERFILE:-Dockerfile}
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/fhir-gateway:${IMAGE_TAG:-local}
+    container_name: sus-fhir-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      core-municipal:
+        condition: service_healthy
+      opa:
+        condition: service_started
+    environment:
+      <<: [*kafka-env, *keycloak-env, *otel-env]
+      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-dev}
+      QUARKUS_HTTP_PORT: "8081"
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/sus_nexus_fhir
+      QUARKUS_DATASOURCE_USERNAME: ${SUS_DB_APP_USER:-sus_nexus}
+      QUARKUS_DATASOURCE_PASSWORD: ${SUS_DB_APP_PASSWORD:-sus_nexus}
+      QUARKUS_FLYWAY_MIGRATE_AT_START: "true"
+      QUARKUS_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
+      QUARKUS_OIDC_CLIENT_ID: fhir-gateway
+      QUARKUS_OIDC_CREDENTIALS_SECRET: ${FHIR_OIDC_SECRET:-fhir-gateway-dev-secret}
+      QUARKUS_OIDC_TOKEN_ISSUER: any
+      CORE_API_URL: http://core-municipal:8080/api/v1
+      OPA_URL: http://opa:8181
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      QUARKUS_OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+    ports:
+      - "${FHIR_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  # Conector PEC (exemplo de instância do connector runtime). Para outros conectores, copie este bloco
+  # alterando CONNECTOR_ID, módulo (build.args) e porta (8091, 8092, ...).
+  connector-pec:
+    profiles: ["core"]
+    build:
+      context: ../../connectors
+      dockerfile: ${CONNECTORS_DOCKERFILE:-Dockerfile}
+      args:
+        CONNECTOR_MODULE: connector-pec
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/connector-pec:${IMAGE_TAG:-local}
+    container_name: sus-connector-pec
+    depends_on:
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      apicurio:
+        condition: service_healthy
+      core-municipal:
+        condition: service_healthy
+    environment:
+      <<: [*kafka-env, *keycloak-env, *otel-env]
+      QUARKUS_PROFILE: ${QUARKUS_PROFILE:-dev}
+      QUARKUS_HTTP_PORT: "8090"
+      CONNECTOR_ID: pec
+      CONNECTOR_TENANT_ID: ${TENANT_ID:-ibge_3143302}
+      QUARKUS_OIDC_CLIENT_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
+      QUARKUS_OIDC_CLIENT_CLIENT_ID: connector-pec
+      QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET: ${CONNECTOR_PEC_OIDC_SECRET:-connector-pec-dev-secret}
+      CORE_API_URL: http://core-municipal:8080/api/v1
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_RAW_ZONE: raw-zone
+      PEC_JDBC_URL: ${PEC_JDBC_URL:-jdbc:postgresql://host.docker.internal:5433/esus}
+      PEC_JDBC_USER: ${PEC_JDBC_USER:-esus_leitura}
+      PEC_JDBC_PASSWORD: ${PEC_JDBC_PASSWORD:-esus}
+      QUARKUS_OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+    ports:
+      - "${CONNECTOR_PEC_PORT:-8090}:8090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8090 && printf 'GET /q/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+  web-shell:
+    profiles: ["core"]
+    build:
+      context: ../..
+      dockerfile: ${WEB_DOCKERFILE:-web/apps/shell/Dockerfile}
+      args:
+        APP: shell
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/web-shell:${IMAGE_TAG:-local}
+    container_name: sus-web-shell
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      core-municipal:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # BFF: o browser fala com o Keycloak em localhost:8180; o servidor Next fala por rede interna.
+      AUTH_KEYCLOAK_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/${KEYCLOAK_REALM:-sus-nexus}
+      AUTH_KEYCLOAK_INTERNAL_ISSUER: http://keycloak:8080/realms/${KEYCLOAK_REALM:-sus-nexus}
+      AUTH_KEYCLOAK_ID: web-shell
+      AUTH_KEYCLOAK_SECRET: ${WEB_OIDC_SECRET:-web-shell-dev-secret}
+      AUTH_SECRET: ${WEB_AUTH_SECRET:-dev-only-change-me-32-chars-minimum!!}
+      AUTH_URL: http://localhost:${WEB_PORT:-3000}
+      NEXT_PUBLIC_APP_URL: http://localhost:${WEB_PORT:-3000}
+      CORE_API_URL: http://core-municipal:8080/api/v1
+      FHIR_API_URL: http://fhir-gateway:8081/fhir/r4
+      AI_SERVICE_URL: http://ai-service:8000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # IA (profile ai)
+  # ---------------------------------------------------------------------------
+  ai-service:
+    profiles: ["ai"]
+    build:
+      context: ../../ai-service
+      dockerfile: ${AI_DOCKERFILE:-Dockerfile}
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/ai-service:${IMAGE_TAG:-local}
+    container_name: sus-ai-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opa:
+        condition: service_started
+    environment:
+      <<: [*kafka-env, *keycloak-env, *otel-env]
+      APP_ENV: local
+      PORT: "8000"
+      DATABASE_URL: postgresql+psycopg://${SUS_DB_APP_USER:-sus_nexus}:${SUS_DB_APP_PASSWORD:-sus_nexus}@postgres:5432/sus_nexus_ai
+      REDIS_URL: redis://redis:6379/1
+      OIDC_CLIENT_ID: ai-service
+      OIDC_CLIENT_SECRET: ${AI_OIDC_SECRET:-ai-service-dev-secret}
+      OIDC_AUDIENCE: core-municipal
+      CORE_API_URL: http://core-municipal:8080/api/v1
+      FHIR_API_URL: http://fhir-gateway:8081/fhir/r4
+      OPA_URL: http://opa:8181
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-dev-litellm}
+      LANGFUSE_HOST: http://langfuse:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      TENANT_DEFAULT: ${TENANT_ID:-ibge_3143302}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+    ports:
+      - "${AI_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  litellm:
+    profiles: ["ai"]
+    image: ghcr.io/berriai/litellm:main-v1.55.8
+    container_name: sus-litellm
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--config", "/config/litellm.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-dev-litellm}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/litellm
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    volumes:
+      - ./litellm/litellm.yaml:/config/litellm.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging: *default-logging
+
+  langfuse:
+    profiles: ["ai"]
+    image: langfuse/langfuse:2
+    container_name: sus-langfuse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/langfuse
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3003}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-dev-only-langfuse-nextauth-secret}
+      SALT: ${LANGFUSE_SALT:-dev-only-langfuse-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_INIT_ORG_ID: sus-nexus
+      LANGFUSE_INIT_ORG_NAME: SUS Nexus
+      LANGFUSE_INIT_PROJECT_ID: sus-nexus-local
+      LANGFUSE_INIT_PROJECT_NAME: sus-nexus-local
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_INIT_USER_EMAIL: dev@sus-nexus.local
+      LANGFUSE_INIT_USER_NAME: dev
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-sus-nexus-dev}
+    ports:
+      - "${LANGFUSE_PORT:-3003}:3000"
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Observabilidade (profile observability)
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    profiles: ["observability"]
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: sus-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_PORT:-4318}:4318"
+      - "8889:8889"
+    logging: *default-logging
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.0.1
+    container_name: sus-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alert-rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  loki:
+    profiles: ["observability"]
+    image: grafana/loki:3.3.1
+    container_name: sus-loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready | grep -q ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging: *default-logging
+
+  tempo:
+    profiles: ["observability"]
+    image: grafana/tempo:2.6.1
+    container_name: sus-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3200/ready | grep -q ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging: *default-logging
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:11.3.1
+    container_name: sus-grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+      GF_SERVER_HTTP_PORT: "3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  metabase:
+    profiles: ["observability"]
+    image: metabase/metabase:v0.52.4
+    container_name: sus-metabase
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: "5432"
+      MB_DB_USER: ${POSTGRES_USER:-postgres}
+      MB_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      MB_DB_HOST: postgres
+      MB_SITE_LOCALE: pt_BR
+      MB_ANON_TRACKING_ENABLED: "false"
+      JAVA_TIMEZONE: America/Sao_Paulo
+    ports:
+      - "${METABASE_PORT:-3002}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    logging: *default-logging
+
+volumes:
+  postgres-data:
+  kafka-data:
+  minio-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+
+networks:
+  default:
+    name: sus-nexus

@@ -1,0 +1,17 @@
+# Terraform
+terraform/**/.terraform/
+terraform/**/.terraform.lock.hcl
+terraform/**/generated/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/terraform.tfvars
+terraform/**/*.tfplan
+
+# Helm (dependências baixadas por `helm dependency build`)
+helm/sus-nexus/charts/*.tgz
+helm/sus-nexus/Chart.lock
+helm/.cr-release-packages/
+rendered/
+
+# Compose
+compose/.env

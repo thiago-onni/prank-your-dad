@@ -1,0 +1,12 @@
+{{ .Chart.Name }} {{ .Chart.Version }} instalado em {{ include "sus.namespace" . }} (ambiente: {{ .Values.global.environment }}).
+
+Imagem:      {{ include "sus.image" . }}
+Workload:    {{ if .Values.rollout.enabled }}Rollout (canário, Argo Rollouts){{ else }}Deployment{{ end }} · réplicas {{ .Values.replicaCount }}{{ if .Values.hpa.enabled }} (HPA {{ .Values.hpa.minReplicas }}-{{ .Values.hpa.maxReplicas }}){{ end }}
+Probes:      live {{ .Values.probes.liveness.path }} · ready {{ .Values.probes.readiness.path }}
+Segredos:    {{ if .Values.externalSecret.enabled }}ExternalSecret → {{ .Values.externalSecret.secretStoreRef.name }}{{ else }}nenhum ExternalSecret (externalSecret.enabled=false){{ end }}
+Ingress:     {{ if .Values.apisix.enabled }}ApisixRoute {{ join ", " .Values.apisix.hosts }}{{ else }}desabilitado{{ end }}
+NetworkPolicy default-deny: {{ .Values.networkPolicy.enabled }}
+
+Verificação:
+  kubectl -n {{ include "sus.namespace" . }} rollout status {{ if .Values.rollout.enabled }}rollout{{ else }}deployment{{ end }}/{{ include "sus.fullname" . }}
+  kubectl -n {{ include "sus.namespace" . }} port-forward svc/{{ include "sus.fullname" . }} {{ .Values.service.port }}:http

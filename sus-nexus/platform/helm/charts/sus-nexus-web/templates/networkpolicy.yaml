@@ -1,0 +1,121 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.networkPolicy.enabled }}
+# Default-deny (ingress + egress) para os pods deste componente, com allowances explícitas.
+# Cilium interpreta NetworkPolicy padrão; regras L7 adicionais podem ir em CiliumNetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sus.fullname" . }}-default-deny
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sus.fullname" . }}-allow
+  namespace: {{ include "sus.namespace" . }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- /* Gateway (APISIX) e observabilidade (Prometheus) sempre podem chegar na porta http */}}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.gatewayNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.observabilityNamespace }}
+      ports:
+        - port: http
+          protocol: TCP
+    {{- range .Values.networkPolicy.ingress }}
+    - from:
+        {{- range .from }}
+        - {{- if .namespace }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- end }}
+          {{- if .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .podLabels | nindent 14 }}
+          {{- end }}
+          {{- if .ipBlock }}
+          ipBlock:
+            {{- toYaml .ipBlock | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      ports:
+        {{- range .ports }}
+        - port: {{ .port }}
+          protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+    {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.allowDNS }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.otel.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.observabilityNamespace }}
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
+    {{- end }}
+    {{- range .Values.networkPolicy.egress }}
+    - to:
+        {{- range .to }}
+        - {{- if .namespace }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- end }}
+          {{- if .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .podLabels | nindent 14 }}
+          {{- end }}
+          {{- if .ipBlock }}
+          ipBlock:
+            {{- toYaml .ipBlock | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      ports:
+        {{- range .ports }}
+        - port: {{ .port }}
+          protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

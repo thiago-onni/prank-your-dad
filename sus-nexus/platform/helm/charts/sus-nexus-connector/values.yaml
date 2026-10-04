@@ -1,0 +1,330 @@
+# Valores padrão — sus-nexus-connector (chart genérico; um release por conector, porta 8090).
+# Instanciado no umbrella via alias (connector-pec, connector-agenda, ...). Defina `connector.id`.
+# Gerado a partir de sus-nexus-core/values.yaml (scripts/gen-component-values.py); edite com cuidado.
+
+global:
+  environment: dev
+  imageRegistry: ''
+  imagePullSecrets: []
+  multiZone: false
+  domain: sus-nexus.local
+  keycloakUrl: https://auth.sus-nexus.local
+  keycloakRealm: sus-nexus
+  namespaces:
+    core: core
+    fhir: fhir
+    connectors: connectors
+    ai: ai
+    web: web
+    data: data
+    security: security
+    workflows: workflows
+    observability: observability
+    gateway: gateway
+nameOverride: ''
+fullnameOverride: ''
+namespaceOverride: ''
+component: connector
+tier: backend
+image:
+  registry: ghcr.io
+  repository: sus-nexus/connector-pec
+  tag: ''
+  digest: ''
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+replicaCount: 1
+revisionHistoryLimit: 3
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+terminationGracePeriodSeconds: 30
+priorityClassName: ''
+containerPort: 8090
+extraPorts: []
+command: []
+args: []
+service:
+  type: ClusterIP
+  port: 8090
+  annotations: {}
+probes:
+  startup:
+    enabled: true
+    path: /q/health/started
+    periodSeconds: 5
+    failureThreshold: 60
+    timeoutSeconds: 3
+  liveness:
+    path: /q/health/live
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
+  readiness:
+    path: /q/health/ready
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
+lifecycle:
+  preStop:
+    exec:
+      command:
+      - sh
+      - -c
+      - sleep 5
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: '1'
+    memory: 1Gi
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 185
+  runAsGroup: 185
+  fsGroup: 185
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  privileged: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+    - ALL
+tmpSizeLimit: 512Mi
+writableDirs: []
+extraVolumes: []
+extraVolumeMounts: []
+initContainers: []
+sidecars: []
+podLabels: {}
+podAnnotations:
+  prometheus.io/scrape: 'false'
+extraLabels: {}
+deploymentAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+serviceAccount:
+  create: true
+  automount: false
+  name: ''
+  annotations: {}
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  scaleDownStabilizationSeconds: 300
+  customMetrics: []
+pdb:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: null
+otel:
+  enabled: true
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+  protocol: grpc
+config:
+  QUARKUS_PROFILE: prod
+  QUARKUS_HTTP_PORT: '8090'
+  CONNECTOR_ID: '{{ .Values.connector.id }}'
+  CONNECTOR_TENANT_ID: '{{ .Values.connector.tenantId }}'
+  CONNECTOR_SOURCE_SYSTEM: '{{ .Values.connector.sourceSystem }}'
+  CONNECTOR_INGEST_TOPIC: '{{ .Values.connector.ingestTopic }}'
+  CONNECTOR_POLL_INTERVAL: '{{ .Values.connector.pollInterval }}'
+  CONNECTOR_RECONCILIATION_CRON: '{{ .Values.connector.reconciliationCron }}'
+  QUARKUS_OIDC_CLIENT_AUTH_SERVER_URL: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}'
+  QUARKUS_OIDC_CLIENT_CLIENT_ID: connector-{{ .Values.connector.id }}
+  CORE_API_URL: http://core-municipal.core.svc.cluster.local:8080/api/v1
+  KAFKA_BOOTSTRAP_SERVERS: sus-kafka-kafka-bootstrap.data.svc.cluster.local:9093
+  KAFKA_SECURITY_PROTOCOL: SSL
+  APICURIO_REGISTRY_URL: http://apicurio.data.svc.cluster.local:8080/apis/registry/v3
+  S3_ENDPOINT: https://minio.data.svc.cluster.local
+  S3_BUCKET_RAW_ZONE: raw-zone
+  QUARKUS_LOG_CONSOLE_JSON: 'true'
+  QUARKUS_LOG_LEVEL: INFO
+  QUARKUS_OTEL_SDK_DISABLED: 'false'
+  JAVA_OPTS_APPEND: -XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom
+env: []
+envFrom: []
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: openbao
+    kind: ClusterSecretStore
+  targetName: ''
+  dataFrom:
+  - key: '{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/source'
+  data:
+  - secretKey: QUARKUS_OIDC_CLIENT_CREDENTIALS_SECRET
+    remoteRef:
+      key: '{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/oidc'
+      property: client_secret
+  - secretKey: S3_ACCESS_KEY
+    remoteRef:
+      key: '{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3'
+      property: access_key
+  - secretKey: S3_SECRET_KEY
+    remoteRef:
+      key: '{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/s3'
+      property: secret_key
+  - secretKey: KAFKA_SSL_KEYSTORE_PASSWORD
+    remoteRef:
+      key: '{{ .Values.global.environment }}/connector-{{ .Values.connector.id }}/kafka'
+      property: keystore_password
+serviceMonitor:
+  enabled: true
+  namespace: ''
+  path: /q/metrics
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+  metricRelabelings: []
+networkPolicy:
+  enabled: true
+  gatewayNamespace: gateway
+  observabilityNamespace: observability
+  allowDNS: true
+  ingress: []
+  egress:
+  - to:
+    - namespace: data
+    ports:
+    - port: 9093
+    - port: 8080
+    - port: 9000
+    - port: 443
+  - to:
+    - namespace: security
+    ports:
+    - port: 8080
+    - port: 8443
+  - to:
+    - namespace: core
+    ports:
+    - port: 8080
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/8
+    ports:
+    - port: 5432
+    - port: 443
+    - port: 1433
+    - port: 1521
+apisix:
+  enabled: false
+  annotations: {}
+  priority: 10
+  hosts:
+  - api.{{ .Values.global.domain }}
+  paths:
+  - /api/v1/*
+  methods: []
+  timeout:
+    connect: 5s
+    send: 30s
+    read: 30s
+  oidc:
+    enabled: true
+    discovery: '{{ .Values.global.keycloakUrl }}/realms/{{ .Values.global.keycloakRealm }}/.well-known/openid-configuration'
+    clientId: core-municipal
+    clientSecret: ''
+    secretRef: core-municipal-apisix-oidc
+    bearerOnly: true
+    scope: openid
+    sslVerify: 'yes'
+    requiredScopes: []
+  rateLimit:
+    enabled: true
+    count: 600
+    timeWindow: 60
+    key: http_x_consumer_username
+    policy: local
+    redisHost: redis.data.svc.cluster.local
+    redisPort: 6379
+    redisClusterNodes: []
+    redisClusterName: ''
+  cors:
+    enabled: false
+    allowOrigins: https://app.sus-nexus.local
+  waf:
+    enabled: false
+    directives: default
+  canary:
+    stableWeight: 100
+    canaryWeight: 0
+  tls:
+    enabled: true
+    secretName: ''
+    certificate:
+      enabled: true
+      issuerName: letsencrypt-prod
+      issuerKind: ClusterIssuer
+  extraPlugins: []
+rollout:
+  enabled: false
+  canary:
+    maxSurge: 25%
+    maxUnavailable: 0
+    steps:
+    - setWeight: 10
+    - pause:
+        duration: 5m
+    - setWeight: 30
+    - pause:
+        duration: 10m
+    - setWeight: 60
+    - pause:
+        duration: 10m
+    trafficRouting: {}
+    analysis:
+      enabled: true
+      startingStep: 1
+      interval: 1m
+      failureLimit: 2
+      minSuccessRate: 0.99
+      maxP99Seconds: 1.0
+      prometheusAddress: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
+migration:
+  enabled: false
+  image: ''
+  command:
+  - java
+  args:
+  - -Dquarkus.flyway.migrate-at-start=true
+  - -Dquarkus.http.host=127.0.0.1
+  - -Dsus.migration-only=true
+  - -jar
+  - /deployments/quarkus-run.jar
+  env:
+  - name: QUARKUS_FLYWAY_MIGRATE_AT_START
+    value: 'true'
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+connector:
+  id: pec
+  tenantId: ibge_3143302
+  sourceSystem: PEC
+  ingestTopic: sus.ingest.pec.v1
+  pollInterval: PT5M
+  reconciliationCron: 0 0 3 * * ?
+  edgeAgent: false

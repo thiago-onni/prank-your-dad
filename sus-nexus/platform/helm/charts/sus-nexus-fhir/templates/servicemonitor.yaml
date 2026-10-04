@@ -1,0 +1,41 @@
+{{- if eq (include "sus.workloadEnabled" .) "true" }}
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "sus.fullname" . }}
+  namespace: {{ .Values.serviceMonitor.namespace | default (include "sus.namespace" .) }}
+  labels:
+    {{- include "sus.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ include "sus.namespace" . }}
+  selector:
+    matchLabels:
+      {{- include "sus.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.serviceMonitor.path }}
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      honorLabels: false
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: service
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - replacement: {{ .Values.global.environment }}
+          targetLabel: environment
+      metricRelabelings:
+        # Nunca exportar labels com potencial de PII
+        - action: labeldrop
+          regex: "(cpf|cns|citizen_id|patient_id|name|email|user)"
+        {{- with .Values.serviceMonitor.metricRelabelings }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

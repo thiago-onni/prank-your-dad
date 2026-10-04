@@ -1,0 +1,10 @@
+# Copie para terraform.tfvars (NÃO versionar). Apply somente pelo pipeline com aprovação (2 pessoas).
+aws_region              = "sa-east-1"
+dr_region               = "sa-east-1"
+ibge_code               = "3143302"
+health_units_cidrs      = ["10.100.0.0/16", "10.101.0.0/16"]
+active_site             = "primary"
+apisix_lb_hostname      = "k8s-gateway-apisix-xxxx.elb.sa-east-1.amazonaws.com"
+apisix_dr_lb_hostname   = "k8s-gateway-apisix-dr-xxxx.elb.sa-east-1.amazonaws.com"
+s3_replication_role_arn = "arn:aws:iam::123456789012:role/sus-nexus-s3-replication"
+dr_kms_key_arn          = "arn:aws:kms:sa-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"

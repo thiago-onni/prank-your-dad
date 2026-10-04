@@ -1,0 +1,199 @@
+{{- if and .Values.strimzi.enabled .Values.kafkaConnect.enabled }}
+{{- $ns := .Values.strimzi.namespace | default (include "umbrella.ns.data" .) }}
+{{- $cluster := .Values.strimzi.clusterName }}
+# Kafka Connect (Strimzi) com Debezium PostgreSQL + Outbox Event Router.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: debezium-connect
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: group, name: sus-connect, patternType: literal }
+        operations: [Read, Describe]
+        host: "*"
+      - resource: { type: topic, name: _connect., patternType: prefix }
+        operations: [All]
+        host: "*"
+      - resource: { type: topic, name: sus., patternType: prefix }
+        operations: [Describe, Write, Create]
+        host: "*"
+      - resource: { type: topic, name: core., patternType: prefix }
+        operations: [Describe, Write, Create]
+        host: "*"
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: debezium-db-credentials
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: debezium-db-credentials
+  data:
+    - secretKey: username
+      remoteRef: { key: "{{ .Values.global.environment }}/data/core-db-debezium", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ .Values.global.environment }}/data/core-db-debezium", property: password }
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: sus-connect
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  version: {{ .Values.strimzi.kafkaVersion | quote }}
+  replicas: {{ .Values.kafkaConnect.replicas }}
+  bootstrapServers: {{ $cluster }}-kafka-bootstrap:9093
+  image: {{ .Values.kafkaConnect.image }}
+  tls:
+    trustedCertificates:
+      - secretName: {{ $cluster }}-cluster-ca-cert
+        certificate: ca.crt
+  authentication:
+    type: tls
+    certificateAndKey:
+      secretName: debezium-connect
+      certificate: user.crt
+      key: user.key
+  config:
+    group.id: sus-connect
+    offset.storage.topic: _connect.offsets
+    config.storage.topic: _connect.configs
+    status.storage.topic: _connect.status
+    config.storage.replication.factor: {{ .Values.strimzi.topicReplication }}
+    offset.storage.replication.factor: {{ .Values.strimzi.topicReplication }}
+    status.storage.replication.factor: {{ .Values.strimzi.topicReplication }}
+    key.converter: org.apache.kafka.connect.storage.StringConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: false
+    value.converter.schemas.enable: false
+    config.providers: secrets
+    config.providers.secrets.class: io.strimzi.kafka.KubernetesSecretConfigProvider
+  externalConfiguration: {}
+  resources:
+    {{- toYaml .Values.kafkaConnect.resources | nindent 4 }}
+  metricsConfig:
+    type: jmxPrometheusExporter
+    valueFrom:
+      configMapKeyRef:
+        name: {{ $cluster }}-metrics
+        key: kafka-metrics-config.yml
+  template:
+    pod:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+    connectContainer:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+---
+# RBAC para o KubernetesSecretConfigProvider ler o secret de credenciais do banco
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sus-connect-secret-reader
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [debezium-db-credentials]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sus-connect-secret-reader
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: sus-connect-connect
+    namespace: {{ $ns }}
+roleRef:
+  kind: Role
+  name: sus-connect-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Mesma configuração de platform/compose/debezium/outbox-connector.json
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: core-outbox
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: sus-connect
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "35"
+spec:
+  class: io.debezium.connector.postgresql.PostgresConnector
+  tasksMax: 1
+  autoRestart:
+    enabled: true
+    maxRestarts: 10
+  config:
+    database.hostname: core-db-rw.{{ include "umbrella.ns.data" . }}.svc.cluster.local
+    database.port: 5432
+    database.user: ${secrets:{{ $ns }}/debezium-db-credentials:username}
+    database.password: ${secrets:{{ $ns }}/debezium-db-credentials:password}
+    database.dbname: sus_nexus_core
+    database.sslmode: require
+    topic.prefix: core
+    plugin.name: pgoutput
+    slot.name: core_outbox
+    publication.name: core_outbox_pub
+    publication.autocreate.mode: filtered
+    snapshot.mode: no_data
+    schema.include.list: platform
+    table.include.list: platform.event_outbox
+    tombstones.on.delete: false
+    heartbeat.interval.ms: 10000
+    transforms: outbox
+    transforms.outbox.type: io.debezium.transforms.outbox.EventRouter
+    transforms.outbox.table.op.invalid.behavior: warn
+    transforms.outbox.table.field.event.id: id
+    transforms.outbox.table.field.event.key: aggregate_id
+    transforms.outbox.table.field.event.type: event_type
+    transforms.outbox.table.field.event.payload: payload
+    transforms.outbox.table.expand.json.payload: true
+    transforms.outbox.route.by.field: aggregate_type
+    transforms.outbox.route.topic.regex: "(?<routedByValue>.*)"
+    transforms.outbox.route.topic.replacement: "sus.${routedByValue}.v1"
+    transforms.outbox.route.tombstone.on.empty.payload: false
+    transforms.outbox.table.fields.additional.placement: "event_type:header:ce_type,aggregate_type:header:aggregate_type,headers:header:headers"
+    key.converter: org.apache.kafka.connect.storage.StringConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: false
+    header.converter: org.apache.kafka.connect.storage.SimpleHeaderConverter
+    errors.tolerance: none
+    errors.log.enable: true
+    errors.log.include.messages: false
+    producer.override.acks: all
+    producer.override.enable.idempotence: true
+    producer.override.compression.type: lz4
+{{- end }}

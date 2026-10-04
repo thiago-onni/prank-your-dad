@@ -1,0 +1,182 @@
+# Alertas operacionais (não-SLO): conectores, DLQ, Kafka, bancos, IA, segurança. Cada alerta aponta runbook.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sus-nexus-platform-alerts
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+    sus-nexus.gov.br/rules: platform
+spec:
+  groups:
+    - name: sus.connectors
+      rules:
+        - alert: SusConnectorCriticalDown
+          # "Alerta de conector crítico ≤ 5 min" (13.3): sem sucesso há 5 min em conector marcado crítico
+          expr: (time() - max by (connector_id) (sus_connector_last_success_timestamp_seconds{critical="true"})) > 300
+          for: 1m
+          labels: { severity: critical, team: integration }
+          annotations:
+            summary: "Conector crítico {{ $labels.connector_id }} sem sucesso há > 5 min"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/connector-down.md
+        - alert: SusConnectorStatusDegraded
+          expr: min by (connector_id) (sus_connector_status) < 2
+          for: 10m
+          labels: { severity: warning, team: integration }
+          annotations:
+            summary: "Conector {{ $labels.connector_id }} degradado/indisponível há 10 min"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/connector-down.md
+        - alert: SusConnectorFailureRateHigh
+          expr: |
+            sum by (connector_id) (rate(sus_connector_messages_failed_total[15m]))
+              / clamp_min(sum by (connector_id) (rate(sus_connector_messages_received_total[15m])), 1e-9) > 0.05
+          for: 15m
+          labels: { severity: warning, team: integration }
+          annotations:
+            summary: "Conector {{ $labels.connector_id }} com > 5% de falhas (15 min)"
+        - alert: SusReconciliationGap
+          expr: sum by (connector_id, entity) (integration_reconciliation_gap_total) > 0
+          for: 1h
+          labels: { severity: warning, team: integration }
+          annotations:
+            summary: "Gap de reconciliação fonte × barramento em {{ $labels.connector_id }}/{{ $labels.entity }}"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/reconciliation.md
+
+    - name: sus.kafka
+      rules:
+        - alert: SusDlqCriticalUntriaged
+          # "Triagem DLQ crítica ≤ 30 min úteis" — mensagem crítica na DLQ sem triagem (tarefa aberta) há 30 min
+          expr: sum by (consumer) (sus_dlq_untriaged_messages{critical="true"}) > 0
+          for: 30m
+          labels: { severity: critical, team: integration }
+          annotations:
+            summary: "DLQ crítica sem triagem há 30 min (consumer {{ $labels.consumer }})"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/dlq-triage.md
+        - alert: SusDlqGrowing
+          expr: sum(increase(sus_dlq_messages_total[1h])) > 50
+          for: 5m
+          labels: { severity: warning, team: integration }
+          annotations:
+            summary: "> 50 mensagens na DLQ na última hora"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/docs/runbooks/dlq-triage.md
+        - alert: SusConsumerLagHigh
+          expr: sum by (consumergroup, topic) (kafka_consumergroup_lag{topic=~"sus\\..*"}) > 10000
+          for: 15m
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Lag > 10k em {{ $labels.consumergroup }} / {{ $labels.topic }}"
+        - alert: SusKafkaUnderReplicatedPartitions
+          expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+          for: 10m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "Kafka com partições sub-replicadas (min.insync.replicas em risco)"
+        - alert: SusKafkaOfflinePartitions
+          expr: sum(kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+          for: 1m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "Kafka com partições offline"
+
+    - name: sus.databases
+      rules:
+        - alert: SusCnpgClusterNotHealthy
+          expr: max by (cluster) (cnpg_pg_replication_lag) > 30
+          for: 5m
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Replicação CNPG {{ $labels.cluster }} com lag > 30 s"
+        - alert: SusCnpgBackupFailed
+          expr: time() - max by (cluster) (cnpg_pg_wal_archive_status_last_archived_time) > 900
+          for: 5m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "WAL do cluster {{ $labels.cluster }} não arquivado há > 15 min (RPO ≤ 5 min em risco)"
+            runbook_url: https://github.com/sus-nexus/sus-nexus/blob/main/sus-nexus/platform/backup-dr/RUNBOOK-DR.md
+        - alert: SusCnpgLastBackupOld
+          expr: time() - max by (cluster) (cnpg_pg_last_backup_timestamp) > 129600
+          for: 10m
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Último base backup do cluster {{ $labels.cluster }} há > 36 h"
+        - alert: SusPostgresConnectionsSaturated
+          expr: sum by (cluster) (cnpg_backends_total) / sum by (cluster) (cnpg_pg_settings_setting{name="max_connections"}) > 0.85
+          for: 10m
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Conexões do cluster {{ $labels.cluster }} > 85% de max_connections"
+        - alert: SusReplicationSlotLagHigh
+          expr: max by (cluster, slot_name) (cnpg_pg_replication_slots_pg_wal_lsn_diff) > 1073741824
+          for: 15m
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Slot de replicação {{ $labels.slot_name }} ({{ $labels.cluster }}) retendo > 1 GiB de WAL — Debezium parado?"
+
+    - name: sus.workflows
+      rules:
+        - alert: SusWorkflowSlaBreach
+          expr: sum(increase(workflow_sla_breach_total[15m])) > 0
+          for: 0m
+          labels: { severity: warning, team: care }
+          annotations:
+            summary: "SLA de workflow estourado (tarefas) — ver dashboard Workflows"
+        - alert: SusTemporalFrontendDown
+          expr: absent(up{job=~".*temporal.*frontend.*"} == 1)
+          for: 5m
+          labels: { severity: critical, team: platform }
+          annotations:
+            summary: "Temporal frontend indisponível"
+
+    - name: sus.ai
+      rules:
+        - alert: SusAiDenialSpike
+          expr: sum(rate(sus_ai_denied_total[10m])) > 1
+          for: 10m
+          labels: { severity: warning, team: ai }
+          annotations:
+            summary: "Negações de ação de agente > 1/s — possível regressão de política ou prompt injection"
+        - alert: SusAiCostBudget
+          expr: sum(increase(sus_ai_cost_usd_total[1d])) > 200
+          for: 5m
+          labels: { severity: warning, team: ai }
+          annotations:
+            summary: "Custo de IA > USD 200 em 24 h"
+        - alert: SusAiApprovalBacklog
+          expr: sum(sus_ai_approval_pending) > 100
+          for: 30m
+          labels: { severity: warning, team: ai }
+          annotations:
+            summary: "> 100 ações de agente aguardando aprovação humana há 30 min"
+
+    - name: sus.security
+      rules:
+        - alert: SusBreakGlassUsed
+          expr: sum(increase(sus_access_log_total{break_glass="true"}[5m])) > 0
+          for: 0m
+          labels: { severity: info, team: security }
+          annotations:
+            summary: "Acesso break-glass registrado — revisar no audit em até 24 h"
+        - alert: SusOpaDenyRateHigh
+          expr: sum(rate(sus_authz_decisions_total{decision="deny"}[10m])) / clamp_min(sum(rate(sus_authz_decisions_total[10m])), 1e-9) > 0.2
+          for: 10m
+          labels: { severity: warning, team: security }
+          annotations:
+            summary: "> 20% das decisões OPA negadas (10 min) — política ou cliente mal configurado"
+        - alert: SusKeycloakLoginFailures
+          expr: sum(rate(keycloak_failed_login_attempts[5m])) > 2
+          for: 5m
+          labels: { severity: warning, team: security }
+          annotations:
+            summary: "> 2 logins falhos/s no Keycloak — possível força bruta"
+        - alert: SusKyvernoPolicyViolations
+          expr: sum(increase(kyverno_policy_results_total{rule_result="fail",policy_validation_mode="enforce"}[15m])) > 10
+          for: 5m
+          labels: { severity: info, team: security }
+          annotations:
+            summary: "Kyverno bloqueou > 10 recursos em 15 min"
+        - alert: SusCertificateExpiringSoon
+          expr: (certmanager_certificate_expiration_timestamp_seconds - time()) < 7 * 24 * 3600
+          for: 1h
+          labels: { severity: warning, team: platform }
+          annotations:
+            summary: "Certificado {{ $labels.name }} ({{ $labels.namespace }}) expira em < 7 dias"

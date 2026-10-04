@@ -1,0 +1,84 @@
+# Values do chart grafana/tempo-distributed (storage MinIO/S3). Traces já chegam com PII removida.
+fullnameOverride: tempo
+tempo:
+  structuredConfig:
+    multitenancy_enabled: false
+traces:
+  otlp:
+    grpc: { enabled: true }
+    http: { enabled: true }
+  jaeger: { thriftHttp: { enabled: false }, grpc: { enabled: false } }
+  zipkin: { enabled: false }
+storage:
+  trace:
+    backend: s3
+    s3:
+      bucket: tempo-traces
+      endpoint: minio.data.svc.cluster.local
+      region: sa-east-1
+      forcepathstyle: true
+      insecure: false
+      tls_ca_path: /etc/ssl/certs/minio-ca.crt
+      access_key: ${S3_ACCESS_KEY_ID}
+      secret_key: ${S3_SECRET_ACCESS_KEY}
+    wal:
+      path: /var/tempo/wal
+compactor:
+  replicas: 1
+  config:
+    compaction:
+      block_retention: 336h       # 14 dias
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+  extraVolumes: [{ name: minio-ca, secret: { secretName: minio-ca } }]
+  extraVolumeMounts: [{ name: minio-ca, mountPath: /etc/ssl/certs/minio-ca.crt, subPath: ca.crt }]
+distributor:
+  replicas: 2
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+ingester:
+  replicas: 3
+  persistence:
+    enabled: true
+    storageClass: fast-nvme
+    size: 20Gi
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+  extraVolumes: [{ name: minio-ca, secret: { secretName: minio-ca } }]
+  extraVolumeMounts: [{ name: minio-ca, mountPath: /etc/ssl/certs/minio-ca.crt, subPath: ca.crt }]
+querier:
+  replicas: 2
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+  extraVolumes: [{ name: minio-ca, secret: { secretName: minio-ca } }]
+  extraVolumeMounts: [{ name: minio-ca, mountPath: /etc/ssl/certs/minio-ca.crt, subPath: ca.crt }]
+queryFrontend:
+  replicas: 2
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+metricsGenerator:
+  enabled: true
+  replicas: 2
+  config:
+    storage:
+      remote_write:
+        - url: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/write
+          send_exemplars: true
+    processor:
+      service_graphs: {}
+      span_metrics:
+        dimensions: [service.namespace, deployment.environment]
+  extraArgs: [-config.expand-env=true]
+  extraEnvFrom: [{ secretRef: { name: tempo-s3-credentials } }]
+global_overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]
+gateway:
+  enabled: false
+minio:
+  enabled: false
+metaMonitoring:
+  serviceMonitor:
+    enabled: true
+    labels: { release: kube-prometheus-stack }

@@ -1,0 +1,85 @@
+{{- if .Values.strimzi.enabled }}
+{{- $root := . }}
+{{- $ns := .Values.strimzi.namespace | default (include "umbrella.ns.data" .) }}
+{{- $cluster := .Values.strimzi.clusterName }}
+{{/*
+ACLs por serviço (PLANO 4.2.3 / KAF-010). Princípio: cada serviço só escreve nos tópicos que produz e
+só lê os que consome; ninguém além do core/fhir lê tópicos de domínio; ingest só é lido pelo core.
+Os usuários de conector são gerados por alias de conector habilitado + lista `strimzi.extraConnectorUsers`
+(para agentes de borda que rodam fora do cluster).
+*/}}
+{{- range $user := .Values.strimzi.users }}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: {{ $user.name }}
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" $root | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+spec:
+  authentication:
+    type: {{ $user.authentication | default "tls" }}
+  authorization:
+    type: simple
+    acls:
+      {{- range $user.acls }}
+      - resource:
+          type: {{ .type }}
+          name: {{ .name | quote }}
+          patternType: {{ .patternType | default "literal" }}
+        operations:
+          {{- toYaml .operations | nindent 10 }}
+        host: "*"
+      {{- end }}
+  {{- with $user.quotas }}
+  quotas:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- /* Conectores: um KafkaUser por alias habilitado */}}
+{{- range $alias := list "connector-pec" "connector-agenda" "connector-sisreg" "connector-cnes" "connector-cadsus" "connector-his" }}
+{{- $cv := index $root.Values $alias }}
+{{- if and $cv $cv.enabled }}
+{{- $id := $cv.connector.id }}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: connector-{{ $id }}
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" $root | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: {{ $cv.connector.ingestTopic | quote }}, patternType: literal }
+        operations: [Describe, Write]
+        host: "*"
+      - resource: { type: topic, name: {{ printf "%s.retry." $cv.connector.ingestTopic | quote }}, patternType: prefix }
+        operations: [Describe, Read, Write]
+        host: "*"
+      - resource: { type: topic, name: "sus.integration.status.v1", patternType: literal }
+        operations: [Describe, Write]
+        host: "*"
+      - resource: { type: topic, name: "sus.dlq.v1", patternType: literal }
+        operations: [Describe, Write]
+        host: "*"
+      - resource: { type: group, name: {{ printf "connector-%s" $id | quote }}, patternType: prefix }
+        operations: [Read, Describe]
+        host: "*"
+  quotas:
+    producerByteRate: 20971520
+    consumerByteRate: 20971520
+{{- end }}
+{{- end }}
+{{- end }}

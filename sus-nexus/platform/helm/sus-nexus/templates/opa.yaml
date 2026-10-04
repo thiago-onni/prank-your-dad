@@ -1,0 +1,183 @@
+{{- if .Values.opa.enabled }}
+{{- $ns := include "umbrella.ns.security" . }}
+# OPA como serviço central (PDP). Bundle publicado pelo CI de `policies/` em OCI (Harbor) ou HTTP (MinIO).
+# Decision logs vão para o audit (via OTel/Loki) — PLANO 12.2.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    services:
+      bundles:
+        url: {{ .Values.opa.bundle.serviceUrl }}
+        {{- if .Values.opa.bundle.oci }}
+        type: oci
+        {{- end }}
+        {{- if .Values.opa.bundle.credentialsSecret }}
+        credentials:
+          bearer:
+            token: "${OPA_BUNDLE_TOKEN}"
+        {{- end }}
+    bundles:
+      sus-nexus:
+        service: bundles
+        resource: {{ .Values.opa.bundle.resource }}
+        polling:
+          min_delay_seconds: 30
+          max_delay_seconds: 120
+        persist: true
+    decision_logs:
+      console: true
+      reporting:
+        min_delay_seconds: 5
+        max_delay_seconds: 10
+    status:
+      console: true
+      prometheus: true
+    distributed_tracing:
+      type: grpc
+      address: otel-collector.{{ .Values.global.namespaces.observability }}.svc.cluster.local:4317
+      service_name: opa
+      sample_percentage: 20
+      encryption: "off"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opa
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+    app.kubernetes.io/name: opa
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  replicas: {{ .Values.opa.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opa
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opa
+        {{- include "umbrella.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Values.opa | toJson | sha256sum }}
+    spec:
+      serviceAccountName: opa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opa
+          image: {{ .Values.opa.image }}
+          args:
+            - run
+            - --server
+            - --addr=0.0.0.0:8181
+            - --config-file=/config/config.yaml
+            - --log-level={{ .Values.opa.logLevel }}
+            - --log-format=json
+            - --disable-telemetry
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8181
+          {{- if .Values.opa.bundle.credentialsSecret }}
+          env:
+            - name: OPA_BUNDLE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.opa.bundle.credentialsSecret }}
+                  key: token
+          {{- end }}
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: "/health?bundles=true&plugins=true", port: http }
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.opa.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: persist
+              mountPath: /.opa
+      volumes:
+        - name: config
+          configMap:
+            name: opa-config
+        - name: persist
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+    app.kubernetes.io/name: opa
+spec:
+  ports:
+    - name: http
+      port: 8181
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: opa
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: opa
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opa
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: opa
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opa
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+{{- end }}

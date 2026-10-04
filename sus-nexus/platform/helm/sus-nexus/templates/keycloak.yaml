@@ -1,0 +1,224 @@
+{{- if .Values.keycloak.enabled }}
+{{- $ns := include "umbrella.ns.security" . }}
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: keycloak-db
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: keycloak-db
+  data:
+    - secretKey: username
+      remoteRef: { key: "{{ .Values.global.environment }}/data/keycloak-db", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ .Values.global.environment }}/data/keycloak-db", property: password }
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: keycloak-bootstrap-admin
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: keycloak-bootstrap-admin
+  data:
+    - secretKey: username
+      remoteRef: { key: "{{ .Values.global.environment }}/security/keycloak-admin", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ .Values.global.environment }}/security/keycloak-admin", property: password }
+---
+# Keycloak Operator (k8s.keycloak.org/v2alpha1)
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  instances: {{ .Values.keycloak.instances }}
+  image: {{ .Values.keycloak.image }}
+  startOptimized: false
+  bootstrapAdmin:
+    user:
+      secret: keycloak-bootstrap-admin
+  db:
+    vendor: postgres
+    host: keycloak-db-rw.{{ include "umbrella.ns.data" . }}.svc.cluster.local
+    port: 5432
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db
+      key: username
+    passwordSecret:
+      name: keycloak-db
+      key: password
+    poolMinSize: 5
+    poolInitialSize: 5
+    poolMaxSize: 30
+  hostname:
+    hostname: {{ .Values.keycloak.hostname }}
+    strict: true
+  http:
+    httpEnabled: false
+    tlsSecret: keycloak-tls
+  ingress:
+    enabled: false   # exposto via ApisixRoute abaixo
+  proxy:
+    headers: xforwarded
+  features:
+    enabled:
+      - token-exchange
+      - admin-fine-grained-authz
+      {{- range .Values.keycloak.extraFeatures }}
+      - {{ . }}
+      {{- end }}
+  additionalOptions:
+    - name: health-enabled
+      value: "true"
+    - name: metrics-enabled
+      value: "true"
+    - name: log-console-output
+      value: json
+    - name: spi-events-listener-jboss-logging-success-level
+      value: info
+    - name: cache
+      value: ispn
+    - name: cache-stack
+      value: kubernetes
+    {{- range .Values.keycloak.additionalOptions }}
+    - name: {{ .name }}
+      value: {{ .value | quote }}
+    {{- end }}
+  resources:
+    {{- toYaml .Values.keycloak.resources | nindent 4 }}
+  unsupported:
+    podTemplate:
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-tls
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  secretName: keycloak-tls
+  issuerRef:
+    name: {{ .Values.keycloak.tls.issuerName }}
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ .Values.keycloak.hostname }}
+    - keycloak-service.{{ $ns }}.svc.cluster.local
+    - keycloak-service.{{ $ns }}.svc
+---
+# Realm importado do arquivo files/realm-sus-nexus.json (cópia sincronizada de
+# platform/compose/keycloak/realm-sus-nexus.json). Overrides por ambiente em keycloak.realmOverrides
+# (ex.: MFA obrigatório em hml/prod — ver values-hml.yaml / values-prod.yaml).
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakRealmImport
+metadata:
+  name: sus-nexus-realm
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "45"
+spec:
+  keycloakCRName: keycloak
+  {{- with .Values.keycloak.placeholders }}
+  placeholders:
+    {{- range $k, $v := . }}
+    {{ $k }}:
+      secret:
+        name: {{ $v.secret }}
+        key: {{ $v.key }}
+    {{- end }}
+  {{- end }}
+  realm:
+    {{- $realm := .Files.Get "files/realm-sus-nexus.json" | fromJson }}
+    {{- $realm = mergeOverwrite $realm .Values.keycloak.realmOverrides }}
+    {{- if not .Values.keycloak.importDevUsers }}
+    {{- $_ := set $realm "users" (list) }}
+    {{- end }}
+    {{- toYaml $realm | nindent 4 }}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: keycloak
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  http:
+    - name: keycloak
+      match:
+        hosts: [{{ .Values.keycloak.hostname | quote }}]
+        paths: ["/realms/*", "/resources/*", "/js/*", "/robots.txt"]
+      backends:
+        - serviceName: keycloak-service
+          servicePort: 8443
+      plugins:
+        - name: limit-count
+          enable: true
+          config: { count: 300, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local }
+        - name: response-rewrite
+          enable: true
+          config:
+            headers:
+              set:
+                Strict-Transport-Security: "max-age=63072000; includeSubDomains; preload"
+                X-Content-Type-Options: nosniff
+    - name: keycloak-admin
+      match:
+        hosts: [{{ .Values.keycloak.hostname | quote }}]
+        paths: ["/admin/*"]
+      backends:
+        - serviceName: keycloak-service
+          servicePort: 8443
+      plugins:
+        - name: ip-restriction
+          enable: true
+          config:
+            whitelist:
+              {{- toYaml .Values.keycloak.adminAllowCidrs | nindent 14 }}
+---
+apiVersion: apisix.apache.org/v2
+kind: ApisixUpstream
+metadata:
+  name: keycloak-service
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  scheme: https
+  portLevelSettings:
+    - port: 8443
+      scheme: https
+{{- end }}

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: sus-nexus-ai
+description: SUS Nexus — AI Service (Python/FastAPI, agentes LangGraph)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0-0"
+home: https://github.com/sus-nexus/sus-nexus
+keywords: [sus-nexus, ai, agents, fastapi]
+maintainers:
+  - name: Plataforma SUS Nexus
+annotations:
+  sus-nexus.gov.br/component: ai-service

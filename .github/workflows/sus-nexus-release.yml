@@ -1,0 +1,272 @@
+name: sus-nexus-release
+
+# Release por tag semver (vX.Y.Z): imagens multi-arch assinadas (cosign keyless) + SBOM, charts Helm
+# empacotados (chart-releaser → GitHub Pages + OCI no GHCR), bundle OPA e GitHub Release com notas.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"]
+
+concurrency:
+  group: sus-nexus-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/sus-nexus
+  HELM_VERSION: v3.16.4
+
+jobs:
+  version:
+    name: versão
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - id: v
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          if [[ "$tag" == *-rc.* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+  images:
+    name: image ${{ matrix.component }}
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { component: core-municipal, context: sus-nexus/core-municipal, dockerfile: Dockerfile, build_args: "" }
+          - { component: fhir-gateway, context: sus-nexus/fhir-gateway, dockerfile: Dockerfile, build_args: "" }
+          - { component: connector-pec, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-pec" }
+          - { component: connector-agenda, context: sus-nexus/connectors, dockerfile: Dockerfile, build_args: "CONNECTOR_MODULE=connector-agenda" }
+          - { component: web-shell, context: sus-nexus, dockerfile: web/apps/shell/Dockerfile }
+          - { component: ai-service, context: sus-nexus/ai-service, dockerfile: Dockerfile, build_args: "" }
+          - { component: kafka-connect-debezium, context: sus-nexus/platform/images/kafka-connect-debezium, dockerfile: Dockerfile, build_args: "" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: contexto existe?
+        id: ctx
+        run: |
+          if [[ -f "${{ matrix.context }}/${{ matrix.dockerfile }}" ]]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::warning::Dockerfile ausente em ${{ matrix.context }} — pulando"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: docker/setup-qemu-action@v3
+        if: steps.ctx.outputs.ok == 'true'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.ctx.outputs.ok == 'true'
+      - uses: docker/login-action@v3
+        if: steps.ctx.outputs.ok == 'true'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        if: steps.ctx.outputs.ok == 'true'
+        id: meta
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.version.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.prerelease == 'false' }}
+      - uses: docker/build-push-action@v6
+        if: steps.ctx.outputs.ok == 'true'
+        id: build
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build_args }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - uses: sigstore/cosign-installer@v3
+        if: steps.ctx.outputs.ok == 'true'
+      - uses: anchore/sbom-action@v0
+        if: steps.ctx.outputs.ok == 'true'
+        with:
+          image: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.component }}.spdx.json
+          upload-artifact: true
+          artifact-name: sbom-${{ matrix.component }}
+      - name: cosign sign + attest (keyless, OIDC do workflow)
+        if: steps.ctx.outputs.ok == 'true'
+        env:
+          COSIGN_YES: "true"
+        run: |
+          IMAGE="${IMAGE_PREFIX}/${{ matrix.component }}@${{ steps.build.outputs.digest }}"
+          cosign sign "$IMAGE"
+          cosign attest --type spdxjson --predicate "sbom-${{ matrix.component }}.spdx.json" "$IMAGE"
+          cosign verify --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/sus-nexus-release.yml@refs/tags/v.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE" > /dev/null
+      - name: digest
+        if: steps.ctx.outputs.ok == 'true'
+        run: |
+          mkdir -p digests
+          echo "${{ matrix.component }}=${{ steps.build.outputs.digest }}" > "digests/${{ matrix.component }}.txt"
+      - uses: actions/upload-artifact@v4
+        if: steps.ctx.outputs.ok == 'true'
+        with:
+          name: digest-${{ matrix.component }}
+          path: digests/*.txt
+          retention-days: 90
+
+  opa-bundle:
+    name: bundle OPA
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-policy-agent/setup-opa@v2
+        with: { version: v0.70.0 }
+      - run: opa test sus-nexus/policies
+      - name: build bundle
+        run: opa build -b sus-nexus/policies -o policies-bundle.tar.gz --revision "${{ needs.version.outputs.version }}"
+      - uses: oras-project/setup-oras@v1
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: push OCI (opa.bundle.resource)
+        run: |
+          oras push "${IMAGE_PREFIX}/policies:${{ needs.version.outputs.version }}" \
+            --artifact-type application/vnd.oci.image.manifest.v1+json \
+            policies-bundle.tar.gz:application/vnd.oci.image.layer.v1.tar+gzip
+      - uses: sigstore/cosign-installer@v3
+      - run: cosign sign --yes "${IMAGE_PREFIX}/policies:${{ needs.version.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with: { name: policies-bundle, path: policies-bundle.tar.gz }
+
+  helm:
+    name: helm charts
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # chart-releaser cria releases/gh-pages
+      packages: write        # OCI no GHCR
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: azure/setup-helm@v4
+        with: { version: "${{ env.HELM_VERSION }}" }
+      - name: versionar charts com a tag
+        working-directory: sus-nexus/platform/helm
+        run: |
+          export V="${{ needs.version.outputs.version }}"
+          for c in charts/* sus-nexus; do
+            sed -i -E "s/^version: .*/version: ${V}/; s/^appVersion: .*/appVersion: \"${V}\"/" "$c/Chart.yaml"
+          done
+          # dependências locais do umbrella (sus-nexus-*) acompanham a versão; temporal mantém a sua
+          python3 - <<'PY'
+          import os, pathlib, re
+          v = os.environ["V"]
+          p = pathlib.Path("sus-nexus/Chart.yaml"); s = p.read_text()
+          s = re.sub(r"(- name: sus-nexus-[a-z]+\n    version: )[^\n]+", lambda m: m.group(1) + v, s)
+          p.write_text(s)
+          PY
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm dependency build sus-nexus
+          for c in charts/*; do helm lint "$c" --strict; done
+          helm lint sus-nexus --strict
+      - name: helm package
+        working-directory: sus-nexus/platform/helm
+        run: |
+          mkdir -p .cr-release-packages
+          for c in charts/* sus-nexus; do helm package "$c" -d .cr-release-packages; done
+          ls -la .cr-release-packages
+      - name: chart-releaser (GitHub Release + índice em gh-pages)
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: sus-nexus/platform/helm/charts
+          packages_with_index: true
+          skip_packaging: true
+          mark_as_latest: ${{ needs.version.outputs.prerelease == 'false' }}
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CR_PACKAGE_PATH: sus-nexus/platform/helm/.cr-release-packages
+          CR_RELEASE_NAME_TEMPLATE: "chart-{{ .Name }}-{{ .Version }}"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v3
+      - name: push OCI + assinar charts
+        working-directory: sus-nexus/platform/helm
+        env:
+          COSIGN_YES: "true"
+        run: |
+          for pkg in .cr-release-packages/*.tgz; do
+            out="$(helm push "$pkg" "oci://${IMAGE_PREFIX}/charts" 2>&1)"; echo "$out"
+            digest="$(echo "$out" | grep -o 'sha256:[a-f0-9]*' | head -1)"
+            name="$(basename "$pkg" | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+.*\.tgz$//')"
+            cosign sign "${IMAGE_PREFIX}/charts/${name}@${digest}"
+          done
+
+  release:
+    name: GitHub Release
+    needs: [version, images, opa-bundle, helm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/download-artifact@v4
+        with: { pattern: "digest-*", merge-multiple: true, path: digests }
+      - uses: actions/download-artifact@v4
+        with: { pattern: "sbom-*", merge-multiple: true, path: sboms }
+      - name: notas de release
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          prev="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          {
+            echo "## SUS Nexus ${V}"
+            echo
+            echo "### Imagens (assinadas com cosign keyless; verifique com \`cosign verify\`)"
+            echo
+            for f in digests/*.txt; do [[ -f "$f" ]] && echo "- \`${IMAGE_PREFIX}/$(cut -d= -f1 "$f")@$(cut -d= -f2 "$f")\`"; done
+            echo
+            echo "### Charts"
+            echo
+            echo "- \`oci://${IMAGE_PREFIX}/charts/sus-nexus:${V}\` (+ sus-nexus-core, sus-nexus-fhir, sus-nexus-web, sus-nexus-ai, sus-nexus-connector)"
+            echo "- Bundle OPA: \`${IMAGE_PREFIX}/policies:${V}\`"
+            echo
+            echo "### Promoção"
+            echo
+            echo "Abra um PR em \`sus-nexus/platform/helm/sus-nexus/values-hml.yaml\` apontando \`image.digest\` dos componentes para os digests acima; depois \`values-prod.yaml\` (2 aprovações)."
+            echo
+            if [[ -n "$prev" ]]; then
+              echo "### Mudanças desde ${prev}"
+              echo
+              git log --pretty='- %s (%h)' "${prev}..${GITHUB_REF_NAME}" -- sus-nexus | head -200
+            fi
+          } > RELEASE_NOTES.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: sus-nexus ${{ needs.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+          files: |
+            sboms/*.spdx.json
+            digests/*.txt
+          generate_release_notes: false

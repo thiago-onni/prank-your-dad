@@ -1,0 +1,100 @@
+# cert-manager: CA interna (mTLS entre serviços, certificados de borda em dev) + ACME (Let's Encrypt)
+# para hostnames públicos. Para ICP-Brasil (e-CNPJ da SMS usado na RNDS) o certificado fica no OpenBao
+# (PKI/transit) e é injetado via ExternalSecret — não passa pelo cert-manager.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+# Raiz interna "SUS Nexus Internal CA" (10 anos). Em prod a raiz pode ser emitida pelo OpenBao PKI e
+# importada no secret sus-nexus-root-ca (ver external-secrets/cluster-secret-store.yaml).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sus-nexus-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: SUS Nexus Internal CA
+  subject:
+    organizations: [Secretaria Municipal de Saude]
+    organizationalUnits: [SUS Nexus]
+    countries: [BR]
+  secretName: sus-nexus-root-ca
+  duration: 87600h
+  renewBefore: 8760h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: internal-ca
+spec:
+  ca:
+    secretName: sus-nexus-root-ca
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: sre@sus-nexus.local
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: apisix
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: sre@sus-nexus.local
+    privateKeySecretRef:
+      name: letsencrypt-prod-account
+    solvers:
+      # DNS-01 preferido (hosts internos não expostos ao HTTP-01); credenciais via ESO
+      - dns01:
+          route53:
+            region: sa-east-1
+            accessKeyIDSecretRef:
+              name: route53-credentials
+              key: access-key-id
+            secretAccessKeySecretRef:
+              name: route53-credentials
+              key: secret-access-key
+        selector:
+          dnsZones: [sus-nexus.saude.montesclaros.mg.gov.br]
+      - http01:
+          ingress:
+            ingressClassName: apisix
+---
+# Certificado wildcard interno para serviços *.svc (mTLS). Namespaces consomem via Certificate próprio
+# com issuerRef internal-ca (exemplo nos charts: apisix.tls.certificate).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-ca-bundle
+  namespace: cert-manager
+spec:
+  commonName: sus-nexus-internal-bundle
+  secretName: internal-ca-bundle
+  duration: 2160h
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.svc.cluster.local"
