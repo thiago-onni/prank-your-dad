@@ -1,0 +1,92 @@
+# Modelo de informação RNDS: Resultado de Exame (laboratorial) — mapeamento declarativo versionado.
+#
+# ATENÇÃO: perfis (StructureDefinition), NamingSystems, códigos de tipo de documento e a forma do
+# Bundle DEPENDEM DA DOCUMENTAÇÃO OFICIAL VIGENTE DA RNDS e do escopo habilitado do município.
+# Todos os valores marcados "A CONFIRMAR" são EXEMPLOS e precisam ser validados na homologação
+# (ver connector-rnds/README.md, seção "Itens a validar na homologação"). Ao mudar qualquer valor
+# oficial, crie um NOVO arquivo com nova versão (ex.: rnds-resultado-exame-1.1.0.yaml) e aponte
+# rnds.models.resultado-exame.mapping para ele — nunca edite uma versão já usada em produção.
+model: resultado-exame
+version: 1.0.0
+status: a-confirmar-na-homologacao
+description: >-
+  DiagnosticReport final/amended + Observations do fhir-gateway municipal, enviados como Bundle à RNDS.
+  Paciente e estabelecimento referenciados logicamente por CNS/CPF e CNES (minimização: o Patient não é
+  incluído). Fonte: evento sus.exam.result.v1 (action=available).
+
+bundle:
+  type: document                      # A CONFIRMAR: document | transaction (sobrescrevível por config)
+  profile: null                       # A CONFIRMAR: perfil do Bundle, se exigido
+  # A CONFIRMAR: sistema do identificador do Bundle ({solicitante} = rnds.solicitante-id | cnes-solicitante)
+  identifier_system: "http://www.saude.gov.br/fhir/r4/NamingSystem/BRRNDS-{solicitante}"
+
+composition:                          # usado apenas quando bundle.type = document
+  profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRResultadoExameLaboratorial-A-CONFIRMAR"
+  type:                               # A CONFIRMAR: CodeSystem/código do tipo de documento na RNDS
+    system: "http://www.saude.gov.br/fhir/r4/CodeSystem/BRTipoDocumento"
+    code: "REL"
+    display: "Resultado de Exame Laboratorial"
+  category: null
+  title: "Resultado de Exame Laboratorial"
+  section_title: "Resultado"
+
+identifier_systems:                   # A CONFIRMAR: NamingSystems oficiais (mesmos do fhir-gateway)
+  cns: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns"
+  cpf: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf"
+  cnes: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes"
+
+code_systems: {}                      # códigos do exame seguem como vierem do fhir-gateway (SIGTAP/LOINC)
+
+resources:
+  DiagnosticReport:
+    mode: entry
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRDiagnosticoLaboratorioClinico-A-CONFIRMAR"
+  Observation:
+    mode: entry
+    profile: "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRResultadoExame-A-CONFIRMAR"
+  Patient:
+    mode: logical                     # referência por CNS (preferencial) ou CPF
+    profile: null
+  Organization:
+    mode: logical                     # referência por CNES
+    profile: null
+  Practitioner:
+    mode: logical                     # referência por CNS/CPF do profissional (quando houver)
+    profile: null
+  ServiceRequest:
+    mode: omit                        # usado só para completar o código do exame
+    profile: null
+
+strip:
+  # Extensões/identificadores próprios do SUS Nexus não vão para a RNDS
+  extension_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  identifier_prefixes:
+    - "http://sus-nexus.gov.br/fhir"
+    - "https://sus-nexus.gov.br/fhir"
+  # Elementos internos (ex.: links para o Binary do gateway municipal)
+  elements:
+    - DiagnosticReport.presentedForm
+    - DiagnosticReport.basedOn
+    - Observation.basedOn
+    - Observation.encounter
+
+# Pré-validação (antes de qualquer chamada externa). Falha → DLQ com motivo, sem envio.
+required:
+  - name: patient_identifier
+    check: cns_or_cpf
+    facts: [patient.cns, patient.cpf]
+  - name: performer_cnes
+    check: cnes
+    facts: [performer.cnes]
+  - name: exam_code
+    check: present
+    facts: [exam.code]
+  - name: exam_date
+    check: datetime
+    facts: [exam.date]
+  - name: final_status
+    check: one_of
+    facts: [report.status]
+    values: [final, amended]

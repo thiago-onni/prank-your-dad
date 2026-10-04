@@ -17,8 +17,17 @@ connectors/
 ├── connector-esus-regulacao/ e-SUS Regulação: API OAuth2 paginada ou export JSON/CSV → regulação porta 8094
 ├── connector-lis/           Laboratório: HL7 v2 ORM/ORU via MLLP ou .hl7 → exames (Fase 2)      porta 8095, MLLP 2575
 ├── connector-his/           Hospital (borda): HL7 v2 ADT A01..A13 → episódios/altas (Fase 3)    porta 8096, MLLP 2576
-└── connector-ris/           Imagem: HL7 v2 ORM/ORU + metadados DICOM (JSON/CSV) → exames (Fase 3) porta 8097, MLLP 2577
+├── connector-ris/           Imagem: HL7 v2 ORM/ORU + metadados DICOM (JSON/CSV) → exames (Fase 3) porta 8097, MLLP 2577
+└── connector-rnds/          SAÍDA para a RNDS (Fase 4): eventos Kafka → FHIR Gateway → Bundle por    porta 8098
+                             modelo habilitado → RNDS (mTLS ICP-Brasil); rnds_submission + reconciliação
 ```
+
+O `connector-rnds` é o único conector de **saída**: a "fonte" é o barramento (`sus.exam.result.v1`,
+`sus.hospital.discharge.v1`) e o destino é a RNDS. Reusa o mesmo pipeline do SDK (raw zone = envelope do
+evento, `transform` = leitura no fhir-gateway + montagem do Bundle via `org.hl7.fhir.r4`, `validate` =
+pré-validação declarativa do YAML do modelo, `publish` = POST na RNDS em vez do core) e registra o resultado
+no core pelo ledger espelho (`POST /api/v1/integration/messages`), heartbeat e reconciliação. Endereços,
+cabeçalhos e perfis da RNDS são exemplos **a confirmar na homologação** — ver `connector-rnds/README.md`.
 
 Os endpoints de ingestão que os conectores chamam (`POST /api/v1/reference/health-units/upsert`,
 `POST /api/v1/terminology/{system}/codes/upsert`, `POST /api/v1/regulation/requests`, `POST /api/v1/regulation/capacity`,
@@ -42,6 +51,7 @@ mvn com.spotify.fmt:fmt-maven-plugin:format   # formata
 mvn -pl connector-pec quarkus:dev  # dev mode de um conector
 docker build -f connector-cnes/src/main/docker/Dockerfile -t sus-nexus/connector-cnes .
 docker build --build-arg CONNECTOR_MODULE=connector-lis --build-arg PORT=8095 -t sus-nexus/connector-lis .   # Dockerfile raiz genérico
+docker build --build-arg CONNECTOR_MODULE=connector-rnds --build-arg PORT=8098 -t sus-nexus/connector-rnds .
 ```
 
 ## Pipeline padrão (ConnectorRuntime)
@@ -106,4 +116,6 @@ H2 em memória para o ledger JDBC e WireMock (porta dinâmica via `QuarkusTestRe
 (e da API do e-SUS Regulação). LIS/HIS/RIS são testados pelos `direct:*-receive` (sem socket MLLP) e por arquivos
 `.hl7` com várias mensagens; o RIS também por exports DICOM JSON/CSV. XLSX de teste é gerado com POI em tempo de teste.
 Amostras HL7/DICOM usam dados fictícios (CNS/CPF válidos de teste) e os testes afirmam que nome, nascimento, laudo e
-sumário de alta nunca aparecem no payload enviado ao core.
+sumário de alta nunca aparecem no payload enviado ao core. O `connector-rnds` usa um WireMock com porta HTTPS de
+certificado de cliente obrigatório (keystores autoassinados de teste) para o serviço de autenticação da RNDS e
+Kafka em memória (`smallrye-in-memory`) para os gatilhos.

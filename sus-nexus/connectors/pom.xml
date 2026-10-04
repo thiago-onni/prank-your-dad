@@ -22,6 +22,7 @@
     <module>connector-lis</module>
     <module>connector-his</module>
     <module>connector-ris</module>
+    <module>connector-rnds</module>
   </modules>
 
   <properties>

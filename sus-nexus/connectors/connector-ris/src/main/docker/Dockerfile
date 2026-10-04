@@ -13,6 +13,7 @@ COPY connector-esus-regulacao/pom.xml connector-esus-regulacao/
 COPY connector-lis/pom.xml connector-lis/
 COPY connector-his/pom.xml connector-his/
 COPY connector-ris/pom.xml connector-ris/
+COPY connector-rnds/pom.xml connector-rnds/
 RUN mvn -q -B -pl connector-ris -am dependency:go-offline -Dfmt.skip || true
 COPY . .
 RUN mvn -q -B -pl connector-ris -am package -DskipTests -Dfmt.skip

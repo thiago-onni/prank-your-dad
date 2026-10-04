@@ -1,0 +1,24 @@
+{
+  "resourceType": "Encounter",
+  "id": "01JSSZ5AWSH8VHTPRE95B9EE0Z",
+  "meta": { "versionId": "4" },
+  "extension": [
+    { "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/hospital-episode-status", "valueCode": "discharged" },
+    { "url": "http://sus-nexus.gov.br/fhir/StructureDefinition/ward", "valueString": "CLINICA MEDICA" }
+  ],
+  "identifier": [
+    { "system": "http://sus-nexus.gov.br/fhir/NamingSystem/municipal-hospital-episode-id", "value": "hep_01JSSZ5AWSH8VHTPRE95B9EE0Z" },
+    { "system": "http://www.saude.gov.br/fhir/r4/NamingSystem/aih", "value": "3126100000017" }
+  ],
+  "status": "finished",
+  "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "IMP" },
+  "subject": { "reference": "Patient/01JFBF5KZNWJ47TAN9ZT24MNPZ" },
+  "period": { "start": "2026-09-20T10:00:00-03:00", "end": "2026-09-28T16:30:00-03:00" },
+  "reasonCode": [ { "coding": [ { "system": "http://hl7.org/fhir/sid/icd-10", "code": "I500" } ] } ],
+  "hospitalization": {
+    "dischargeDisposition": { "coding": [ { "system": "http://terminology.hl7.org/CodeSystem/discharge-disposition", "code": "home" } ] },
+    "destination": { "reference": "Location/xyz" }
+  },
+  "location": [ { "location": { "reference": "Location/abc" } } ],
+  "serviceProvider": { "reference": "Organization/org-hospital" }
+}

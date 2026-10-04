@@ -1,0 +1,17 @@
+model: resultado-exame
+version: 0.0.1
+status: teste
+description: mapeamento inválido de teste
+bundle: {type: document, profile: null, identifier_system: null}
+composition: null
+identifier_systems:
+  cns: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns"
+  cpf: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf"
+  cnes: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cnes"
+code_systems: {}
+resources: {}
+strip: null
+required:
+  - name: x
+    check: regex_magico
+    facts: [patient.cns]

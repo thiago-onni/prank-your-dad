@@ -1,5 +1,5 @@
 # Build multi-stage. Contexto: raiz de sus-nexus/connectors (projeto multi-módulo).
-#   docker build -f connector-his/src/main/docker/Dockerfile -t sus-nexus/connector-his .
+#   docker build -f connector-rnds/src/main/docker/Dockerfile -t sus-nexus/connector-rnds .
 FROM maven:3.9.11-eclipse-temurin-21 AS build
 WORKDIR /workspace
 COPY pom.xml .
@@ -14,9 +14,9 @@ COPY connector-lis/pom.xml connector-lis/
 COPY connector-his/pom.xml connector-his/
 COPY connector-ris/pom.xml connector-ris/
 COPY connector-rnds/pom.xml connector-rnds/
-RUN mvn -q -B -pl connector-his -am dependency:go-offline -Dfmt.skip || true
+RUN mvn -q -B -pl connector-rnds -am dependency:go-offline -Dfmt.skip || true
 COPY . .
-RUN mvn -q -B -pl connector-his -am package -DskipTests -Dfmt.skip
+RUN mvn -q -B -pl connector-rnds -am package -DskipTests -Dfmt.skip
 
 FROM eclipse-temurin:21-jre-jammy
 ENV LANG=C.UTF-8 TZ=America/Sao_Paulo \
@@ -24,12 +24,14 @@ ENV LANG=C.UTF-8 TZ=America/Sao_Paulo \
 RUN groupadd --system --gid 1001 sus && useradd --system --uid 1001 --gid sus --home /app sus \
     && mkdir -p /app/data && chown -R sus:sus /app
 WORKDIR /app
-COPY --from=build --chown=sus:sus /workspace/connector-his/target/quarkus-app/lib/ /app/lib/
-COPY --from=build --chown=sus:sus /workspace/connector-his/target/quarkus-app/*.jar /app/
-COPY --from=build --chown=sus:sus /workspace/connector-his/target/quarkus-app/app/ /app/app/
-COPY --from=build --chown=sus:sus /workspace/connector-his/target/quarkus-app/quarkus/ /app/quarkus/
+COPY --from=build --chown=sus:sus /workspace/connector-rnds/target/quarkus-app/lib/ /app/lib/
+COPY --from=build --chown=sus:sus /workspace/connector-rnds/target/quarkus-app/*.jar /app/
+COPY --from=build --chown=sus:sus /workspace/connector-rnds/target/quarkus-app/app/ /app/app/
+COPY --from=build --chown=sus:sus /workspace/connector-rnds/target/quarkus-app/quarkus/ /app/quarkus/
+RUN mkdir -p /app/secrets && chown sus:sus /app/secrets
 USER 1001
 VOLUME ["/app/data"]
-EXPOSE 8096
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh", "-c", "wget -qO- http://localhost:8096/q/health/ready | grep -q UP"]
+# Certificado ICP-Brasil (PKCS#12) montado em /app/secrets pelo External Secrets (OpenBao); nunca na imagem.
+EXPOSE 8098
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh", "-c", "wget -qO- http://localhost:8098/q/health/ready | grep -q UP"]
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/quarkus-run.jar"]

@@ -2,7 +2,7 @@
 #   docker build --build-arg CONNECTOR_MODULE=connector-pec --build-arg PORT=8092 -t sus-nexus/connector-pec .
 # Portas: connector-terminology 8090, connector-cnes 8091, connector-pec 8092,
 #         connector-sisreg 8093, connector-esus-regulacao 8094, connector-lis 8095 (MLLP 2575),
-#         connector-his 8096 (MLLP 2576), connector-ris 8097 (MLLP 2577).
+#         connector-his 8096 (MLLP 2576), connector-ris 8097 (MLLP 2577), connector-rnds 8098 (saída RNDS).
 FROM maven:3.9.11-eclipse-temurin-21 AS build
 ARG CONNECTOR_MODULE=connector-pec
 WORKDIR /workspace
@@ -17,6 +17,7 @@ COPY connector-esus-regulacao/pom.xml connector-esus-regulacao/
 COPY connector-lis/pom.xml connector-lis/
 COPY connector-his/pom.xml connector-his/
 COPY connector-ris/pom.xml connector-ris/
+COPY connector-rnds/pom.xml connector-rnds/
 RUN mvn -q -B -pl ${CONNECTOR_MODULE} -am dependency:go-offline -Dfmt.skip || true
 COPY . .
 RUN mvn -q -B -pl ${CONNECTOR_MODULE} -am package -DskipTests -Dfmt.skip \

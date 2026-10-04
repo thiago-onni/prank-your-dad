@@ -1,0 +1,14 @@
+{
+  "resourceType": "Patient",
+  "id": "01JFBF5KZNWJ47TAN9ZT24MNPZ",
+  "meta": { "versionId": "3" },
+  "identifier": [
+    { "system": "http://sus-nexus.gov.br/fhir/NamingSystem/municipal-citizen-id", "value": "cit_01JFBF5KZNWJ47TAN9ZT24MNPZ" },
+    { "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cns", "value": "700123456789010" },
+    { "system": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf", "value": "12345678909" }
+  ],
+  "name": [ { "text": "MARIA DA SILVA TESTE", "family": "TESTE", "given": ["MARIA", "DA", "SILVA"] } ],
+  "gender": "female",
+  "birthDate": "1971-03-14",
+  "address": [ { "line": ["RUA DAS FLORES 100"], "city": "Montes Claros", "state": "MG" } ]
+}
