@@ -1,0 +1,50 @@
+# Exportações que só trazem a mudança (agendamentos, devoluções) → RegulationStatusChange,
+# publicado em POST /api/v1/regulation/requests/by-source/{target_ref.system}/{target_ref.source_record_id}/status.
+mapping_set: sisreg-regulation-status
+version: "1.0.0"
+entity_type: regulation_status
+lookups:
+  situacao:
+    AGENDADA: scheduled
+    AGENDADO: scheduled
+    MARCADA: scheduled
+    CONFIRMADA: scheduled
+    REMARCADA: scheduled
+    DEVOLVIDA: returned
+    DEVOLVIDO: returned
+    RETORNADA: returned
+    AUTORIZADA: authorized
+    NEGADA: denied
+    CANCELADA: cancelled
+    CANCELADO: cancelled
+    DESMARCADA: cancelled
+    FALTA: no_show
+    FALTOU: no_show
+    NAO COMPARECEU: no_show
+    REALIZADA: performed
+    EXECUTADA: performed
+    ATENDIDA: performed
+    VENCIDA: expired
+  prioridade:
+    VERMELHA: emergency
+    VERMELHO: emergency
+    AMARELA: urgent
+    AMARELO: urgent
+    VERDE: priority
+    AZUL: elective
+fields:
+  - { target: target_ref.system, constant: SISREG }
+  - { source: codigo_solicitacao, target: target_ref.source_record_id, transforms: [trim], required: true }
+  - { target: source.system, constant: SISREG }
+  - { target: source.connector, constant: connector-sisreg }
+  - { source: codigo_solicitacao, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: data_atualizacao, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: cnes_executante, target: source.cnes, transforms: [digits, blank_to_null] }
+  - { source: situacao, target: status, transforms: [trim, unaccent, upper, { lookup: { table: situacao, strict: true } }], required: true }
+  - { source: classificacao_risco, target: priority, transforms: [trim, unaccent, upper, blank_to_null, { lookup: { table: prioridade } }] }
+  - { source: data_evento, target: occurred_at, transforms: [{ date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }], required: true }
+  - { source: cnes_executante, target: provider_cnes, transforms: [digits, blank_to_null] }
+  - { source: data_agendamento, target: scheduled_at, transforms: [blank_to_null, { date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }] }
+  - { source: regulador, target: regulator_id, transforms: [trim, blank_to_null] }
+  - { source: motivo, target: reason, transforms: [trim, blank_to_null, { substring: { start: 0, end: 500 } }] }
+  - { source: retorno_origem, target: return_to_origin, transforms: [blank_to_null, { to_boolean: { true_values: ["1", "S", "SIM", "TRUE"] } }] }

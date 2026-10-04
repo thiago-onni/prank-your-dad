@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "id": "EVT-1",
+      "solicitacao": { "id": "REG-A-001" },
+      "situacao": "AGENDADA",
+      "data": "2026-01-12T09:00:00-03:00",
+      "unidade_executante": { "cnes": "2131234" },
+      "data_agendamento": "2026-01-20T14:30:00-03:00",
+      "agendamento": { "id": "AG-77" },
+      "regulador": { "id": "REG-USER-9" },
+      "atualizado_em": "2026-01-12T09:00:00-03:00"
+    },
+    {
+      "id": "EVT-2",
+      "solicitacao": { "id": "REG-A-002" },
+      "situacao": "DEVOLVIDA",
+      "data": "2026-01-12T11:00:00-03:00",
+      "motivo": "Falta laudo",
+      "retorno_origem": true,
+      "atualizado_em": "2026-01-12T11:00:00-03:00"
+    }
+  ],
+  "page": 1,
+  "total": 2
+}

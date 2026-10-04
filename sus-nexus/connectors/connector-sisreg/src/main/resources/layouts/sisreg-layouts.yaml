@@ -1,0 +1,90 @@
+# Layout das exportações do SISREG III (relatórios/planilhas gerados pelo gestor municipal).
+# Cabeçalhos são comparados normalizados (minúsculas, sem acento, não alfanuméricos → "_"), então
+# "Código da Solicitação", "CODIGO_SOLICITACAO" e "codigo solicitacao" são equivalentes.
+# Aliases funcionam como coalesce: o primeiro cabeçalho presente e preenchido vence.
+# AJUSTE os aliases ao relatório da sua versão do SISREG; mantenha os nomes canônicos (chaves).
+version: "1.0.0"
+kinds:
+  # Relatório completo de solicitações ambulatoriais (traz paciente, procedimento, situação atual):
+  # publicado como upsert em POST /regulation/requests (status atual incluído).
+  - name: solicitacoes
+    entity: regulation_request
+    file_pattern: "(?i).*solicita.*\\.(csv|xlsx)"
+    id_column: codigo_solicitacao
+    version_column: data_atualizacao
+    defaults: { situacao: PENDENTE }
+    columns:
+      codigo_solicitacao: [codigo_solicitacao, codigo_da_solicitacao, cod_solicitacao, numero_solicitacao, num_solicitacao, chave, chave_solicitacao, codigo]
+      codigo_paciente: [codigo_paciente, cod_paciente, codigo_do_paciente, id_paciente]
+      cns_paciente: [cns_paciente, cns_do_paciente, cns, cartao_sus, cartao_nacional_de_saude, cns_usuario]
+      cpf_paciente: [cpf_paciente, cpf_do_paciente, cpf]
+      nome_paciente: [nome_paciente, nome_do_paciente, paciente, usuario]
+      tipo: [tipo, tipo_solicitacao, tipo_de_solicitacao, tipo_procedimento]
+      codigo_procedimento: [codigo_procedimento, codigo_do_procedimento, cod_procedimento, procedimento_sigtap, cod_sigtap, codigo_sigtap, procedimento_codigo, codigo_interno_procedimento]
+      nome_procedimento: [nome_procedimento, procedimento, descricao_procedimento, descricao_do_procedimento]
+      especialidade: [especialidade, cbo_especialidade, cbo]
+      cnes_solicitante: [cnes_solicitante, cnes_unidade_solicitante, unidade_solicitante_cnes, cod_unidade_solicitante, cnes_da_unidade_solicitante]
+      nome_solicitante: [unidade_solicitante, nome_unidade_solicitante]
+      cnes_executante: [cnes_executante, cnes_unidade_executante, unidade_executante_cnes, cod_unidade_executante, cnes_da_unidade_executante, cnes_prestador]
+      nome_executante: [unidade_executante, nome_unidade_executante, prestador]
+      profissional_solicitante: [profissional_solicitante, nome_profissional_solicitante, cns_profissional_solicitante, medico_solicitante, profissional]
+      cbo_profissional: [cbo_profissional_solicitante, cbo_solicitante]
+      classificacao_risco: [classificacao_risco, classificacao_de_risco, classif_risco, prioridade, cor, risco]
+      situacao: [situacao, situacao_solicitacao, status, status_solicitacao, situacao_atual]
+      data_solicitacao: [data_solicitacao, data_da_solicitacao, dt_solicitacao, data_cadastro, data_de_cadastro]
+      data_agendamento: [data_agendamento, data_do_agendamento, dt_agendamento, data_hora_agendamento, data_marcacao]
+      data_situacao: [data_situacao, data_da_situacao, dt_situacao, data_status, data_decisao, data_autorizacao, data_devolucao, data_atualizacao]
+      data_atualizacao: [data_atualizacao, dt_atualizacao, data_ultima_atualizacao, data_situacao, data_da_situacao]
+      regulador: [regulador, nome_regulador, medico_regulador, operador]
+      motivo: [motivo_devolucao, motivo_da_devolucao, motivo, justificativa_devolucao, motivo_negacao, motivo_cancelamento, observacao_regulador]
+      cid: [cid, cid10, cid_10, codigo_cid]
+      justificativa: [justificativa, justificativa_clinica, hipotese_diagnostica]
+  # Relatório de agendamentos/marcações: só a mudança (data/executante). Publicado por
+  # POST /regulation/requests/by-source/SISREG/{codigo}/status. Se o relatório trouxer as colunas
+  # completas da solicitação, troque entity para regulation_request (upsert).
+  - name: agendamentos
+    entity: regulation_status
+    file_pattern: "(?i).*(agenda|marca).*\\.(csv|xlsx)"
+    id_column: codigo_solicitacao
+    version_column: data_atualizacao
+    defaults: { situacao: AGENDADA }
+    columns:
+      codigo_solicitacao: [codigo_solicitacao, codigo_da_solicitacao, cod_solicitacao, numero_solicitacao, chave, chave_solicitacao, codigo]
+      situacao: [situacao, situacao_agendamento, status, situacao_atual]
+      cnes_executante: [cnes_executante, cnes_unidade_executante, unidade_executante_cnes, cod_unidade_executante, cnes_prestador]
+      data_agendamento: [data_agendamento, data_do_agendamento, dt_agendamento, data_hora_agendamento, data_marcacao, data_consulta]
+      data_evento: [data_situacao, data_marcacao, data_do_agendamento_em, data_atualizacao, data_agendamento, dt_agendamento, data_hora_agendamento]
+      data_atualizacao: [data_atualizacao, dt_atualizacao, data_marcacao]
+      regulador: [regulador, nome_regulador, operador, operador_marcacao]
+      motivo: [motivo, observacao, motivo_cancelamento, justificativa]
+      classificacao_risco: [classificacao_risco, classificacao_de_risco, prioridade, cor]
+  # Relatório de devoluções: solicitação devolvida à origem com motivo.
+  - name: devolucoes
+    entity: regulation_status
+    file_pattern: "(?i).*devol.*\\.(csv|xlsx)"
+    id_column: codigo_solicitacao
+    version_column: data_atualizacao
+    defaults: { situacao: DEVOLVIDA, retorno_origem: "1" }
+    columns:
+      codigo_solicitacao: [codigo_solicitacao, codigo_da_solicitacao, cod_solicitacao, numero_solicitacao, chave, chave_solicitacao, codigo]
+      situacao: [situacao, status]
+      data_evento: [data_devolucao, data_da_devolucao, dt_devolucao, data_situacao, data_atualizacao]
+      data_atualizacao: [data_atualizacao, dt_atualizacao, data_devolucao]
+      regulador: [regulador, nome_regulador, medico_regulador, operador]
+      motivo: [motivo_devolucao, motivo_da_devolucao, motivo, justificativa_devolucao, observacao]
+      retorno_origem: [retorno_origem, devolvida_para_origem]
+  # Oferta/vagas por executante, procedimento e competência (REG-006).
+  - name: oferta
+    entity: provider_capacity
+    file_pattern: "(?i).*(oferta|vaga|cota|capacidade).*\\.(csv|xlsx)"
+    version_column: data_atualizacao
+    columns:
+      cnes_executante: [cnes_executante, cnes_unidade_executante, cnes, cnes_prestador, cod_unidade_executante]
+      nome_executante: [unidade_executante, nome_unidade_executante, prestador, nome_executante, unidade]
+      codigo_procedimento: [codigo_procedimento, codigo_do_procedimento, cod_procedimento, procedimento_sigtap, cod_sigtap, codigo_sigtap, codigo_interno_procedimento]
+      nome_procedimento: [nome_procedimento, procedimento, descricao_procedimento]
+      competencia: [competencia, mes_competencia, mes_ano, periodo, mes]
+      vagas_ofertadas: [vagas_ofertadas, vagas, oferta, total_vagas, cota, qtd_ofertada, quantidade_ofertada, vagas_programadas]
+      vagas_utilizadas: [vagas_utilizadas, utilizadas, agendadas, qtd_utilizada, vagas_ocupadas, consumidas]
+      vagas_disponiveis: [vagas_disponiveis, disponiveis, saldo, livres, qtd_disponivel]
+      data_atualizacao: [data_atualizacao, dt_atualizacao, data_geracao, data_extracao]

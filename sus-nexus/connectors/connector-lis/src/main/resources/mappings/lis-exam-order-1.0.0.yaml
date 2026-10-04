@@ -1,0 +1,53 @@
+# HL7 ORM^O01 (modelo plano msh.*/pid.*/orc.*/obr.*/order.* de Hl7Fields+LisConnector.flat) →
+# ExamOrderRegistration (POST /api/v1/exams/orders, upsert por número do pedido).
+# citizen_ref é montado pelo conector (PID-3: CNS → CPF → identificador local).
+# Status: ORC-1 CA/DC/OC → cancelled; senão ORC-5 (SC/IP/CM...); senão requested.
+mapping_set: lis-exam-order
+version: "1.0.0"
+entity_type: exam_order
+lookups:
+  order_status:        # ORC-5 (HL7 tabela 0038)
+    SC: scheduled
+    IP: collected
+    A: collected
+    CM: performed
+    CA: cancelled
+    DC: cancelled
+    HD: requested
+    RP: requested
+  order_control:       # ORC-1 (HL7 tabela 0119) — só os que determinam status sozinhos
+    CA: cancelled
+    OC: cancelled
+    DC: cancelled
+    CR: cancelled
+    DR: cancelled
+  priority:            # OBR-5 / TQ-6 (HL7 tabela 0027)
+    S: urgent
+    A: urgent
+    P: priority
+    C: priority
+    R: routine
+    T: routine
+  coding_system:
+    LN: LOINC
+    LOINC: LOINC
+    SIGTAP: SIGTAP
+fields:
+  - { target: source.system, constant: LIS }
+  - { target: source.connector, constant: connector-lis }
+  - { source: order.id, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: msh.control_id, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: order.requesting_cnes, target: source.cnes, transforms: [blank_to_null] }
+  # status: status_from_control (ORC-1 de cancelamento) prevalece sobre ORC-5; o conector resolve e remove a chave auxiliar
+  - { source: orc.order_status, target: status, transforms: [trim, upper, blank_to_null, { lookup: { table: order_status, default: requested } }], depends_on: orc.order_status }
+  - { source: orc.order_control, target: status_from_control, transforms: [trim, upper, blank_to_null, { lookup: { table: order_control } }], depends_on: orc.order_control }
+  - { source: order.requested_at, target: requested_at, transforms: [blank_to_null], required: true }
+  - { source: obr.universal_id, target: exam_code, transforms: [trim], required: true }
+  - { source: obr.universal_coding_system, target: code_system, transforms: [trim, upper, { lookup: { table: coding_system, default: LOCAL } }] }
+  - { source: obr.universal_text, target: exam_description, transforms: [trim, blank_to_null] }
+  - { source: order.category, target: category }
+  - { source: order.requesting_cnes, target: requesting_cnes, transforms: [blank_to_null] }
+  - { source: order.provider_id, target: requesting_professional_id, transforms: [trim, blank_to_null] }
+  - { source: orc.placer_group, target: regulation_source_record_id, transforms: [trim, blank_to_null] }
+  - { source: order.priority, target: priority, transforms: [trim, upper, blank_to_null, { lookup: { table: priority, default: routine } }] }
+  - { source: order.occurred_at, target: occurred_at, transforms: [blank_to_null] }

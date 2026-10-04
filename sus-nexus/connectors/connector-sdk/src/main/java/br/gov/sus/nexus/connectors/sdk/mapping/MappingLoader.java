@@ -24,6 +24,8 @@ import java.util.Map;
  *   - { source: no_cidadao, target: demographics.legal_name, transforms: [trim, upper], required: true }
  *   - { source: dt_nascimento, target: demographics.birthdate, transforms: [ { date: { from: ddMMyyyy } } ] }
  *   - { source: sexo, target: demographics.sex, transforms: [ { lookup: { table: sexo, default: unknown } } ] }
+ *   - { source: competencia, target: competence, transforms: [ { year_month: { from: "MM/yyyy" } } ] }
+ *   - { source: vagas, target: offered, transforms: [ { regex: { pattern: "\\D", replacement: "" } }, to_integer ] }
  *   - { target: source.system, constant: PEC }
  *   - { target: "identifiers[0].system", constant: CPF, depends_on: nu_cpf }
  * </pre>
@@ -116,6 +118,7 @@ public final class MappingLoader {
       case "digits" -> new Transformation.Digits();
       case "blank_to_null" -> new Transformation.BlankToNull();
       case "to_integer" -> new Transformation.ToInteger();
+      case "to_decimal" -> new Transformation.ToDecimal();
       default -> throw new IllegalArgumentException("transformação desconhecida: " + name);
     };
   }
@@ -127,6 +130,12 @@ public final class MappingLoader {
       case "lookup" ->
           new Transformation.Lookup(
               required(cfg, "table"), text(cfg, "default"), cfg.path("strict").asBoolean(false));
+      case "year_month" ->
+          new Transformation.YearMonthFormat(required(cfg, "from"), text(cfg, "to"));
+      case "regex" ->
+          new Transformation.RegexReplace(
+              java.util.regex.Pattern.compile(required(cfg, "pattern")),
+              cfg.path("replacement").asText(""));
       case "default" -> new Transformation.Default(cfg.asText());
       case "substring" ->
           new Transformation.Substring(cfg.path("start").asInt(0), cfg.path("end").asInt(-1));

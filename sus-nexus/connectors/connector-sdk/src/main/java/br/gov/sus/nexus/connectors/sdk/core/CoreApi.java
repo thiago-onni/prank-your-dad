@@ -3,7 +3,12 @@ package br.gov.sus.nexus.connectors.sdk.core;
 import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CitizenRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderRegistration;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ExamResultRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacityBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationRequestRegistration;
+import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationStatusChange;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
@@ -61,4 +66,45 @@ public interface CoreApi {
       @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
       @HeaderParam(CORRELATION_ID) String correlationId,
       CodeUpsertBatch body);
+
+  @POST
+  @Path("/regulation/requests")
+  Response registerRegulationRequest(
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      RegulationRequestRegistration body);
+
+  /** Endpoint "by-source" (pedido localizado por sistema + registro de origem). */
+  @POST
+  @Path("/regulation/requests/by-source/{system}/{sourceRecordId}/status")
+  Response registerRegulationStatusBySource(
+      @PathParam("system") String system,
+      @PathParam("sourceRecordId") String sourceRecordId,
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      RegulationStatusChange body);
+
+  @POST
+  @Path("/regulation/capacity")
+  Response upsertProviderCapacity(
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      ProviderCapacityBatch body);
+
+  @POST
+  @Path("/exams/orders")
+  Response registerExamOrder(
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      ExamOrderRegistration body);
+
+  /** Endpoint "by-source" (pedido localizado por sistema + registro de origem). */
+  @POST
+  @Path("/exams/orders/by-source/{system}/{sourceRecordId}/results")
+  Response registerExamResultBySource(
+      @PathParam("system") String system,
+      @PathParam("sourceRecordId") String sourceRecordId,
+      @HeaderParam(IDEMPOTENCY_KEY) String idempotencyKey,
+      @HeaderParam(CORRELATION_ID) String correlationId,
+      ExamResultRegistration body);
 }

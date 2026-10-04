@@ -17,6 +17,9 @@
     <module>connector-terminology</module>
     <module>connector-cnes</module>
     <module>connector-pec</module>
+    <module>connector-sisreg</module>
+    <module>connector-esus-regulacao</module>
+    <module>connector-lis</module>
   </modules>
 
   <properties>
@@ -38,6 +41,7 @@
     <ulid-creator.version>5.2.4</ulid-creator.version>
     <javadbf.version>1.14.1</javadbf.version>
     <aws-sdk.version>2.55.11</aws-sdk.version>
+    <poi.version>5.4.1</poi.version>
 
     <skipITs>true</skipITs>
   </properties>
@@ -83,6 +87,11 @@
         <groupId>com.github.albfernandez</groupId>
         <artifactId>javadbf</artifactId>
         <version>${javadbf.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.poi</groupId>
+        <artifactId>poi-ooxml</artifactId>
+        <version>${poi.version}</version>
       </dependency>
       <dependency>
         <groupId>software.amazon.awssdk</groupId>

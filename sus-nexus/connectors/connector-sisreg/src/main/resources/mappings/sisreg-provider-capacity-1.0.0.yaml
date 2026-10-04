@@ -1,0 +1,16 @@
+# Oferta de vagas (executante × procedimento × competência) → ProviderCapacity
+# (POST /api/v1/regulation/capacity, lotes de connector.core.batch-size).
+mapping_set: sisreg-provider-capacity
+version: "1.0.0"
+entity_type: provider_capacity
+fields:
+  - { source: cnes_executante, target: provider_cnes, transforms: [digits], required: true }
+  - { source: nome_executante, target: provider_name, transforms: [trim, blank_to_null] }
+  - { source: codigo_procedimento, target: service_code, transforms: [digits], required: true }
+  - { target: code_system, constant: SIGTAP }
+  - { source: competencia, target: competence, transforms: [trim, { year_month: { from: "MM/yyyy|yyyyMM|yyyy-MM|MM-yyyy|yyyy/MM" } }], required: true }
+  - { source: vagas_ofertadas, target: offered, transforms: [{ regex: { pattern: "[^0-9-]", replacement: "" } }, to_integer], required: true }
+  - { source: vagas_utilizadas, target: used, transforms: [blank_to_null, { regex: { pattern: "[^0-9-]", replacement: "" } }, to_integer] }
+  - { source: vagas_disponiveis, target: available, transforms: [blank_to_null, { regex: { pattern: "[^0-9-]", replacement: "" } }, to_integer] }
+  - { target: source_system, constant: SISREG }
+  - { source: data_atualizacao, target: updated_at, transforms: [blank_to_null, { date: { from: "dd/MM/yyyy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yyyy|yyyy-MM-dd HH:mm:ss|yyyy-MM-dd", to: iso-datetime } }] }

@@ -4,8 +4,15 @@ import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.AppointmentResponse;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CitizenRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.CodeUpsertBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderRegistration;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ExamOrderResponse;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ExamResultRegistration;
 import br.gov.sus.nexus.connectors.sdk.core.dto.HealthUnitUpsertBatch;
 import br.gov.sus.nexus.connectors.sdk.core.dto.IdentityResolution;
+import br.gov.sus.nexus.connectors.sdk.core.dto.ProviderCapacityBatch;
+import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationRequestRegistration;
+import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationRequestResponse;
+import br.gov.sus.nexus.connectors.sdk.core.dto.RegulationStatusChange;
 import br.gov.sus.nexus.connectors.sdk.core.dto.UpsertResult;
 import br.gov.sus.nexus.connectors.sdk.util.Pii;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -114,6 +121,116 @@ public class CoreClient {
       String system, String idempotencyKey, String correlationId, CodeUpsertBatch body) {
     return call(
         () -> api.upsertCodes(system, idempotencyKey, correlationId, body), UpsertResult.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public RegulationRequestResponse registerRegulationRequest(
+      String idempotencyKey, String correlationId, RegulationRequestRegistration body) {
+    return call(
+        () -> api.registerRegulationRequest(idempotencyKey, correlationId, body),
+        RegulationRequestResponse.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public RegulationRequestResponse registerRegulationStatusBySource(
+      String system,
+      String sourceRecordId,
+      String idempotencyKey,
+      String correlationId,
+      RegulationStatusChange body) {
+    return call(
+        () ->
+            api.registerRegulationStatusBySource(
+                system, sourceRecordId, idempotencyKey, correlationId, body),
+        RegulationRequestResponse.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public UpsertResult upsertProviderCapacity(
+      String idempotencyKey, String correlationId, ProviderCapacityBatch body) {
+    return call(
+        () -> api.upsertProviderCapacity(idempotencyKey, correlationId, body), UpsertResult.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public ExamOrderResponse registerExamOrder(
+      String idempotencyKey, String correlationId, ExamOrderRegistration body) {
+    return call(
+        () -> api.registerExamOrder(idempotencyKey, correlationId, body), ExamOrderResponse.class);
+  }
+
+  @Retry(
+      maxRetries = 4,
+      delay = 500,
+      delayUnit = ChronoUnit.MILLIS,
+      jitter = 200,
+      jitterDelayUnit = ChronoUnit.MILLIS,
+      retryOn = CoreClientException.class,
+      abortOn = CorePermanentException.class)
+  @CircuitBreaker(
+      requestVolumeThreshold = 8,
+      failureRatio = 0.5,
+      delay = 10_000,
+      failOn = CoreClientException.class)
+  public ExamOrderResponse registerExamResultBySource(
+      String system,
+      String sourceRecordId,
+      String idempotencyKey,
+      String correlationId,
+      ExamResultRegistration body) {
+    return call(
+        () ->
+            api.registerExamResultBySource(
+                system, sourceRecordId, idempotencyKey, correlationId, body),
+        ExamOrderResponse.class);
   }
 
   private <T> T call(Supplier<Response> request, Class<T> type) {

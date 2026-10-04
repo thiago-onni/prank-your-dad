@@ -9,8 +9,9 @@ import java.util.Map;
  * Lote canônico produzido por {@link Connector#transform(RawMessage)}.
  *
  * <p>Tipos de entidade conhecidos pelo SDK: {@link #CITIZEN}, {@link #APPOINTMENT}, {@link
- * #HEALTH_UNIT}, {@link #CODE}. {@code attributes} carrega metadados do lote (ex.: {@code system} e
- * {@code competence} para terminologia).
+ * #HEALTH_UNIT}, {@link #CODE}, {@link #REGULATION_REQUEST}, {@link #REGULATION_STATUS}, {@link
+ * #PROVIDER_CAPACITY}, {@link #EXAM_ORDER}, {@link #EXAM_RESULT}. {@code attributes} carrega
+ * metadados do lote (ex.: {@code system} e {@code competence} para terminologia).
  */
 public record CanonicalBatch(
     String entityType,
@@ -22,6 +23,11 @@ public record CanonicalBatch(
   public static final String APPOINTMENT = "appointment";
   public static final String HEALTH_UNIT = "health_unit";
   public static final String CODE = "code";
+  public static final String REGULATION_REQUEST = "regulation_request";
+  public static final String REGULATION_STATUS = "regulation_status";
+  public static final String PROVIDER_CAPACITY = "provider_capacity";
+  public static final String EXAM_ORDER = "exam_order";
+  public static final String EXAM_RESULT = "exam_result";
 
   /** Atributo preenchido pelo pipeline com o correlation_id da integration_message. */
   public static final String CORRELATION_ID = "correlation_id";

@@ -976,6 +976,33 @@ paths:
               schema: { $ref: '#/components/schemas/RegulationRequest' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/regulation/requests/by-source/{system}/{sourceRecordId}/status:
+    post:
+      tags: [regulation]
+      summary: Registrar mudança de status identificando o pedido pelo registro de origem (conectores sem id interno)
+      description: |
+        Equivalente a `POST /regulation/requests/{requestId}/status`, mas o pedido é localizado por
+        (`source.system`, `source.source_record_id`) do registro já ingerido via `POST /regulation/requests`.
+        Usado por conectores (SISREG, e-SUS Regulação) que recebem eventos de status sem conhecer o id interno.
+        404 quando nenhum pedido com esse registro de origem existe no tenant.
+      operationId: registerRegulationStatusBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegulationStatusChange' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegulationRequest' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/regulation/requests/{requestId}/issues:
     post:
       tags: [regulation]
@@ -1199,6 +1226,32 @@ paths:
               schema: { $ref: '#/components/schemas/ExamOrder' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/exams/orders/by-source/{system}/{sourceRecordId}/results:
+    post:
+      tags: [exams]
+      summary: Registrar resultado/laudo identificando o pedido pelo registro de origem (LIS via HL7 ORU sem id interno)
+      description: |
+        Equivalente a `POST /exams/orders/{orderId}/results`, mas o pedido é localizado por
+        (`source.system`, `source.source_record_id`) do pedido já ingerido via `POST /exams/orders`
+        (ex.: número de pedido ORC-2/ORC-3 do HL7 ORM). 404 quando o pedido de origem não existe no tenant.
+      operationId: registerExamResultBySource
+      parameters:
+        - $ref: '#/components/parameters/sourceSystem'
+        - $ref: '#/components/parameters/sourceRecordId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExamResultRegistration' }
+      responses:
+        '201':
+          description: Registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExamOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/exams/orders/{orderId}/results/{resultId}/document:
     get:
       tags: [exams]
@@ -1298,6 +1351,18 @@ components:
       in: path
       required: true
       schema: { type: string }
+    sourceSystem:
+      name: system
+      in: path
+      required: true
+      description: Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS
+      schema: { type: string, maxLength: 64 }
+    sourceRecordId:
+      name: sourceRecordId
+      in: path
+      required: true
+      description: Identificador do registro no sistema de origem (`source.source_record_id`)
+      schema: { type: string, maxLength: 256 }
 
   responses:
     Problem:

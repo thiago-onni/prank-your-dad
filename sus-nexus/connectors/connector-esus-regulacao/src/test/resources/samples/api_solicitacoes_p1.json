@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "id": "REG-A-001",
+      "tipo": "CONSULTA",
+      "situacao": "PENDENTE",
+      "prioridade": "AMARELO",
+      "data_solicitacao": "2026-01-05T09:15:00-03:00",
+      "procedimento": { "codigo": "0301010072", "sistema": "SIGTAP" },
+      "especialidade": "CARDIOLOGIA",
+      "unidade_solicitante": { "cnes": "2206997" },
+      "profissional_solicitante": { "id": "PROF-1", "cbo": "225125" },
+      "paciente": { "id": "P-1", "cns": "898001234567891" },
+      "atualizado_em": "2026-01-05T09:20:00-03:00"
+    },
+    {
+      "id": "REG-A-002",
+      "tipo": "PROCEDIMENTO",
+      "situacao": "DEVOLVIDA",
+      "prioridade": "VERDE",
+      "data_solicitacao": "2026-01-06T10:00:00-03:00",
+      "procedimento": { "codigo": "0401010015", "sistema": "SIGTAP" },
+      "unidade_solicitante": { "cnes": "2206997" },
+      "paciente": { "id": "P-2", "cns": "700000000000005" },
+      "motivo": "Falta laudo",
+      "atualizado_em": "2026-01-10T10:00:00-03:00"
+    }
+  ],
+  "page": 1,
+  "total": 3
+}

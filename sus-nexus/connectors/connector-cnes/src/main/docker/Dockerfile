@@ -8,6 +8,9 @@ COPY connector-template/pom.xml connector-template/
 COPY connector-terminology/pom.xml connector-terminology/
 COPY connector-cnes/pom.xml connector-cnes/
 COPY connector-pec/pom.xml connector-pec/
+COPY connector-sisreg/pom.xml connector-sisreg/
+COPY connector-esus-regulacao/pom.xml connector-esus-regulacao/
+COPY connector-lis/pom.xml connector-lis/
 RUN mvn -q -B -pl connector-cnes -am dependency:go-offline -Dfmt.skip || true
 COPY . .
 RUN mvn -q -B -pl connector-cnes -am package -DskipTests -Dfmt.skip
