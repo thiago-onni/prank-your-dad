@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     core_timeout_seconds: float = 10.0
     opa_url: str = "http://opa:8181"
     opa_decision_path: str = "/v1/data/sus/agents/decision"
+    opa_invoke_path: str = "/v1/data/sus/agents/invoke"
+    """Decisão de invocação humana de agentes com perfil (``data.sus.agents.invoke``)."""
     opa_cache_ttl_seconds: float = 5.0
     policy_mode: Literal["opa", "local"] = "opa"
     """``opa``: consulta HTTP ao OPA; ``local``: avaliador em memória equivalente (dev/test)."""

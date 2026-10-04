@@ -51,7 +51,9 @@ paths:
 
         O município é sempre o do token (`municipality_id`); o corpo não aceita tenant nem campos
 
-        extras. Papéis: `gestor`, `auditor`, `admin_municipal` (espelho de `data.sus.agents.invoke`).
+        extras. Papéis: `gestor`, `auditor`, `admin_municipal`, checados localmente e pela decisão OPA
+
+        `data.sus.agents.invoke` (papéis, tenant e kill switch); OPA indisponível → 503.
 
         A saída (`output`) segue o `output_schema` do agente em `GET /agents`.'
       operationId: run_bi_situation_analyst
@@ -69,7 +71,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgentRunRecord'
         '403':
-          description: papel sem permissão ou token sem município
+          description: papel sem permissão, token sem município ou negado pelo OPA
+        '503':
+          description: 'OPA indisponível (fail-closed: o agente não é executado)'
         '422':
           description: Validation Error
           content:

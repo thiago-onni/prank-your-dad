@@ -14,7 +14,7 @@ from sus_nexus_ai.agents.bi_situation_analyst import BiSituationInput
 from sus_nexus_ai.api.auth import Principal, get_principal, require_settings_roles
 from sus_nexus_ai.persistence.schemas import AgentApproval, AgentRunRecord, Trigger
 from sus_nexus_ai.security.kill_switch import KillSwitchState
-from sus_nexus_ai.security.policy import AGENT_PROFILES
+from sus_nexus_ai.security.policy import AGENT_PROFILES, PolicyUnavailable
 from sus_nexus_ai.service import AIService, ApprovalError, UnknownAgent
 
 router = APIRouter()
@@ -119,7 +119,10 @@ def list_tools(
     tags=["agents"],
     response_model=AgentRunRecord,
     summary="Run BI situation analyst",
-    responses={403: {"description": "papel sem permissão ou token sem município"}},
+    responses={
+        403: {"description": "papel sem permissão, token sem município ou negado pelo OPA"},
+        503: {"description": "OPA indisponível (fail-closed: o agente não é executado)"},
+    },
 )
 async def run_bi_situation_analyst(
     body: BiSituationInput,
@@ -129,7 +132,8 @@ async def run_bi_situation_analyst(
     """Análise de situação da competência (somente dados agregados; sem ações).
 
     O município é sempre o do token (`municipality_id`); o corpo não aceita tenant nem campos
-    extras. Papéis: `gestor`, `auditor`, `admin_municipal` (espelho de `data.sus.agents.invoke`).
+    extras. Papéis: `gestor`, `auditor`, `admin_municipal`, checados localmente e pela decisão OPA
+    `data.sus.agents.invoke` (papéis, tenant e kill switch); OPA indisponível → 503.
     A saída (`output`) segue o `output_schema` do agente em `GET /agents`.
     """
     service = _service(request)
@@ -141,6 +145,20 @@ async def run_bi_situation_analyst(
     tenant = principal.tenant
     if not tenant or not _TENANT_RE.fullmatch(tenant):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "token sem município (municipality_id)")
+    # decisão autoritativa em tempo de execução (OPA); a checagem acima é defesa em profundidade
+    try:
+        decision = await service.authorize_invocation(
+            BI_AGENT_ID, roles=principal.roles, subject_tenant=principal.tenant, tenant=tenant
+        )
+    except PolicyUnavailable as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "política indisponível (OPA); invocação negada"
+        ) from exc
+    if not decision.allow:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"invocação negada pela política: {', '.join(decision.reasons) or 'sem motivo'}",
+        )
     return await service.run_agent(
         BI_AGENT_ID,
         tenant=tenant,

@@ -19,7 +19,15 @@ from sus_nexus_ai.security.identity import (
     KeycloakIdentityProvider,
 )
 from sus_nexus_ai.security.kill_switch import KillSwitch
-from sus_nexus_ai.security.policy import AgentPolicyClient, LocalPolicyEvaluator, PolicyClient
+from sus_nexus_ai.security.policy import (
+    AgentPolicyClient,
+    InvokeAgent,
+    InvokeDecision,
+    InvokeInput,
+    InvokeSubject,
+    LocalPolicyEvaluator,
+    PolicyClient,
+)
 from sus_nexus_ai.tools.analytics import (
     AggregatedAnalytics,
     InMemoryAggregatedAnalytics,
@@ -91,6 +99,31 @@ class AIService:
             return self.catalog[agent_id]
         except KeyError as exc:
             raise UnknownAgent(agent_id) from exc
+
+    async def authorize_invocation(
+        self, agent_id: str, *, roles: list[str], subject_tenant: str | None, tenant: str
+    ) -> InvokeDecision:
+        """Consulta ``data.sus.agents.invoke`` (OPA) com papéis, tenant e kill switch efetivo.
+
+        Levanta ``PolicyUnavailable`` se o OPA não responder (o chamador nega: fail-closed).
+        """
+        decision = await self.policy.decide_invoke(
+            InvokeInput(
+                agent=InvokeAgent(id=agent_id),
+                subject=InvokeSubject(roles=sorted(set(roles)), tenant=subject_tenant),
+                tenant=tenant,
+                kill_switch=self.kill_switch.state(),
+            )
+        )
+        log.info(
+            "agent.invoke_decision",
+            agent_id=agent_id,
+            tenant=tenant,
+            allow=decision.allow,
+            reasons=decision.reasons,
+            policy_version=decision.policy_version,
+        )
+        return decision
 
     async def run_agent(
         self,
@@ -239,6 +272,7 @@ def build_service(
                 settings.opa_url,
                 settings.opa_decision_path,
                 cache_ttl_seconds=settings.opa_cache_ttl_seconds,
+                invoke_path=settings.opa_invoke_path,
             )
         )
     if identity is None:

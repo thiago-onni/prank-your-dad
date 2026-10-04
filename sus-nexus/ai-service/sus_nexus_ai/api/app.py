@@ -102,6 +102,7 @@ def _title(status: int) -> str:
         409: "Conflict",
         422: "Unprocessable Entity",
         500: "Internal Server Error",
+        503: "Service Unavailable",
     }.get(status, "Error")
 
 

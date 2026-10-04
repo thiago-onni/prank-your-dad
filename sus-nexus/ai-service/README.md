@@ -94,6 +94,14 @@ rebaixar. Contrato OPA: `POST {AI_OPA_URL}/v1/data/sus/agents/decision` com
 é a referência para o Rego em `policies/`; as ferramentas acima constam de `policies/data/agent_tools.json`
 (`tests/test_registry.py` confere). OPA indisponível ⇒ negação (fail-closed).
 
+Invocação humana de agentes com perfil: `POST {AI_OPA_URL}{AI_OPA_INVOKE_PATH}` (padrão
+`/v1/data/sus/agents/invoke`) com
+`{"input": {"agent": {"id"}, "subject": {"roles", "tenant"}, "tenant", "kill_switch"}}`
+→ `{"result": {"allow","reasons","policy_version"}}` (`subject.tenant` = `municipality_id` do token;
+`kill_switch` = estado efetivo). Negado ⇒ 403 com os motivos; OPA indisponível ou resposta sem
+`result` ⇒ **503** e o agente não roda (fail-closed). `evaluate_invoke_locally` é o espelho em
+memória (`AI_POLICY_MODE=local`).
+
 ## Agentes
 
 | agente (versão) | gatilho | entrada | saída | regra versionada | ações |
@@ -135,9 +143,11 @@ proíbe acrescentar kinds). `plan_actions` usa a regra, não a saída do LLM, pa
   rejeitada; CPF/CNS/telefone/e-mail/`[PESSOA_n]`/nomes de pessoa bloqueiam. Falha → mensagem de
   reparo e nova tentativa (até `AI_LLM_MAX_OUTPUT_RETRIES`); persistindo, `invalid_output` e a saída
   é descartada.
-* **Acesso**: rota dedicada; papéis `gestor`, `auditor`, `admin_municipal`
-  (`AGENT_PROFILES` = `agent_profiles` do OPA, `data.sus.agents.invoke`); município = `municipality_id`
-  do token (corpo com `tenant` → 422). O executor nega ao agente qualquer ferramenta fora da camada
+* **Acesso**: rota dedicada; papéis `gestor`, `auditor`, `admin_municipal`, checados localmente
+  (`AGENT_PROFILES` = `agent_profiles` do OPA; defesa em profundidade, antes de consultar o OPA) **e**
+  pela decisão `data.sus.agents.invoke` consultada em tempo de execução (papéis, tenant, kill switch;
+  negado → 403, OPA indisponível → 503); município = `municipality_id` do token (corpo com
+  `tenant` → 422). O executor nega ao agente qualquer ferramenta fora da camada
   `aggregated` ou de escrita (`data_layer_not_allowed:*`, `agent_read_only`), além do OPA.
 
 ### `post_discharge_followup` v2 — o core decide risco e tarefa
@@ -194,7 +204,7 @@ O estado também é enviado ao OPA em toda decisão.
 | rota | papel | descrição |
 |---|---|---|
 | `POST /agents/{agent_id}/run` | autenticado | `{tenant, trigger{kind,ref}, input}` → `AgentRunRecord` (agentes com perfil → 403; use a rota dedicada) |
-| `POST /agents/bi_situation_analyst/run` | `gestor`/`auditor`/`admin_municipal` | `BiSituationInput` (sem tenant; município do token) → `AgentRunRecord` (`output` conforme `output_schema` em `GET /agents`) |
+| `POST /agents/bi_situation_analyst/run` | `gestor`/`auditor`/`admin_municipal` + OPA `invoke` (403/503) | `BiSituationInput` (sem tenant; município do token) → `AgentRunRecord` (`output` conforme `output_schema` em `GET /agents`) |
 | `GET /runs/{run_id}`, `GET /runs?agent_id&status` | autenticado | consulta |
 | `POST /runs/{run_id}/actions/{action_id}/approve\|reject` | `agent_approver`/`admin` | `{justification}` (≥ 10 caracteres); aprovador = `sub` do token; aprovar executa a ferramenta com a identidade do agente e registra `approved_by` |
 | `GET /approvals?status` | autenticado | fila de aprovações |
@@ -272,7 +282,7 @@ contra o OpenAPI do core (OpenAPI 3.1 → JSON Schema resolvendo `$ref` locais, 
 |---|---|---|
 | `ENVIRONMENT` | `dev` | `test` usa `InMemoryCoreClient` |
 | `CORE_BASE_URL`, `CORE_TIMEOUT_SECONDS` | `http://core-municipal:8080`, `10` | API pública do core |
-| `OPA_URL`, `OPA_DECISION_PATH`, `OPA_CACHE_TTL_SECONDS` | `http://opa:8181`, `/v1/data/sus/agents/decision`, `5` | política |
+| `OPA_URL`, `OPA_DECISION_PATH`, `OPA_INVOKE_PATH`, `OPA_CACHE_TTL_SECONDS` | `http://opa:8181`, `/v1/data/sus/agents/decision`, `/v1/data/sus/agents/invoke`, `5` | política |
 | `POLICY_MODE` | `opa` | `local` = avaliador em memória |
 | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` | `fake`, `openai/gpt-4o-mini`, `0`, `1500` | LiteLLM |
 | `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MOCK_RESPONSE` | — | provedor / resposta mock |
@@ -305,7 +315,8 @@ contra o OpenAPI do core (OpenAPI 3.1 → JSON Schema resolvendo `$ref` locais, 
 * Agente de BI: a verificação numérica aceita arredondamento compatível com as casas citadas
   (inteiros têm tolerância ±0,5) e não associa número a unidade no texto livre; a detecção de nomes
   é heurística (prenomes comuns, pronomes de tratamento, "paciente X"). A supressão é a primária
-  do dbt (sem supressão complementar). O papel de invocação é checado no ai-service (espelho de
-  `data.sus.agents.invoke`); a consulta ao OPA para invocação ainda não é feita em tempo de execução.
+  do dbt (sem supressão complementar).
+* `data.sus.agents.invoke` não considera a versão do agente nem distingue o tipo de kill switch
+  (motivo único `kill_switch`); o ai-service envia só `agent.id`.
 * O OpenAPI exportado depende da versão do FastAPI/Pydantic instalada; regenere após atualizar
   dependências (`tests/test_openapi_export.py` avisa).

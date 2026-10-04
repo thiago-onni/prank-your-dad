@@ -9,11 +9,15 @@ from sus_nexus_ai.security.policy import (
     ActionClass,
     AgentIdentity,
     AgentPolicyClient,
+    InvokeDecision,
+    InvokeInput,
+    InvokeSubject,
     LocalPolicyEvaluator,
     PolicyClient,
     PolicyDecision,
     PolicyInput,
     PolicyUnavailable,
+    evaluate_invoke_locally,
     evaluate_locally,
 )
 
@@ -24,6 +28,9 @@ __all__ = [
     "AgentToken",
     "FakeIdentityProvider",
     "IdentityProvider",
+    "InvokeDecision",
+    "InvokeInput",
+    "InvokeSubject",
     "KeycloakIdentityProvider",
     "KillSwitch",
     "KillSwitchEngaged",
@@ -33,5 +40,6 @@ __all__ = [
     "PolicyDecision",
     "PolicyInput",
     "PolicyUnavailable",
+    "evaluate_invoke_locally",
     "evaluate_locally",
 ]
