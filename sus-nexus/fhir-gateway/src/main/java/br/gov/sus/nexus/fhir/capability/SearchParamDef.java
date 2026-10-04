@@ -32,6 +32,10 @@ public record SearchParamDef(
     return new SearchParamDef(name, SearchParamType.DATE, expression, doc, List.of());
   }
 
+  public static SearchParamDef quantity(String name, String expression, String doc) {
+    return new SearchParamDef(name, SearchParamType.QUANTITY, expression, doc, List.of());
+  }
+
   public static SearchParamDef reference(
       String name, String expression, String doc, String... targets) {
     return new SearchParamDef(name, SearchParamType.REFERENCE, expression, doc, List.of(targets));

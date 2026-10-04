@@ -10,8 +10,9 @@ import java.util.Map;
  *
  * <p>Tipos de entidade conhecidos pelo SDK: {@link #CITIZEN}, {@link #APPOINTMENT}, {@link
  * #HEALTH_UNIT}, {@link #CODE}, {@link #REGULATION_REQUEST}, {@link #REGULATION_STATUS}, {@link
- * #PROVIDER_CAPACITY}, {@link #EXAM_ORDER}, {@link #EXAM_RESULT}. {@code attributes} carrega
- * metadados do lote (ex.: {@code system} e {@code competence} para terminologia).
+ * #PROVIDER_CAPACITY}, {@link #EXAM_ORDER}, {@link #EXAM_RESULT}, {@link #HOSPITAL_MOVEMENT},
+ * {@link #HOSPITAL_DISCHARGE}. {@code attributes} carrega metadados do lote (ex.: {@code system} e
+ * {@code competence} para terminologia).
  */
 public record CanonicalBatch(
     String entityType,
@@ -28,6 +29,8 @@ public record CanonicalBatch(
   public static final String PROVIDER_CAPACITY = "provider_capacity";
   public static final String EXAM_ORDER = "exam_order";
   public static final String EXAM_RESULT = "exam_result";
+  public static final String HOSPITAL_MOVEMENT = "hospital_movement";
+  public static final String HOSPITAL_DISCHARGE = "hospital_discharge";
 
   /** Atributo preenchido pelo pipeline com o correlation_id da integration_message. */
   public static final String CORRELATION_ID = "correlation_id";

@@ -30,6 +30,7 @@
     <fmt-plugin.version>2.29</fmt-plugin.version>
     <assertj.version>3.27.3</assertj.version>
     <wiremock.version>3.13.2</wiremock.version>
+    <awssdk.version>2.55.11</awssdk.version>
     <skipITs>true</skipITs>
   </properties>
 
@@ -91,6 +92,28 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest-client-jackson</artifactId>
+    </dependency>
+
+    <!-- FHIR-3: object storage de Binary (AWS SDK v2, cliente síncrono leve) -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${awssdk.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${awssdk.version}</version>
     </dependency>
 
     <!-- HL7 FHIR R4: modelos, parsers, FHIRPath (biblioteca, ADR-003) -->

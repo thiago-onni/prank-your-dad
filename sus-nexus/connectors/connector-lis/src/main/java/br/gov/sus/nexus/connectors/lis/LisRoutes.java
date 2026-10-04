@@ -2,6 +2,8 @@ package br.gov.sus.nexus.connectors.lis;
 
 import br.gov.sus.nexus.connectors.sdk.api.CanonicalBatch;
 import br.gov.sus.nexus.connectors.sdk.api.RawMessage;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Acks;
+import br.gov.sus.nexus.connectors.sdk.hl7.Hl7Parser;
 import br.gov.sus.nexus.connectors.sdk.runtime.ConnectorRuntime;
 import br.gov.sus.nexus.connectors.sdk.runtime.PipelineHeaders;
 import br.gov.sus.nexus.connectors.sdk.util.Hashes;

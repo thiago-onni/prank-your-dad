@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { Card, CardHeader, EmptyState } from '@sus-nexus/design-system';
 import { getAuth } from '@sus-nexus/auth/server';
 import { PageHeader } from '@/components/PageHeader';
-import { visibleNavItems } from '@/components/layout/nav';
+import { homeShortcuts } from '@/components/layout/nav';
 import { t } from '@/i18n';
 
 export default async function HomePage() {
   const session = await getAuth().publicSession();
-  const items = visibleNavItems(session?.roles ?? []).filter((i) => i.href !== '/');
+  const items = homeShortcuts(session?.roles ?? []);
   return (
     <>
       <PageHeader

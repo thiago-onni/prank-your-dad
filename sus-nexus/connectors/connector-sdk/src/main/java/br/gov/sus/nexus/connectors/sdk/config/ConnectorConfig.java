@@ -12,6 +12,13 @@ public interface ConnectorConfig {
   /** Tenant alvo: {@code ibge_<7 dígitos>}; vai no header {@code X-Tenant-Id}. */
   String tenantId();
 
+  /**
+   * Conector de borda: roda dentro da rede da origem (ex.: hospital) com saída apenas para o
+   * barramento (mTLS). Só altera documentação e os detalhes do healthcheck.
+   */
+  @WithDefault("false")
+  boolean edge();
+
   RawStore rawStore();
 
   Ledger ledger();

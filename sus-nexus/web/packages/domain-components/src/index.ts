@@ -20,6 +20,10 @@ export {
   type RegulationPriority,
 } from './components/RegulationQueueCard';
 export {
+  RegulationQueueSummaryCard,
+  type RegulationQueueSummaryCardProps,
+} from './components/RegulationQueueSummaryCard';
+export {
   AppointmentStatusChip,
   type AppointmentStatusChipProps,
 } from './components/AppointmentStatusChip';
@@ -36,6 +40,7 @@ export {
   type AgentDecision,
   type AgentToolCall,
   type AgentActionClass,
+  type AgentPlannedAction,
 } from './components/AgentDecisionTrace';
 export {
   FHIRResourceViewer,

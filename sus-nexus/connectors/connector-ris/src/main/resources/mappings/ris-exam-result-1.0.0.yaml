@@ -1,0 +1,32 @@
+# HL7 ORU^R01 do RIS (laudo de imagem) → ExamResultRegistration, publicado em
+# POST /api/v1/exams/orders/by-source/RIS/{target_ref.source_record_id}/results.
+# O texto do laudo (OBX TX/FT/ST, NTE) NUNCA vai ao core: observations fica vazio e o resultado
+# aponta para a raw zone (document_ref/document_sha256/document_content_type), montados pelo conector,
+# que também decide `critical` (OBX-8 ∈ ris.critical.flags, MSH/OBR marcador).
+mapping_set: ris-exam-result
+version: "1.0.0"
+entity_type: exam_result
+lookups:
+  result_status:       # OBR-25 (HL7 tabela 0123)
+    F: final
+    P: preliminary
+    C: amended
+    X: cancelled
+    R: preliminary
+    A: preliminary
+    I: preliminary
+    S: preliminary
+    O: preliminary
+    Y: cancelled
+    Z: cancelled
+fields:
+  - { target: target_ref.system, constant: RIS }
+  - { source: order.id, target: target_ref.source_record_id, transforms: [trim], required: true }
+  - { target: source.system, constant: RIS }
+  - { target: source.connector, constant: connector-ris }
+  - { source: order.id, target: source.source_record_id, transforms: [trim], required: true }
+  - { source: msh.control_id, target: source.source_record_version, transforms: [trim, blank_to_null] }
+  - { source: order.performer_cnes, target: source.cnes, transforms: [blank_to_null] }
+  - { source: order.reported_at, target: reported_at, transforms: [blank_to_null], required: true }
+  - { source: obr.result_status, target: status, transforms: [trim, upper, { lookup: { table: result_status, default: final } }], required: true }
+  - { source: order.performer_cnes, target: performer_cnes, transforms: [blank_to_null] }

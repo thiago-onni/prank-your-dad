@@ -17,6 +17,7 @@ public final class ResourceCapability {
   private final Map<String, SearchParamDef> searchParams;
   private final String profile;
   private final List<String> includes;
+  private final List<String> operations;
 
   private ResourceCapability(Builder b) {
     this.type = b.type;
@@ -24,6 +25,7 @@ public final class ResourceCapability {
     this.searchParams = Collections.unmodifiableMap(new LinkedHashMap<>(b.searchParams));
     this.profile = b.profile;
     this.includes = List.copyOf(b.includes);
+    this.operations = List.copyOf(b.operations);
   }
 
   public static Builder of(String type) {
@@ -60,6 +62,15 @@ public final class ResourceCapability {
     return includes.contains(paramName);
   }
 
+  /** Operações de instância implementadas para o tipo (nomes sem {@code $}, ex.: everything). */
+  public List<String> operations() {
+    return operations;
+  }
+
+  public boolean supportsOperation(String name) {
+    return operations.contains(name);
+  }
+
   public Optional<SearchParamDef> searchParam(String name) {
     return Optional.ofNullable(searchParams.get(name));
   }
@@ -71,6 +82,7 @@ public final class ResourceCapability {
     private final Map<String, SearchParamDef> searchParams = new LinkedHashMap<>();
     private String profile;
     private final List<String> includes = new ArrayList<>();
+    private final List<String> operations = new ArrayList<>();
 
     private Builder(String type) {
       this.type = type;
@@ -86,11 +98,19 @@ public final class ResourceCapability {
           Interaction.READ,
           Interaction.VREAD,
           Interaction.SEARCH_TYPE,
-          Interaction.HISTORY_INSTANCE);
+          Interaction.HISTORY_INSTANCE,
+          Interaction.HISTORY_TYPE);
     }
 
+    /** Leitura completa + create/update/delete (exclusão lógica). */
     public Builder readWrite() {
-      return readOnly().interactions(Interaction.CREATE, Interaction.UPDATE);
+      return readOnly().interactions(Interaction.CREATE, Interaction.UPDATE, Interaction.DELETE);
+    }
+
+    /** Registra uma operação de instância ({@code GET [type]/[id]/$name}). */
+    public Builder operation(String name) {
+      operations.add(name);
+      return this;
     }
 
     public Builder param(SearchParamDef def) {

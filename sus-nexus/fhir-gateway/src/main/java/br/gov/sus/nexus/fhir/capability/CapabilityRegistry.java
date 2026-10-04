@@ -39,6 +39,34 @@ public class CapabilityRegistry {
   /** Operações de sistema implementadas (nome sem {@code $}). */
   public static final List<String> SYSTEM_OPERATIONS = List.of("validate");
 
+  /** Interações de nível de sistema implementadas ({@code POST [base]}, {@code GET _history}). */
+  public static final List<String> SYSTEM_INTERACTIONS =
+      List.of("transaction", "batch", "history-system");
+
+  /** Operações de instância implementadas (nome sem {@code $}), com os tipos que as expõem. */
+  public static final Map<String, List<String>> INSTANCE_OPERATIONS =
+      Map.of("everything", List.of("Patient"));
+
+  /**
+   * Tipos clínicos incluídos por padrão em {@code Patient/$everything} (além do próprio Patient).
+   * {@code Binary} fica fora por padrão (conteúdo potencialmente grande) e só entra com {@code
+   * _type=Binary}.
+   */
+  public static final List<String> EVERYTHING_DEFAULT_TYPES =
+      List.of(
+          "Encounter",
+          "Appointment",
+          "ServiceRequest",
+          "Task",
+          "Condition",
+          "CarePlan",
+          "Observation",
+          "DiagnosticReport",
+          "DocumentReference");
+
+  /** Tipos cuja leitura/escrita exige escopo explícito do tipo (nunca {@code *}). */
+  public static final List<String> EXPLICIT_SCOPE_TYPES = List.of("DocumentReference", "Binary");
+
   /** Nome do parâmetro de referência ao paciente usado pelo compartimento {@code patient/}. */
   public static final String PATIENT_PARAM = "patient";
 
@@ -54,7 +82,11 @@ public class CapabilityRegistry {
     "ServiceRequest",
     "Task",
     "Condition",
-    "CarePlan"
+    "CarePlan",
+    "Observation",
+    "DiagnosticReport",
+    "DocumentReference",
+    "Binary"
   };
 
   private static final String PATIENT_ACTOR =
@@ -77,6 +109,7 @@ public class CapabilityRegistry {
                     "identifier", "Patient.identifier", "Identificador (CNS, CPF, id municipal)"))
             .param(SearchParamDef.string("name", "Patient.name", "Qualquer parte do nome"))
             .param(SearchParamDef.date("birthdate", "Patient.birthDate", "Data de nascimento"))
+            .operation("everything")
             .build());
 
     register(
@@ -286,6 +319,119 @@ public class CapabilityRegistry {
             .param(
                 SearchParamDef.token("category", "CarePlan.category", "Categoria/linha de cuidado"))
             .param(SearchParamDef.date("date", "CarePlan.period", "Período do plano"))
+            .build());
+
+    // ---- FHIR-3: resultados de exame, laudos e documentos ----------------------------------
+    register(
+        ResourceCapability.of("Observation")
+            .readWrite()
+            .profile(profiles.observation())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "Observation.subject", "Sujeito (Patient)", "Patient"))
+            .param(
+                SearchParamDef.reference("patient", "Observation.subject", "Paciente", "Patient"))
+            .param(SearchParamDef.token("code", "Observation.code", "Código (LOINC/SIGTAP/local)"))
+            .param(SearchParamDef.date("date", "Observation.effective", "Data/período efetivo"))
+            .param(SearchParamDef.token("status", "Observation.status", "Situação"))
+            .param(SearchParamDef.token("category", "Observation.category", "Categoria"))
+            .param(
+                SearchParamDef.quantity(
+                    "value-quantity",
+                    "Observation.value.ofType(Quantity)",
+                    "Valor numérico (prefixos eq/ne/gt/lt/ge/le, [system|]code opcional)"))
+            .param(
+                SearchParamDef.reference(
+                    "based-on", "Observation.basedOn", "Pedido de origem", "ServiceRequest"))
+            .param(
+                SearchParamDef.reference(
+                    "encounter", "Observation.encounter", "Atendimento", "Encounter"))
+            .include("patient")
+            .include("based-on")
+            .build());
+
+    register(
+        ResourceCapability.of("DiagnosticReport")
+            .readWrite()
+            .profile(profiles.diagnosticReport())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "DiagnosticReport.subject", "Sujeito (Patient)", "Patient"))
+            .param(
+                SearchParamDef.reference(
+                    "patient", "DiagnosticReport.subject", "Paciente", "Patient"))
+            .param(
+                SearchParamDef.date("date", "DiagnosticReport.effective", "Data/período efetivo"))
+            .param(SearchParamDef.token("status", "DiagnosticReport.status", "Situação"))
+            .param(SearchParamDef.token("code", "DiagnosticReport.code", "Código do exame"))
+            .param(
+                SearchParamDef.token(
+                    "category", "DiagnosticReport.category", "Categoria (LAB/RAD/OTH)"))
+            .param(
+                SearchParamDef.reference(
+                    "based-on", "DiagnosticReport.basedOn", "Pedido de origem", "ServiceRequest"))
+            .param(
+                SearchParamDef.reference(
+                    "result", "DiagnosticReport.result", "Observações do laudo", "Observation"))
+            .param(
+                SearchParamDef.reference(
+                    "performer",
+                    "DiagnosticReport.performer",
+                    "Executante",
+                    "Organization",
+                    "PractitionerRole",
+                    "Practitioner"))
+            .include("patient")
+            .include("result")
+            .include("based-on")
+            .build());
+
+    register(
+        ResourceCapability.of("DocumentReference")
+            .readWrite()
+            .profile(profiles.documentReference())
+            .param(
+                SearchParamDef.reference(
+                    "subject", "DocumentReference.subject", "Sujeito (Patient)", "Patient"))
+            .param(
+                SearchParamDef.reference(
+                    "patient", "DocumentReference.subject", "Paciente", "Patient"))
+            .param(SearchParamDef.date("date", "DocumentReference.date", "Data do documento"))
+            .param(SearchParamDef.token("status", "DocumentReference.status", "Situação"))
+            .param(SearchParamDef.token("type", "DocumentReference.type", "Tipo (LOINC)"))
+            .param(
+                SearchParamDef.token("category", "DocumentReference.category", "Categoria"))
+            .param(
+                SearchParamDef.reference(
+                    "author",
+                    "DocumentReference.author",
+                    "Autor",
+                    "Organization",
+                    "PractitionerRole",
+                    "Practitioner"))
+            .param(
+                SearchParamDef.reference(
+                    "related",
+                    "DocumentReference.context.related",
+                    "Recursos relacionados (pedido, laudo)",
+                    "ServiceRequest",
+                    "DiagnosticReport",
+                    "Encounter"))
+            .include("patient")
+            .include("subject")
+            .build());
+
+    // Binary: conteúdo no object storage; apenas create/read, sem busca (compartimento via
+    // securityContext → Patient)
+    register(
+        ResourceCapability.of("Binary")
+            .interactions(Interaction.READ, Interaction.CREATE)
+            .param(
+                SearchParamDef.reference(
+                    "patient",
+                    "Binary.securityContext",
+                    "Paciente do contexto de segurança (compartimento)",
+                    "Patient"))
             .build());
 
     // Recursos de auditoria/proveniência: somente leitura (gerados pelo próprio gateway)

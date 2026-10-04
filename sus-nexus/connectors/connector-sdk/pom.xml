@@ -97,6 +97,16 @@
       <artifactId>camel-quarkus-microprofile-health</artifactId>
     </dependency>
 
+    <!-- HL7 v2 (HAPI): parser tolerante, campos e ACK compartilhados por LIS/HIS/RIS -->
+    <dependency>
+      <groupId>ca.uhn.hapi</groupId>
+      <artifactId>hapi-base</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ca.uhn.hapi</groupId>
+      <artifactId>hapi-structures-v25</artifactId>
+    </dependency>
+
     <!-- Opcionais: raw zone S3/MinIO e ledger JDBC -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>

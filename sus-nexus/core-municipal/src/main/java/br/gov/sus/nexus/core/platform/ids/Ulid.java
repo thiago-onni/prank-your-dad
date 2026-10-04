@@ -48,6 +48,18 @@ public final class Ulid {
   public static final String EXAM_ORDER = "exo_";
   public static final String EXAM_HISTORY = "esh_";
   public static final String EXAM_RESULT = "exr_";
+  public static final String HOSPITAL_EPISODE = "hep_";
+  public static final String BED_MOVEMENT = "hbm_";
+  public static final String DISCHARGE = "hdis_";
+  public static final String COUNTER_REFERRAL = "cref_";
+  public static final String CARE_PLAN = "cp_";
+  public static final String CARE_PLAN_ITEM = "cpi_";
+  public static final String CARE_GAP = "gap_";
+  public static final String PROTOCOL = "prot_";
+  public static final String PROTOCOL_VERSION = "pv_";
+  public static final String RULE_VERSION = "rv_";
+  public static final String CONSENT = "cons_";
+  public static final String COMMUNICATION_PREFERENCE = "cpref_";
 
   private static final char[] ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
   private static final Pattern ULID_PATTERN = Pattern.compile("^[0-9A-HJKMNP-TV-Z]{26}$");

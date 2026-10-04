@@ -14,6 +14,7 @@ import org.hl7.fhir.r4.model.CapabilityStatement.ConditionalDeleteStatus;
 import org.hl7.fhir.r4.model.CapabilityStatement.ConditionalReadStatus;
 import org.hl7.fhir.r4.model.CapabilityStatement.ResourceVersionPolicy;
 import org.hl7.fhir.r4.model.CapabilityStatement.RestfulCapabilityMode;
+import org.hl7.fhir.r4.model.CapabilityStatement.SystemRestfulInteraction;
 import org.hl7.fhir.r4.model.CapabilityStatement.TypeRestfulInteraction;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
@@ -59,7 +60,8 @@ public class CapabilityStatementBuilder {
             + " user/*.write, system/*.read, system/*.write). Tenant pelo claim municipality_id."
             + " Busca: _count, _cursor, _sort (parâmetros de data e _lastUpdated, prefixo '-' para"
             + " ordem decrescente), _total=accurate e _include conforme searchInclude de cada"
-            + " tipo.");
+            + " tipo. Bundles batch/transaction em POST [base]; _history de tipo e de sistema;"
+            + " delete lógico (410); Patient/$everything paginado por cursor.");
     rest.getSecurity()
         .setCors(false)
         .addService(
@@ -80,10 +82,17 @@ public class CapabilityStatementBuilder {
       res.setVersioning(ResourceVersionPolicy.VERSIONED);
       res.setReadHistory(cap.supports(Interaction.HISTORY_INSTANCE));
       res.setUpdateCreate(cap.supports(Interaction.UPDATE));
-      res.setConditionalCreate(false);
+      // If-None-Exist por identifier dentro de Bundles batch/transaction
+      res.setConditionalCreate(cap.supports(Interaction.CREATE));
       res.setConditionalRead(ConditionalReadStatus.NOTSUPPORTED);
       res.setConditionalUpdate(false);
       res.setConditionalDelete(ConditionalDeleteStatus.NOTSUPPORTED);
+      for (String op : cap.operations()) {
+        res.addOperation()
+            .setName(op)
+            .setDefinition(
+                "http://hl7.org/fhir/OperationDefinition/" + cap.type() + "-" + op);
+      }
       if (cap.supports(Interaction.SEARCH_TYPE)) {
         for (SearchParamDef p : registry.commonParams()) {
           addParam(res, p);
@@ -95,6 +104,9 @@ public class CapabilityStatementBuilder {
           res.addSearchInclude(cap.type() + ":" + inc);
         }
       }
+    }
+    for (String si : CapabilityRegistry.SYSTEM_INTERACTIONS) {
+      rest.addInteraction().setCode(SystemRestfulInteraction.fromCode(si));
     }
     for (String op : CapabilityRegistry.SYSTEM_OPERATIONS) {
       rest.addOperation()

@@ -1,4 +1,4 @@
-package br.gov.sus.nexus.connectors.lis;
+package br.gov.sus.nexus.connectors.sdk.hl7;
 
 import ca.uhn.hl7v2.AcknowledgmentCode;
 import ca.uhn.hl7v2.HL7Exception;

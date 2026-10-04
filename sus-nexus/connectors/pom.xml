@@ -20,6 +20,8 @@
     <module>connector-sisreg</module>
     <module>connector-esus-regulacao</module>
     <module>connector-lis</module>
+    <module>connector-his</module>
+    <module>connector-ris</module>
   </modules>
 
   <properties>

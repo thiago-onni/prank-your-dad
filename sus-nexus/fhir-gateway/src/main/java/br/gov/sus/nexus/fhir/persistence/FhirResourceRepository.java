@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -182,6 +183,159 @@ public class FhirResourceRepository {
     return out;
   }
 
+  /**
+   * Exclusão lógica: nova versão com {@code deleted = true} (conteúdo preservado para o histórico),
+   * índices removidos. Não há exclusão física.
+   */
+  public void markDeleted(Connection c, StoredResource deletedVersion) throws SQLException {
+    update(c, deletedVersion, List.of());
+  }
+
+  /** Página de histórico de tipo ({@code type != null}) ou de sistema ({@code type == null}). */
+  public List<StoredResource> historyPage(
+      Connection c, String tenantId, String type, HistoryCursor after, Instant since, int limit)
+      throws SQLException {
+    StringBuilder sql =
+        new StringBuilder("SELECT ")
+            .append(COLUMNS)
+            .append(" FROM fhir.fhir_resource_history WHERE tenant_id = ?");
+    List<Object> params = new ArrayList<>();
+    params.add(tenantId);
+    if (type != null) {
+      sql.append(" AND resource_type = ?");
+      params.add(type);
+    }
+    if (since != null) {
+      sql.append(" AND last_updated >= ?");
+      params.add(Timestamp.from(since));
+    }
+    if (after != null) {
+      sql.append(
+          " AND (last_updated < ? OR (last_updated = ? AND (id > ? OR (id = ? AND version_id"
+              + " < ?))))");
+      Timestamp ts = Timestamp.from(after.lastUpdated());
+      params.add(ts);
+      params.add(ts);
+      params.add(after.id());
+      params.add(after.id());
+      params.add(after.versionId());
+    }
+    sql.append(" ORDER BY last_updated DESC, id ASC, version_id DESC LIMIT ?");
+    params.add(limit);
+    try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
+      int i = 1;
+      for (Object p : params) {
+        ps.setObject(i++, p);
+      }
+      try (ResultSet rs = ps.executeQuery()) {
+        List<StoredResource> list = new ArrayList<>();
+        while (rs.next()) {
+          list.add(map(rs));
+        }
+        return list;
+      }
+    }
+  }
+
+  /** Posição (keyset) na listagem de histórico de tipo/sistema. */
+  public record HistoryCursor(Instant lastUpdated, String id, int versionId) {}
+
+  /**
+   * Página do compartimento de um paciente ({@code $everything}): o próprio Patient e todo recurso
+   * dos tipos informados cujo parâmetro {@code patient} aponta para ele, ordenados por (tipo, id).
+   */
+  public List<StoredResource> compartmentPage(
+      Connection c,
+      String tenantId,
+      String patientId,
+      List<String> types,
+      Instant since,
+      String afterType,
+      String afterId,
+      int limit)
+      throws SQLException {
+    StringBuilder sql =
+        new StringBuilder("SELECT ")
+            .append(COLUMNS)
+            .append(
+                " FROM fhir.fhir_resource r WHERE r.tenant_id = ? AND r.deleted = false AND"
+                    + " r.resource_type = ANY(?) AND ((r.resource_type = 'Patient' AND r.id = ?)"
+                    + " OR EXISTS (SELECT 1 FROM fhir.fhir_idx_reference t WHERE t.resource_id ="
+                    + " r.id AND t.param = 'patient' AND t.target_type = 'Patient' AND"
+                    + " t.target_id = ?))");
+    List<Object> params = new ArrayList<>();
+    params.add(tenantId);
+    params.add(textArray(c, types));
+    params.add(patientId);
+    params.add(patientId);
+    if (since != null) {
+      sql.append(" AND r.last_updated >= ?");
+      params.add(Timestamp.from(since));
+    }
+    if (afterType != null && afterId != null) {
+      sql.append(" AND (r.resource_type > ? OR (r.resource_type = ? AND r.id > ?))");
+      params.add(afterType);
+      params.add(afterType);
+      params.add(afterId);
+    }
+    sql.append(" ORDER BY r.resource_type ASC, r.id ASC LIMIT ?");
+    params.add(limit);
+    try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
+      int i = 1;
+      for (Object p : params) {
+        ps.setObject(i++, p);
+      }
+      try (ResultSet rs = ps.executeQuery()) {
+        List<StoredResource> list = new ArrayList<>();
+        while (rs.next()) {
+          list.add(map(rs));
+        }
+        return list;
+      }
+    }
+  }
+
+  /** Metadados de um Binary (o conteúdo fica no object storage). */
+  public record BinaryMeta(
+      String id, String tenantId, String contentType, long sizeBytes, String sha256, String key) {}
+
+  public void insertBinary(Connection c, BinaryMeta meta) throws SQLException {
+    try (PreparedStatement ps =
+        c.prepareStatement(
+            "INSERT INTO fhir.fhir_binary (id, tenant_id, content_type, size_bytes, sha256,"
+                + " storage_key) VALUES (?, ?, ?, ?, ?, ?)")) {
+      ps.setString(1, meta.id());
+      ps.setString(2, meta.tenantId());
+      ps.setString(3, meta.contentType());
+      ps.setLong(4, meta.sizeBytes());
+      ps.setString(5, meta.sha256());
+      ps.setString(6, meta.key());
+      ps.executeUpdate();
+    }
+  }
+
+  public Optional<BinaryMeta> findBinary(Connection c, String id) throws SQLException {
+    try (PreparedStatement ps =
+        c.prepareStatement(
+            "SELECT id, tenant_id, content_type, size_bytes, sha256, storage_key FROM"
+                + " fhir.fhir_binary WHERE id = ?")) {
+      ps.setString(1, id);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) {
+          return Optional.empty();
+        }
+        return Optional.of(
+            new BinaryMeta(
+                rs.getString(1),
+                rs.getString(2),
+                rs.getString(3),
+                rs.getLong(4),
+                rs.getString(5),
+                rs.getString(6)));
+      }
+    }
+  }
+
   private void appendHistory(Connection c, StoredResource r) throws SQLException {
     String sql =
         "INSERT INTO fhir.fhir_resource_history (id, tenant_id, resource_type, version_id,"
@@ -195,7 +349,12 @@ public class FhirResourceRepository {
   private void replaceIndex(Connection c, StoredResource r, List<IndexEntry> index)
       throws SQLException {
     for (String table :
-        List.of("fhir_idx_token", "fhir_idx_string", "fhir_idx_date", "fhir_idx_reference")) {
+        List.of(
+            "fhir_idx_token",
+            "fhir_idx_string",
+            "fhir_idx_date",
+            "fhir_idx_reference",
+            "fhir_idx_quantity")) {
       try (PreparedStatement ps =
           c.prepareStatement("DELETE FROM fhir." + table + " WHERE resource_id = ?")) {
         ps.setString(1, r.id());
@@ -217,7 +376,11 @@ public class FhirResourceRepository {
         PreparedStatement ref =
             c.prepareStatement(
                 "INSERT INTO fhir.fhir_idx_reference (resource_id, tenant_id, param, target_type,"
-                    + " target_id) VALUES (?, ?, ?, ?, ?)")) {
+                    + " target_id) VALUES (?, ?, ?, ?, ?)");
+        PreparedStatement qty =
+            c.prepareStatement(
+                "INSERT INTO fhir.fhir_idx_quantity (resource_id, tenant_id, param, system, code,"
+                    + " value) VALUES (?, ?, ?, ?, ?, ?)")) {
       for (IndexEntry e : index) {
         switch (e) {
           case IndexEntry.Token t -> {
@@ -251,12 +414,22 @@ public class FhirResourceRepository {
             ref.setString(5, f.targetId());
             ref.addBatch();
           }
+          case IndexEntry.Quantity q -> {
+            qty.setString(1, r.id());
+            qty.setString(2, r.tenantId());
+            qty.setString(3, q.param());
+            qty.setString(4, q.system());
+            qty.setString(5, q.code());
+            qty.setBigDecimal(6, q.value());
+            qty.addBatch();
+          }
         }
       }
       token.executeBatch();
       str.executeBatch();
       date.executeBatch();
       ref.executeBatch();
+      qty.executeBatch();
     }
   }
 

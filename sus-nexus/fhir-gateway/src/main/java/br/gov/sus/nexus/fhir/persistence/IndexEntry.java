@@ -14,4 +14,8 @@ public sealed interface IndexEntry {
   record Date(String param, Instant low, Instant high) implements IndexEntry {}
 
   record Ref(String param, String targetType, String targetId) implements IndexEntry {}
+
+  /** Quantidade ({@code Quantity.value} com unidade codificada opcional). */
+  record Quantity(String param, String system, String code, java.math.BigDecimal value)
+      implements IndexEntry {}
 }

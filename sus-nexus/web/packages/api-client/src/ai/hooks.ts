@@ -1,0 +1,124 @@
+'use client';
+
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAiClient } from '../provider';
+import { aiKeys } from './keys';
+import type {
+  AgentApproval,
+  AgentDescriptor,
+  AgentRunRecord,
+  ApprovalStatus,
+  KillSwitchResponse,
+  KillSwitchState,
+  RunStatus,
+  ToolDescriptor,
+} from './types';
+
+export function useAgents() {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.agents(),
+    queryFn: (): Promise<AgentDescriptor[]> => ai.listAgents(),
+  });
+}
+
+export function useAgentTools() {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.tools(),
+    queryFn: (): Promise<ToolDescriptor[]> => ai.listTools(),
+  });
+}
+
+export interface AgentRunsParams {
+  agent_id?: string;
+  status?: RunStatus;
+  limit?: number;
+}
+
+export function useAgentRuns(params: AgentRunsParams = {}) {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.runs(params),
+    placeholderData: keepPreviousData,
+    queryFn: (): Promise<AgentRunRecord[]> =>
+      ai.listRuns({
+        agent_id: params.agent_id || undefined,
+        status: params.status,
+        limit: params.limit,
+      }),
+  });
+}
+
+export function useAgentRun(runId: string | undefined) {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.run(runId ?? ''),
+    enabled: Boolean(runId),
+    queryFn: (): Promise<AgentRunRecord> => ai.getRun(runId as string),
+  });
+}
+
+export function useApprovals(params: { status?: ApprovalStatus; agent_id?: string } = {}) {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.approvals(params),
+    placeholderData: keepPreviousData,
+    queryFn: (): Promise<AgentApproval[]> =>
+      ai.listApprovals({ status: params.status ?? 'pending', agent_id: params.agent_id }),
+  });
+}
+
+export interface ActionDecisionInput {
+  runId: string;
+  actionId: string;
+  /** Obrigatória (10–1000 caracteres); registrada na trilha de auditoria (AIA-005). */
+  justification: string;
+}
+
+function useActionDecision(kind: 'approve' | 'reject') {
+  const ai = useAiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActionDecisionInput): Promise<AgentRunRecord> =>
+      kind === 'approve'
+        ? ai.approveAction(input.runId, input.actionId, input.justification)
+        : ai.rejectAction(input.runId, input.actionId, input.justification),
+    onSuccess: async (run) => {
+      qc.setQueryData(aiKeys.run(run.id), run);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [...aiKeys.all, 'approvals'] }),
+        qc.invalidateQueries({ queryKey: [...aiKeys.all, 'runs'] }),
+      ]);
+    },
+  });
+}
+
+export function useApproveAction() {
+  return useActionDecision('approve');
+}
+
+export function useRejectAction() {
+  return useActionDecision('reject');
+}
+
+export function useKillSwitch(options?: { enabled?: boolean }) {
+  const ai = useAiClient();
+  return useQuery({
+    queryKey: aiKeys.killSwitch(),
+    enabled: options?.enabled ?? true,
+    queryFn: (): Promise<KillSwitchResponse> => ai.getKillSwitch(),
+  });
+}
+
+/** Define o estado administrativo do kill switch (AIA-009). Restrito a dpo/admin no backend. */
+export function useSetKillSwitch() {
+  const ai = useAiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (state: KillSwitchState): Promise<KillSwitchResponse> => ai.setKillSwitch(state),
+    onSuccess: (data) => {
+      qc.setQueryData(aiKeys.killSwitch(), data);
+    },
+  });
+}
