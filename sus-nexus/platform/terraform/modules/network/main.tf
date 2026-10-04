@@ -79,6 +79,7 @@ resource "aws_subnet" "this" {
 }
 
 resource "aws_eip" "nat" {
+  #checkov:skip=CKV2_AWS_19:Cada EIP é anexado ao aws_nat_gateway.this[each.key] (mesmo for_each); o grafo do Checkov não resolve a aresta de forma determinística.
   for_each = local.is_aws && var.enable_nat_gateway ? toset(var.availability_zones) : toset([])
   domain   = "vpc"
   tags     = merge(local.tags, { Name = "${var.name}-nat-${each.key}" })
