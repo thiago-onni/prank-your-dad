@@ -35,6 +35,7 @@ import {
   toSummary,
 } from './data';
 import { careHandlers } from './care-handlers';
+import { productionHandlers } from './production-handlers';
 import { delay, normalize, paginate, problem, readJson, requirePurpose } from './http-utils';
 
 /**
@@ -616,6 +617,7 @@ export const handlers = [
 
   // ---------- hospital / plano de cuidado / lacunas / protocolos ----------
   ...careHandlers,
+  ...productionHandlers,
 
   // ---------- ai-service ----------
   http.get('*/agents', async () => {

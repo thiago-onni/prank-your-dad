@@ -30,6 +30,7 @@ export * from './hooks/regulation';
 export * from './hooks/exams';
 export * from './hooks/hospital';
 export * from './hooks/careplans';
+export * from './hooks/production';
 export * from './ai/types';
 export {
   createAiClient,

@@ -14,6 +14,8 @@ export const ROLES = {
   PROFISSIONAL_APS: 'profissional_aps',
   PROFISSIONAL_HOSPITALAR: 'profissional_hospitalar',
   ADMIN_MUNICIPAL: 'admin_municipal',
+  /** Cliente agente de IA (ai-service). Nunca executa ações que exigem humano (ex.: PRO-010). */
+  AGENTE_IA: 'agente_ia',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];

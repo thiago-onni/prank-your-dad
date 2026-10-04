@@ -1,7 +1,13 @@
-import { PlaceholderPage } from '@/components/Placeholder';
+import { ProductionPage, isProductionTab } from '@/features/producao/ProductionPage';
+import { t } from '@/i18n';
 
-export const metadata = { title: 'Produção' };
+export const metadata = { title: t.production.title };
 
-export default function Page() {
-  return <PlaceholderPage title="Produção" phase="Auditoria de Produção (F4)" />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { aba } = await searchParams;
+  return <ProductionPage initialTab={isProductionTab(aba) ? aba : 'painel'} />;
 }

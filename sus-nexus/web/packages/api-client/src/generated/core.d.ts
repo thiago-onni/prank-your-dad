@@ -684,6 +684,256 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProductionBatches"];
+        put?: never;
+        /**
+         * Gerar lote (rascunho) de uma competência/CNES/tipo — somente registros `validated` (PRO-005)
+         * @description Inclui todos os registros `validated` da competência/CNES/tipo que não estão em outro lote. Sem
+         *     registros elegíveis → 422. Papel: auditor. O lote nasce `draft` e só pode ser exportado após
+         *     aprovação humana (`/approve`).
+         */
+        post: operations["createProductionBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/batches/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProductionBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/batches/{batchId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aprovação humana obrigatória do lote (PRO-010)
+         * @description Papéis `auditor` ou `gestor`, com justificativa (≥ 10 caracteres). Agente de IA → 403 mesmo que o
+         *     token carregue outro papel. Lote fora de `draft` → 409. Registrado em `audit_log`.
+         */
+        post: operations["approveProductionBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/batches/{batchId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exportar lote aprovado em layout configurável (arquivo + sha256); marca registros `exported`
+         * @description Gera o arquivo no armazenamento de exportação (`ExportStorage`) e devolve a referência e o SHA-256.
+         *     Layouts: `bpa_mag_ref_v1` (BPA-Mag simplificado — **layout de referência a homologar** com o
+         *     validador oficial; só BPA-C/BPA-I) e `csv_ref_v1` (qualquer tipo). A transmissão oficial continua
+         *     no sistema oficial (SIA/SIH); o barramento só marca `exported`. Papel: auditor. Agente de IA → 403.
+         *     Lote não aprovado → 409.
+         */
+        post: operations["exportProductionBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Competências e prazos de apresentação (PRO-007)
+         * @description Prazo configurável em `production.production_deadline` (seed global: dia 10 do mês seguinte, 23:59
+         *     America/Sao_Paulo; linha do tenant sobrepõe). Alertas D-5 e D-1 viram tarefas na fila `auditoria`.
+         */
+        get: operations["listProductionDeadlines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pendências de pré-auditoria (fila do auditor; leitura permitida ao agente de IA) */
+        get: operations["listProductionIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retorno do processamento oficial por registro ou lote (PRO-008)
+         * @description `transmitted`/`received`/`accepted` aceitam escopo de lote (`batch_id`); `rejected` e `paid` exigem
+         *     registro (`production_record_id` ou `record_source`). `rejected` reabre pendência com o motivo
+         *     oficial (issue `official_rejection`) e tarefa `production_issue`; `paid` grava o valor. Idempotente
+         *     por `(source.system, source.source_record_id, outcome, registro/lote)`. Papéis: operador_integracao,
+         *     auditor.
+         */
+        post: operations["registerProductionOutcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registros de produção com status de pré-auditoria (PRO-001..004)
+         * @description Papéis: auditor (tudo), gestor, operador_integracao e admin_municipal (leitura). Dado administrativo de
+         *     faturamento — não aparece na timeline do cidadão. CNS/CPF só mascarados.
+         */
+        get: operations["listProductionRecords"];
+        put?: never;
+        /**
+         * Registrar produção vinda de fonte (upsert por vínculo de origem) e pré-auditar
+         * @description Upsert por `(tenant, source.system, source.source_record_id)`. A pré-auditoria roda na hora com o
+         *     conjunto de regras vigente `production-validation` (platform.rule_set): sem erro → `validated`;
+         *     com erro → `pending` + tarefa `production_issue` na fila `auditoria`. Reenvio idêntico devolve 200
+         *     sem alteração; atualização de registro já exportado/transmitido → 409 (corrigir no sistema oficial).
+         *     Papéis: operador_integracao (conectores), auditor.
+         */
+        post: operations["registerProductionRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/records/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProductionRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/records/{recordId}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Corrigir registro com justificativa e revalidar (PRO-006)
+         * @description Somente humano com papel `auditor` (agente de IA → 403, PRO-010). Justificativa obrigatória
+         *     (≥ 10 caracteres); alterações e justificativa vão para `production_record_history` e `audit_log`.
+         *     Permitida em `pending`, `validated` (fora de lote aprovado) e `rejected` (reapresentação). Avisos
+         *     podem ser dispensados (`waive_issue_ids`); erros não. Sinaliza o `ProductionPreAuditWorkflow`.
+         */
+        post: operations["correctProductionRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/records/by-source/{system}/{sourceRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Registro de produção pelo identificador de origem (uso dos conectores) */
+        get: operations["getProductionRecordBySource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Painel de produção da competência (PRO-009)
+         * @description Papéis gestor, auditor, admin_municipal. Contagens por status, valores estimado/pago e perda evitável estimada.
+         */
+        get: operations["getProductionSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols": {
         parameters: {
             query?: never;
@@ -1281,6 +1531,8 @@ export interface components {
             /** @description Versão do layout/mapeamento usado */
             version?: string;
         };
+        /** @description Competência AAAAMM */
+        Competence: string;
         ConnectorHeartbeat: {
             connector_version: string;
             /** @description ConnectorDescriptor do SDK */
@@ -1469,6 +1721,11 @@ export interface components {
             scheduled_at?: string;
             source: components["schemas"]["SourceRefInput"];
             status: components["schemas"]["ExamOrderStatus"];
+        };
+        /** @description Referência a registro de outro domínio pelo vínculo de origem */
+        ExternalRef: {
+            source_record_id: string;
+            system?: string;
         };
         HealthUnit: {
             active?: boolean;
@@ -1697,6 +1954,277 @@ export interface components {
             title?: string;
             /** Format: uri */
             type?: string;
+        };
+        ProductionBatch: {
+            approval_justification?: string;
+            /** Format: date-time */
+            approved_at?: string;
+            approved_by?: string;
+            cnes: string;
+            competence: components["schemas"]["Competence"];
+            /** Format: date-time */
+            created_at: string;
+            created_by?: string;
+            estimated_value?: number;
+            export?: {
+                /** Format: date-time */
+                exported_at?: string;
+                exported_by?: string;
+                /** @description Referência no armazenamento de exportação (arquivo/object storage) */
+                file_ref?: string;
+                layout?: string;
+                lines?: number;
+                /** @description Linhas sem CNS cifrado disponível (preenchidas com zeros — revisar antes de transmitir) */
+                lines_missing_identifiers?: number;
+                sha256?: string;
+                size_bytes?: number;
+            };
+            id: string;
+            kind: components["schemas"]["ProductionKind"];
+            protocol_number?: string;
+            record_ids?: string[];
+            records_count: number;
+            status: components["schemas"]["ProductionBatchStatus"];
+            total_quantity?: number;
+            version?: number;
+        };
+        ProductionBatchApproval: {
+            justification: string;
+        };
+        ProductionBatchCreate: {
+            cnes: string;
+            competence: components["schemas"]["Competence"];
+            kind: components["schemas"]["ProductionKind"];
+        };
+        ProductionBatchExportRequest: {
+            /**
+             * @description Padrão: bpa_mag_ref_v1 para BPA-C/BPA-I; csv_ref_v1 para APAC/AIH
+             * @enum {string}
+             */
+            layout?: "bpa_mag_ref_v1" | "csv_ref_v1";
+        };
+        /** @enum {string} */
+        ProductionBatchStatus: "draft" | "approved" | "exported" | "transmitted" | "processed";
+        ProductionCorrection: {
+            /** @description Campos corrigidos (somente os informados mudam) */
+            changes: {
+                aih_number?: string;
+                apac_number?: string;
+                appointment_ref?: components["schemas"]["ExternalRef"];
+                /** Format: date */
+                attendance_date?: string;
+                /** @enum {string} */
+                character_of_care?: "elective" | "urgency" | "work_accident" | "other";
+                cid_code?: string;
+                citizen_ref?: components["schemas"]["CitizenRef"];
+                cnes?: string;
+                competence?: components["schemas"]["Competence"];
+                encounter_ref?: components["schemas"]["ExternalRef"];
+                hospital_episode_ref?: components["schemas"]["ExternalRef"];
+                procedure_code?: string;
+                professional_cbo?: string;
+                professional_cns?: string;
+                quantity?: number;
+            };
+            justification: string;
+            /** @description Pendências de severidade warning dispensadas com a mesma justificativa (erros não são dispensáveis) */
+            waive_issue_ids?: string[];
+        };
+        ProductionDeadline: {
+            alert_days?: number[];
+            competence: components["schemas"]["Competence"];
+            /** @enum {string} */
+            configured_by?: "global" | "tenant" | "default";
+            days_remaining?: number;
+            /** Format: date-time */
+            deadline_at: string;
+            pending_records?: number;
+            /**
+             * @description closing = até 5 dias do prazo
+             * @enum {string}
+             */
+            status: "open" | "closing" | "closed";
+            validated_records?: number;
+        };
+        ProductionIssue: {
+            cnes?: string;
+            competence?: components["schemas"]["Competence"];
+            /** Format: date-time */
+            created_at: string;
+            field?: string;
+            id: string;
+            kind?: components["schemas"]["ProductionKind"];
+            message: string;
+            /** @enum {string} */
+            origin?: "rule" | "workflow" | "official_return";
+            procedure_code?: string;
+            production_record_id: string;
+            record_status?: components["schemas"]["ProductionRecordStatus"];
+            resolution_note?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            rule_id: string;
+            /** @description ex.: production-validation/1 */
+            rule_version: string;
+            /** @enum {string} */
+            severity: "error" | "warning";
+            /** @enum {string} */
+            status: "open" | "resolved" | "waived";
+            task_id?: string;
+        };
+        /**
+         * @description Instrumento de registro (BPA consolidado, BPA individualizado, APAC, AIH)
+         * @enum {string}
+         */
+        ProductionKind: "bpa_c" | "bpa_i" | "apac" | "aih";
+        /** @description Informe exatamente um entre production_record_id, record_source e batch_id */
+        ProductionOutcomeRegistration: {
+            approved_quantity?: number;
+            batch_id?: string;
+            /** @enum {string} */
+            outcome: "transmitted" | "received" | "accepted" | "rejected" | "paid";
+            paid_amount?: number;
+            /** Format: date-time */
+            processed_at: string;
+            production_record_id?: string;
+            protocol_number?: string;
+            reason?: string;
+            reason_code?: string;
+            record_source?: components["schemas"]["ExternalRef"];
+            source: components["schemas"]["SourceRefInput"];
+        };
+        ProductionOutcomeResult: {
+            affected: {
+                production_record_id?: string;
+                status?: components["schemas"]["ProductionRecordStatus"];
+            }[];
+            batch_id?: string;
+            outcome: string;
+            /** @description Retorno já aplicado (idempotência) */
+            unchanged?: boolean;
+        };
+        ProductionRecord: {
+            aih_number?: string;
+            apac_number?: string;
+            appointment_id?: string;
+            approved_quantity?: number;
+            /** Format: date */
+            attendance_date: string;
+            batch_id?: string;
+            character_of_care?: string;
+            cid_code?: string;
+            citizen_id?: string;
+            citizen_identifier_masked?: string;
+            cnes: string;
+            competence: components["schemas"]["Competence"];
+            correction_count?: number;
+            /** Format: date-time */
+            deadline_at?: string;
+            encounter_ref?: components["schemas"]["ExternalRef"];
+            estimated_value?: number;
+            health_unit_name?: string;
+            history?: {
+                action?: string;
+                actor_id?: string;
+                from_status?: string;
+                justification?: string;
+                /** Format: date-time */
+                occurred_at?: string;
+                rule_version?: string;
+                to_status?: string;
+            }[];
+            hospital_episode_id?: string;
+            id: string;
+            issues?: components["schemas"]["ProductionIssue"][];
+            kind: components["schemas"]["ProductionKind"];
+            outcome_reason?: string;
+            outcome_reason_code?: string;
+            paid_amount?: number;
+            procedure_code: string;
+            procedure_display?: string;
+            professional_cbo?: string;
+            professional_cns_masked?: string;
+            quantity: number;
+            rule_version?: string;
+            source_record_id: string;
+            source_system: string;
+            status: components["schemas"]["ProductionRecordStatus"];
+            /** @description Valor unitário SIGTAP (atributo `valor`) na competência */
+            unit_value?: number;
+            /** Format: date-time */
+            validated_at?: string;
+            version?: number;
+        };
+        ProductionRecordRegistration: {
+            aih_number?: string;
+            apac_number?: string;
+            appointment_ref?: components["schemas"]["ExternalRef"];
+            /** Format: date */
+            attendance_date: string;
+            /**
+             * @description Caráter do atendimento
+             * @enum {string}
+             */
+            character_of_care?: "elective" | "urgency" | "work_accident" | "other";
+            /** @description CID-10 (opcional) */
+            cid_code?: string;
+            /** @description Obrigatório para bpa_i, apac e aih (ausente → pendência citizen_unresolved). identifier_value (CNS/CPF) é validado (DV) e guardado só como hash/máscara/cifra. */
+            citizen_ref?: components["schemas"]["CitizenRef"];
+            cnes: string;
+            competence: components["schemas"]["Competence"];
+            encounter_ref?: components["schemas"]["ExternalRef"];
+            hospital_episode_ref?: components["schemas"]["ExternalRef"];
+            kind: components["schemas"]["ProductionKind"];
+            /** @description Código SIGTAP */
+            procedure_code: string;
+            professional_cbo: string;
+            /** @description CNS do profissional (opcional). Persistido só como hash (HMAC por tenant), máscara e cifra (export); nunca em claro em eventos/respostas/logs. */
+            professional_cns?: string;
+            quantity: number;
+            source: components["schemas"]["SourceRefInput"];
+        };
+        /** @enum {string} */
+        ProductionRecordStatus: "generated" | "validated" | "pending" | "exported" | "transmitted" | "received" | "rejected" | "corrected" | "approved" | "paid";
+        ProductionSummary: {
+            by_kind?: {
+                estimated?: number;
+                kind?: components["schemas"]["ProductionKind"];
+                records?: number;
+            }[];
+            cnes?: string;
+            competence: components["schemas"]["Competence"];
+            days_to_deadline?: number;
+            /** Format: date-time */
+            deadline_at?: string;
+            issues_by_rule?: {
+                open?: number;
+                rule_id?: string;
+                severity?: string;
+            }[];
+            totals: {
+                approved?: number;
+                /** @description Registros com ao menos uma correção humana */
+                corrected?: number;
+                exported?: number;
+                generated?: number;
+                paid?: number;
+                pending?: number;
+                received?: number;
+                records?: number;
+                rejected?: number;
+                transmitted?: number;
+                validated?: number;
+            };
+            values?: {
+                /** @description Valor de registros pendentes + rejeitados ainda não corrigidos (perda evitável se tratados no prazo) */
+                avoidable_loss_estimated?: number;
+                /** @description Σ quantidade × valor SIGTAP */
+                estimated?: number;
+                paid?: number;
+                pending?: number;
+                rejected?: number;
+                validated?: number;
+            };
         };
         Protocol: {
             approved_by?: string;
@@ -2033,6 +2561,7 @@ export interface components {
         };
     };
     parameters: {
+        batchId: string;
         carePlanId: string;
         caseId: string;
         citizenId: string;
@@ -2045,6 +2574,7 @@ export interface components {
         orderId: string;
         /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
         purpose: components["schemas"]["Purpose"];
+        recordId: string;
         requestId: string;
         /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
         sourceRecordId: string;
@@ -3480,6 +4010,408 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MergeCase"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProductionBatches: {
+        parameters: {
+            query?: {
+                cnes?: string;
+                competence?: components["schemas"]["Competence"];
+                cursor?: components["parameters"]["cursor"];
+                limit?: components["parameters"]["limit"];
+                status?: components["schemas"]["ProductionBatchStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProductionBatch"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProductionBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Lote gerado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionBatch"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProductionBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["batchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionBatch"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    approveProductionBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["batchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBatchApproval"];
+            };
+        };
+        responses: {
+            /** @description Aprovado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionBatch"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportProductionBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["batchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProductionBatchExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Exportado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionBatch"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProductionDeadlines: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Competence"];
+                to?: components["schemas"]["Competence"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProductionDeadline"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProductionIssues: {
+        parameters: {
+            query?: {
+                cnes?: string;
+                competence?: components["schemas"]["Competence"];
+                cursor?: components["parameters"]["cursor"];
+                kind?: components["schemas"]["ProductionKind"];
+                limit?: components["parameters"]["limit"];
+                record_id?: string;
+                /** @description rule_id (ex. `cbo_incompatible`) */
+                rule?: string;
+                severity?: "error" | "warning";
+                /** @description padrão `open` */
+                status?: "open" | "resolved" | "waived";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProductionIssue"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerProductionOutcome: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionOutcomeRegistration"];
+            };
+        };
+        responses: {
+            /** @description Aplicado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionOutcomeResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProductionRecords: {
+        parameters: {
+            query?: {
+                batch_id?: string;
+                citizen_id?: string;
+                cnes?: string;
+                competence?: components["schemas"]["Competence"];
+                cursor?: components["parameters"]["cursor"];
+                kind?: components["schemas"]["ProductionKind"];
+                limit?: components["parameters"]["limit"];
+                procedure_code?: string;
+                status?: components["schemas"]["ProductionRecordStatus"];
+            };
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProductionRecord"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    registerProductionRecord: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Mesma chave + mesma requisição devolve a resposta armazenada (72 h, header Idempotent-Replayed); mesma chave + requisição diferente → 422. */
+                "Idempotency-Key"?: components["parameters"]["idempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionRecordRegistration"];
+            };
+        };
+        responses: {
+            /** @description Registro atualizado (ou inalterado) e pré-auditado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            /** @description Registro criado e pré-auditado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProductionRecord: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                recordId: components["parameters"]["recordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    correctProductionRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: components["parameters"]["recordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionCorrection"];
+            };
+        };
+        responses: {
+            /** @description Corrigido e revalidado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProductionRecordBySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Finalidade declarada do acesso (LGPD). Avaliada pela política OPA e registrada no access_log. */
+                "X-Purpose-Of-Use": components["parameters"]["purpose"];
+            };
+            path: {
+                /** @description Identificador do registro no sistema de origem (`source.source_record_id`) */
+                sourceRecordId: components["parameters"]["sourceRecordId"];
+                /** @description Sistema de origem (`source.system` do registro ingerido), ex. SISREG, ESUS_REGULACAO, LIS */
+                system: components["parameters"]["sourceSystem"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionRecord"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProductionSummary: {
+        parameters: {
+            query: {
+                cnes?: string;
+                competence: components["schemas"]["Competence"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionSummary"];
                 };
             };
             default: components["responses"]["Problem"];

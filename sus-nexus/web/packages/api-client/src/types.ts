@@ -123,6 +123,30 @@ export type ProtocolTransitionInput = NonNullable<
 >['content']['application/json'];
 export type ProtocolTransitionAction = ProtocolTransitionInput['action'];
 
+// ---------- produção e pré-auditoria (PRO) ----------
+export type Competence = Schemas['Competence'];
+export type ProductionKind = Schemas['ProductionKind'];
+export type ProductionRecordStatus = Schemas['ProductionRecordStatus'];
+export type ProductionBatchStatus = Schemas['ProductionBatchStatus'];
+export type ProductionRecord = Schemas['ProductionRecord'];
+export type ProductionIssue = Schemas['ProductionIssue'];
+export type ProductionIssueSeverity = ProductionIssue['severity'];
+export type ProductionIssueStatus = ProductionIssue['status'];
+export type ProductionHistoryEntry = NonNullable<ProductionRecord['history']>[number];
+export type ProductionCorrection = Schemas['ProductionCorrection'];
+export type ProductionCorrectionChanges = ProductionCorrection['changes'];
+export type ProductionBatch = Schemas['ProductionBatch'];
+export type ProductionBatchExport = NonNullable<ProductionBatch['export']>;
+export type ProductionBatchCreate = Schemas['ProductionBatchCreate'];
+export type ProductionBatchApproval = Schemas['ProductionBatchApproval'];
+export type ProductionExportLayout = NonNullable<Schemas['ProductionBatchExportRequest']['layout']>;
+export type ProductionOutcomeRegistration = Schemas['ProductionOutcomeRegistration'];
+export type ProductionOutcome = ProductionOutcomeRegistration['outcome'];
+export type ProductionOutcomeResult = Schemas['ProductionOutcomeResult'];
+export type ProductionSummary = Schemas['ProductionSummary'];
+export type ProductionDeadline = Schemas['ProductionDeadline'];
+export type ProductionDeadlineStatus = ProductionDeadline['status'];
+
 /** Página paginada por cursor opaco. */
 export interface Page<T> {
   items: T[];

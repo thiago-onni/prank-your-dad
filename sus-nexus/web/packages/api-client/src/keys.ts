@@ -40,4 +40,12 @@ export const coreKeys = {
   carePlan: (id: string) => [...coreKeys.careplan(), 'plan', id] as const,
   careGaps: (params: object) => [...coreKeys.careplan(), 'gaps', params] as const,
   protocols: (params: object) => [...coreKeys.careplan(), 'protocols', params] as const,
+  production: () => [...coreKeys.all, 'production'] as const,
+  productionRecords: (params: object) => [...coreKeys.production(), 'records', params] as const,
+  productionRecord: (id: string) => [...coreKeys.production(), 'record', id] as const,
+  productionIssues: (params: object) => [...coreKeys.production(), 'issues', params] as const,
+  productionBatches: (params: object) => [...coreKeys.production(), 'batches', params] as const,
+  productionBatch: (id: string) => [...coreKeys.production(), 'batch', id] as const,
+  productionSummary: (params: object) => [...coreKeys.production(), 'summary', params] as const,
+  productionDeadlines: (params: object) => [...coreKeys.production(), 'deadlines', params] as const,
 };

@@ -61,8 +61,9 @@ export const NAV_ITEMS: NavItem[] = [
   {
     href: '/producao',
     label: t.nav.production,
-    roles: [ROLES.AUDITOR, ROLES.GESTOR],
-    description: 'Auditoria de produção (F4)',
+    roles: [ROLES.AUDITOR, ROLES.GESTOR, ROLES.ADMIN_MUNICIPAL, ROLES.OPERADOR_INTEGRACAO],
+    description:
+      'Produção e pré-auditoria BPA/APAC/AIH: pendências, lotes, prazos e retorno oficial',
   },
   {
     href: '/agentes',
@@ -105,6 +106,12 @@ export const HOME_SHORTCUTS: NavItem[] = [
  * o usuário tem mais de um papel. Apenas usabilidade.
  */
 export const FEATURED_SHORTCUTS: NavItem[] = [
+  {
+    href: '/producao?aba=pendencias',
+    label: 'Pendências de produção',
+    roles: [ROLES.AUDITOR],
+    description: 'Fila de pré-auditoria da competência e prazos de apresentação',
+  },
   {
     href: '/hospital',
     label: 'Internações e pós-alta',

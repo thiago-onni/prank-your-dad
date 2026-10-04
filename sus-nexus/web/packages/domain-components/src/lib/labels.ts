@@ -26,6 +26,13 @@ import type {
   ProtocolItemPriority,
   ProtocolStatus,
   ProtocolTransitionAction,
+  ProductionBatchStatus,
+  ProductionDeadlineStatus,
+  ProductionIssueSeverity,
+  ProductionIssueStatus,
+  ProductionKind,
+  ProductionOutcome,
+  ProductionRecordStatus,
   Purpose,
   RegistrationState,
   RegulationIssueFilter,
@@ -562,3 +569,86 @@ export const PROTOCOL_NEXT_ACTION: Partial<Record<ProtocolStatus, ProtocolTransi
   approved: 'activate',
   active: 'revoke',
 };
+
+// ---------- produção e pré-auditoria (PRO) ----------
+
+export const productionKindLabels: Record<ProductionKind, { label: string; description: string }> =
+  {
+    bpa_c: { label: 'BPA-C', description: 'Boletim de Produção Ambulatorial consolidado' },
+    bpa_i: { label: 'BPA-I', description: 'Boletim de Produção Ambulatorial individualizado' },
+    apac: { label: 'APAC', description: 'Autorização de Procedimento de Alta Complexidade' },
+    aih: { label: 'AIH', description: 'Autorização de Internação Hospitalar' },
+  };
+
+export const productionRecordStatusLabels: Record<
+  ProductionRecordStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  generated: { label: 'Gerado', tone: 'neutral' },
+  validated: { label: 'Validado', tone: 'success' },
+  pending: { label: 'Com pendência', tone: 'warning' },
+  exported: { label: 'Exportado', tone: 'info' },
+  transmitted: { label: 'Transmitido', tone: 'info' },
+  received: { label: 'Recebido', tone: 'info' },
+  rejected: { label: 'Glosado/rejeitado', tone: 'danger' },
+  corrected: { label: 'Corrigido', tone: 'primary' },
+  approved: { label: 'Aprovado', tone: 'success' },
+  paid: { label: 'Pago', tone: 'success' },
+};
+
+export const productionBatchStatusLabels: Record<
+  ProductionBatchStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  draft: { label: 'Rascunho', tone: 'neutral' },
+  approved: { label: 'Aprovado', tone: 'success' },
+  exported: { label: 'Exportado', tone: 'info' },
+  transmitted: { label: 'Transmitido', tone: 'info' },
+  processed: { label: 'Processado', tone: 'success' },
+};
+
+export const productionIssueSeverityLabels: Record<
+  ProductionIssueSeverity,
+  { label: string; tone: BadgeTone }
+> = {
+  error: { label: 'Erro', tone: 'danger' },
+  warning: { label: 'Aviso', tone: 'warning' },
+};
+
+export const productionIssueStatusLabels: Record<
+  ProductionIssueStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  open: { label: 'Aberta', tone: 'warning' },
+  resolved: { label: 'Resolvida', tone: 'success' },
+  waived: { label: 'Dispensada', tone: 'neutral' },
+};
+
+export const productionDeadlineStatusLabels: Record<
+  ProductionDeadlineStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  open: { label: 'Aberta', tone: 'success' },
+  closing: { label: 'Prazo próximo', tone: 'warning' },
+  closed: { label: 'Encerrada', tone: 'neutral' },
+};
+
+export const productionOutcomeLabels: Record<ProductionOutcome, string> = {
+  transmitted: 'Transmitido',
+  received: 'Recebido',
+  accepted: 'Aceito/aprovado',
+  rejected: 'Rejeitado/glosado',
+  paid: 'Pago',
+};
+
+/** Competência AAAAMM → "09/2026". */
+export function formatCompetence(competence: string | undefined | null): string {
+  if (!competence || !/^\d{6}$/.test(competence)) return competence ?? '—';
+  return `${competence.slice(4)}/${competence.slice(0, 4)}`;
+}
+
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function formatCurrency(value: number | undefined | null): string {
+  return value === undefined || value === null ? '—' : brl.format(value);
+}
