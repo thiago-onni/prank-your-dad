@@ -77,9 +77,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -99,9 +101,9 @@ import org.jboss.logging.Logger;
  * pré-auditoria por regras versionadas ({@link PreAuditor}), pendências com {@code rule_version} e
  * tarefa {@code production_issue} na fila {@code auditoria}, correção humana com justificativa
  * (PRO-006), lotes só com registros validados e aprovação humana obrigatória (PRO-010), exportação
- * em layout de referência ({@link ExportLayouts}) via {@link ExportStorage}, retornos oficiais
- * (PRO-008), painel (PRO-009) e prazos por competência (PRO-007). Agentes de IA nunca corrigem,
- * geram/aprovam/exportam lote nem registram retorno.
+ * nos layouts oficiais BPA-Magnético/APAC ou CSV de referência ({@link ExportLayouts}) via {@link
+ * ExportStorage}, retornos oficiais (PRO-008), painel (PRO-009) e prazos por competência (PRO-007).
+ * Agentes de IA nunca corrigem, geram/aprovam/exportam lote nem registram retorno.
  */
 @ApplicationScoped
 public class ProductionServiceImpl implements ProductionService {
@@ -149,6 +151,16 @@ public class ProductionServiceImpl implements ProductionService {
 
   @ConfigProperty(name = "sus.production.export-origin-document", defaultValue = "00000000000000")
   String exportOriginDocument;
+
+  /** Órgão de destino do cabeçalho BPA/APAC ({@code cbc_dst}, 40). */
+  @ConfigProperty(
+      name = "sus.production.export-destination-name",
+      defaultValue = "SECRETARIA MUNICIPAL DE SAUDE")
+  String exportDestinationName;
+
+  /** Indicador do destino ({@code cbc_dst_in}): {@code M} municipal ou {@code E} estadual. */
+  @ConfigProperty(name = "sus.production.export-destination-indicator", defaultValue = "M")
+  String exportDestinationIndicator;
 
   // ---------------------------------------------------------------------
   // registro + pré-auditoria (PRO-001..004)
@@ -905,29 +917,48 @@ public class ProductionServiceImpl implements ProductionService {
               + b.status
               + ": exportação exige lote aprovado por humano (auditor/gestor) e ainda não exportado");
     }
+    boolean bpa = "bpa_c".equals(b.kind) || "bpa_i".equals(b.kind);
+    boolean apac = "apac".equals(b.kind);
     String layout =
         request != null && present(request.layout())
             ? request.layout()
-            : ("bpa_c".equals(b.kind) || "bpa_i".equals(b.kind)
-                ? ExportLayouts.BPA_MAG_REF_V1
-                : ExportLayouts.CSV_REF_V1);
-    if (ExportLayouts.BPA_MAG_REF_V1.equals(layout)
-        && !("bpa_c".equals(b.kind) || "bpa_i".equals(b.kind))) {
-      throw DomainValidationException.field("layout", "bpa_mag_ref_v1 só para BPA-C/BPA-I");
+            : (bpa
+                ? ExportLayouts.BPA_MAG_V202412
+                : apac ? ExportLayouts.APAC_MAG_V202607 : ExportLayouts.CSV_REF_V1);
+    if (ExportLayouts.BPA_MAG_V202412.equals(layout) && !bpa) {
+      throw DomainValidationException.field(
+          "layout", ExportLayouts.BPA_MAG_V202412 + " só para BPA-C/BPA-I");
+    }
+    if (ExportLayouts.APAC_MAG_V202607.equals(layout) && !apac) {
+      throw DomainValidationException.field(
+          "layout", ExportLayouts.APAC_MAG_V202607 + " só para APAC");
     }
     List<ProductionRecord> rows = records.byBatch(b.id);
     List<ExportLayouts.Line> lines = new ArrayList<>();
     for (ProductionRecord r : rows) {
       lines.add(line(r));
     }
-    ExportLayouts.Rendered rendered =
-        ExportLayouts.BPA_MAG_REF_V1.equals(layout)
-            ? ExportLayouts.bpaMag(
-                b.competence,
-                lines,
-                new ExportLayouts.Header(
-                    exportOriginName, exportOriginAcronym, exportOriginDocument))
-            : ExportLayouts.csv(lines);
+    ExportLayouts.Header header =
+        new ExportLayouts.Header(
+            exportOriginName,
+            exportOriginAcronym,
+            exportOriginDocument,
+            exportDestinationName,
+            exportDestinationIndicator,
+            b.tenantId.substring("ibge_".length(), "ibge_".length() + 2),
+            LocalDate.now(ZoneId.of("America/Sao_Paulo")));
+    ExportLayouts.Rendered rendered;
+    try {
+      rendered =
+          switch (layout) {
+            case ExportLayouts.BPA_MAG_V202412 -> ExportLayouts.bpaMag(b.competence, lines, header);
+            case ExportLayouts.APAC_MAG_V202607 ->
+                ExportLayouts.apacMag(b.competence, lines, header);
+            default -> ExportLayouts.csv(lines);
+          };
+    } catch (IllegalArgumentException e) {
+      throw DomainValidationException.field("layout", e.getMessage());
+    }
     String name =
         b.competence
             + "_"
@@ -991,15 +1022,31 @@ public class ProductionServiceImpl implements ProductionService {
         r.citizenIdentifierEnc != null && "CNS".equals(r.citizenIdentifierSystem)
             ? cipher.decrypt(r.citizenIdentifierEnc)
             : null;
+    String citizenCpf =
+        r.citizenIdentifierEnc != null && "CPF".equals(r.citizenIdentifierSystem)
+            ? cipher.decrypt(r.citizenIdentifierEnc)
+            : null;
     String sex = null;
     Integer age = null;
     String ibge = null;
+    ExportLayouts.Patient patient = null;
     CitizenDetail c = r.citizenId == null ? null : safeCitizen(r.citizenId);
     if (c != null) {
       sex = c.sex() == Sex.FEMALE ? "F" : c.sex() == Sex.MALE ? "M" : null;
       age =
           c.birthdate() == null ? null : Period.between(c.birthdate(), r.attendanceDate).getYears();
       ibge = c.address() == null ? null : c.address().cityIbge();
+      CitizenDetail.Address a = c.address();
+      patient =
+          new ExportLayouts.Patient(
+              present(c.legalName()) ? c.legalName() : c.displayName(),
+              c.motherName(),
+              c.birthdate(),
+              a == null ? null : a.postalCode(),
+              a == null ? null : a.street(),
+              a == null ? null : a.number(),
+              a == null ? null : a.complement(),
+              a == null ? null : a.district());
     }
     String authorization =
         "apac".equals(r.kind) ? r.apacNumber : "aih".equals(r.kind) ? r.aihNumber : null;
@@ -1013,13 +1060,15 @@ public class ProductionServiceImpl implements ProductionService {
         r.attendanceDate,
         r.procedureCode,
         citizenCns,
+        citizenCpf,
         sex,
         ibge,
         r.cidCode,
         age,
         r.quantity,
         r.characterOfCare,
-        authorization);
+        authorization,
+        patient);
   }
 
   // ---------------------------------------------------------------------

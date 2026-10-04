@@ -5,11 +5,16 @@
 # format: delimited (cabeçalho na 1ª linha; cabeçalhos normalizados — minúsculas, sem acento,
 #         não alfanuméricos → "_" — e resolvidos por aliases, o primeiro preenchido vence)
 #       | fixed-width (posições 1-based inclusivas; line_filter seleciona as linhas de detalhe)
+#       | dbf (tabela dBase III dos arquivos de disseminação do DATASUS; aceita o .dbc publicado no
+#         FTP — descomprimido pelo DbcDecompressor, porte do blast.c — ou o .dbf expandido pelo
+#         TabWin; nomes de campo resolvidos por aliases como no delimited)
+# row_filter: { column: <coluna canônica>, in: [...] | not_in: [...] } — linhas recusadas não viram
+#         mensagem (a numeração de linha, base da idempotência, é preservada)
 # source_system: valor de source.system (produção: pode ser sobrescrito pela coluna sistema_origem)
 # id_column: identificador estável do registro na fonte (senão "<sha256 do arquivo[0:16]>:<linha>")
 # Idempotência: event_id = f(kind, SHA-256 do arquivo, nº da linha) — reenvio/reprocessamento é
 # descartado pelo event_inbox do core; o mesmo arquivo (mesmo SHA-256) nunca é relido.
-version: "1.0.0"
+version: "2.0.0"
 kinds:
   # ------------------------------------------------------------------------------------------
   # Exportação de produção do sistema de origem (PEC/HIS/sistema próprio) — BPA-C, BPA-I, APAC, AIH.
@@ -51,15 +56,124 @@ kinds:
       id_internacao: [id_internacao, internacao_origem, numero_atendimento_hospitalar]
 
   # ------------------------------------------------------------------------------------------
-  # Retornos de processamento oficial — LAYOUTS "A CONFIRMAR" até a homologação com o faturamento
-  # municipal/DATASUS (nomes de arquivo, colunas, códigos de situação e de motivo, casas decimais).
+  # Retornos OFICIAIS do processamento SIA/SIH — arquivos de disseminação do DATASUS (FTP
+  # ftp.datasus.gov.br/dissemin/publicos/{SIASUS,SIHSUS}/200801_/Dados, um arquivo por UF e mês de
+  # processamento, .dbc; o TabWin expande para .dbf). Estrutura física conferida nos próprios
+  # arquivos oficiais (PARR2401.dbc, RDRR2401.dbc, RJRR2401.dbc, ERRR2401.dbc — SHA-256 em
+  # docs/integracoes/layouts-sia-sih.md) e domínios nos CNV/DBF oficiais do TabWin (TAB_SIA.zip:
+  # INDICA.CNV; TAB_SIH.zip: SITREJEICAO.CNV, MOTBLOQUEIO.CNV, MOTERRO.DBF). Dicionários: Informe
+  # Técnico SIASUS 2019-07 e Informe Técnico SIH 2016-03 (IT_SIHSUS_1603.pdf).
+  # status "oficial": layout e códigos de situação confirmados em fonte oficial.
+  # CHAVE DE CONCILIAÇÃO — A CONFIRMAR com o faturamento municipal: os arquivos oficiais não trazem o
+  # id do registro do barramento; o alvo é o vínculo de origem (sistema_origem_registro +
+  # id_registro_origem) e exige que o sistema de origem exporte a produção com id_registro = nº da
+  # AIH (SIH) ou nº da APAC/autorização (SIA). Os arquivos de disseminação não têm CNS do paciente
+  # em claro e não individualizam BPA-C; linhas sem nº de autorização são ignoradas (row_filter).
+  #
+  # SIA — PA<UF><AAMM>[a-d].dbc: produção ambulatorial processada (uma linha por procedimento
+  # apresentado). PA_INDICA (CNV INDICA): 0 não aprovado, 5 aprovado totalmente, 6 aprovado
+  # parcialmente. PA_MVM = AAAAMM de processamento; PA_QTDAPR = quantidade aprovada.
+  - name: retorno_sia_pa
+    group: retorno
+    entity: production_outcome
+    status: oficial
+    file_pattern: "(?i)PA[A-Z]{2}\\d{4}[a-z]?\\.(dbc|dbf)"
+    format: dbf
+    charset: ISO-8859-1
+    source_system: SIA
+    row_filter: { column: id_registro_origem, not_in: ["", "0000000000000"] }
+    defaults:
+      situacao_prefixo: SIA-PA
+      sistema_origem_registro: PRODUCAO_MUNICIPAL
+      motivo: "Produção não aprovada no processamento do SIA (PA_INDICA = 0)"
+    columns:
+      situacao: [pa_indica]
+      id_registro_origem: [pa_autoriz]
+      mes_processamento: [pa_mvm]
+      competencia: [pa_cmp]
+      cnes: [pa_coduni]
+      procedimento: [pa_proc_id]
+      quantidade_aprovada: [pa_qtdapr]
+
+  # SIH — RD<UF><AAMM>.dbc: AIH reduzidas (AIH aprovadas no processamento do mês) → accepted.
+  - name: retorno_sih_rd
+    group: retorno
+    entity: production_outcome
+    status: oficial
+    file_pattern: "(?i)RD[A-Z]{2}\\d{4}\\.(dbc|dbf)"
+    format: dbf
+    charset: ISO-8859-1
+    source_system: SIH
+    row_filter: { column: id_registro_origem, not_in: [""] }
+    defaults: { situacao_prefixo: SIH-RD, sistema_origem_registro: HIS }
+    columns:
+      id_registro_origem: [n_aih]
+      ano_processamento: [ano_cmpt]
+      mes_processamento: [mes_cmpt]
+      cnes: [cnes]
+      protocolo: [remessa]
+
+  # SIH — RJ<UF><AAMM>.dbc: AIH rejeitadas. ST_SITUAC (CNV SITREJEICAO): 0 AIH autorizada,
+  # 1 AIH rejeitada — só as rejeitadas (1) viram retorno; motivo = ST_MOT_BLO (CNV MOTBLOQUEIO).
+  - name: retorno_sih_rj
+    group: retorno
+    entity: production_outcome
+    status: oficial
+    file_pattern: "(?i)RJ[A-Z]{2}\\d{4}\\.(dbc|dbf)"
+    format: dbf
+    charset: ISO-8859-1
+    source_system: SIH
+    row_filter:
+      - { column: situacao, in: ["1"] }
+      - { column: id_registro_origem, not_in: [""] }
+    defaults:
+      situacao_prefixo: SIH-RJ
+      sistema_origem_registro: HIS
+      motivo: "AIH rejeitada no processamento do SIH (RJ; motivo de bloqueio ST_MOT_BLO, tabela MOTBLOQUEIO.CNV do TAB_SIH)"
+    columns:
+      situacao: [st_situac]
+      id_registro_origem: [n_aih]
+      ano_processamento: [ano_cmpt]
+      mes_processamento: [mes_cmpt]
+      codigo_motivo: [st_mot_blo]
+      cnes: [cnes]
+      protocolo: [remessa]
+
+  # SIH — ER<UF><AAMM>.dbc: AIH rejeitadas com erro de processamento; CO_ERRO (6 dígitos) é o
+  # código da tabela MOTERRO.DBF do TAB_SIH (DS_MOT_ERR = descrição).
+  - name: retorno_sih_er
+    group: retorno
+    entity: production_outcome
+    status: oficial
+    file_pattern: "(?i)ER[A-Z]{2}\\d{4}\\.(dbc|dbf)"
+    format: dbf
+    charset: ISO-8859-1
+    source_system: SIH
+    row_filter: { column: id_registro_origem, not_in: [""] }
+    defaults:
+      situacao_prefixo: SIH-ER
+      sistema_origem_registro: HIS
+      motivo: "AIH rejeitada com erro no processamento do SIH (ER; código CO_ERRO, tabela MOTERRO.DBF do TAB_SIH)"
+    columns:
+      id_registro_origem: [aih]
+      ano_processamento: [ano]
+      mes_processamento: [mes]
+      codigo_motivo: [co_erro]
+      cnes: [cnes]
+      protocolo: [remessa]
+
+  # ------------------------------------------------------------------------------------------
+  # ALTERNATIVA LOCAL (CSV configurável) — planilha/relatório de retorno montado pelo faturamento
+  # municipal a partir dos relatórios do SIA/SIHD. NÃO é layout oficial do DATASUS: colunas por
+  # aliases, situação por texto livre (ver lookup "situacao" do mapeamento). Continua "A CONFIRMAR"
+  # com o faturamento (nomes de coluna e códigos de motivo locais).
   # Uma linha = um retorno (ProductionOutcomeRegistration). Alvo (exatamente um, nesta precedência):
   # id do barramento (prod_…) → registro de origem (sistema_origem_registro + id_registro_origem) → lote.
   - name: retorno_sia_csv
     group: retorno
     entity: production_outcome
     status: A CONFIRMAR
-    file_pattern: "(?i).*(sia|bpa|apac).*\\.csv"
+    file_pattern: "(?i).*(sia|sih|bpa|apac|aih).*\\.csv"
     format: delimited
     delimiter: ";"
     charset: ISO-8859-1
@@ -80,28 +194,3 @@ kinds:
       valor_pago: [valor_pago, vl_pago, valor_aprovado, vl_aprovado]
       quantidade_aprovada: [quantidade_aprovada, qtd_aprovada, qtde_aprovada, qt_aprovada]
       protocolo: [protocolo, numero_protocolo, nu_protocolo]
-
-  # SIH: arquivo texto de largura fixa (detalhe = tipo "02"; "01" cabeçalho e "99" rodapé ignorados).
-  # Situação em 2 letras (PG pago, AP aprovado, RJ rejeitado, GL glosado) e valor com 2 casas
-  # implícitas. O alvo é o nº da AIH como registro de origem (o sistema hospitalar exporta a AIH
-  # com id_registro = nº da AIH) — A CONFIRMAR.
-  - name: retorno_sih_txt
-    group: retorno
-    entity: production_outcome
-    status: A CONFIRMAR
-    file_pattern: "(?i).*sih.*\\.txt"
-    format: fixed-width
-    charset: ISO-8859-1
-    source_system: SIH
-    line_filter: { start: 1, end: 2, equals: "02" }
-    defaults: { sistema_origem_registro: HIS, valor_casas_implicitas: "2" }
-    columns:
-      id_registro_origem: { start: 3, end: 15 }
-      competencia: { start: 16, end: 21 }
-      data_processamento: { start: 22, end: 29 }
-      situacao: { start: 30, end: 31 }
-      codigo_motivo: { start: 32, end: 35 }
-      valor_pago: { start: 36, end: 47 }
-      quantidade_aprovada: { start: 48, end: 53 }
-      protocolo: { start: 54, end: 69 }
-      motivo: { start: 70, end: 129 }

@@ -228,7 +228,7 @@ productionBatches.push({
   approved_at: '2026-09-04T15:20:00-03:00',
   approval_justification: 'Conferido com o relatório do e-SUS APS da competência.',
   export: {
-    layout: 'bpa_mag_ref_v1',
+    layout: 'bpa_mag_v202412',
     file_ref: 'exports/ibge_3143302/202608/bpa_i_2126672.txt',
     sha256: 'b5d4045c3f466fa91fe2cc6abe79232a1a57cdf104f7a26e716e0a1e2789df78',
     size_bytes: 2_310,

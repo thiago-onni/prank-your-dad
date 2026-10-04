@@ -43,8 +43,9 @@ import java.util.Set;
  *       APAC, AIH) → {@code ProductionRecordRegistration}, mesma porta do {@code POST
  *       /production/records};
  *   <li>{@code production_outcome}: retornos de processamento SIA/SIH (rejeições/glosas, aceites,
- *       pagos) → {@code ProductionOutcomeRegistration}. Layouts marcados <b>A CONFIRMAR</b> até a
- *       homologação.
+ *       pagos) → {@code ProductionOutcomeRegistration}. Layouts oficiais: arquivos de disseminação
+ *       do DATASUS (SIA {@code PA}, SIH {@code RD}/{@code RJ}/{@code ER}, {@code .dbc}/{@code
+ *       .dbf}); a alternativa CSV local segue marcada <b>A CONFIRMAR</b>.
  * </ul>
  *
  * <p>Publica no tópico de ingestão {@code sus.ingest.production.v1} (consumidor do core {@code
@@ -186,6 +187,8 @@ public class SiaConnector extends AbstractConnector {
     canonical.put("_source_system", system);
     SiaRules.applyImplicitDecimals(
         canonical, "valor_pago", canonical.get("valor_casas_implicitas"));
+    SiaRules.applySituationPrefix(canonical);
+    SiaRules.applyProcessingMonth(canonical);
     canonical.put("_source_record_id", raw.sourceRecordId());
     canonical.put(
         "_source_record_version",

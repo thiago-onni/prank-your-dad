@@ -760,10 +760,15 @@ export interface paths {
          *     `production-exports` com SSE, chave `<tenant>/<competência>/<lote>/<arquivo>`, sem sobrescrita) e
          *     devolve a referência (`file://` ou `s3://`) e o SHA-256. O arquivo contém CNS em claro: acesso ao
          *     diretório/bucket restrito à credencial do core.
-         *     Layouts: `bpa_mag_ref_v1` (BPA-Mag simplificado — **layout de referência a homologar** com o
-         *     validador oficial; só BPA-C/BPA-I) e `csv_ref_v1` (qualquer tipo). A transmissão oficial continua
-         *     no sistema oficial (SIA/SIH); o barramento só marca `exported`. Papel: auditor. Agente de IA → 403.
-         *     Lote não aprovado → 409.
+         *     O arquivo contém também os dados nominais do paciente exigidos pelo layout (nome, nascimento, endereço).
+         *     Layouts: `bpa_mag_v202412` ("Layout de Exportação BPA" do DATASUS/SIA, 12/2024 — cabeçalho `#BPA#`,
+         *     BPA-C tipo 02 e BPA-I tipo 03, campo de controle; só BPA-C/BPA-I), `apac_mag_v202607` (layout de
+         *     interface texto APAC/SIA, 07/2026 — registros 01, 14 e 13; só APAC; partes variáveis de laudo e campos
+         *     de autorização são completados no APAC-Mag/SIA) e `csv_ref_v1` (CSV de referência, qualquer tipo; AIH
+         *     só neste — layout SISAIH01 não implementado). Fontes e pendências de conferência em
+         *     `docs/integracoes/layouts-sia-sih.md`. A transmissão oficial continua no sistema oficial (SIA/SIH); o
+         *     barramento só marca `exported`. Papel: auditor. Agente de IA → 403. Lote não aprovado → 409; layout
+         *     incompatível com o tipo do lote → 422.
          */
         post: operations["exportProductionBatch"];
         delete?: never;
@@ -2033,10 +2038,10 @@ export interface components {
         };
         ProductionBatchExportRequest: {
             /**
-             * @description Padrão: bpa_mag_ref_v1 para BPA-C/BPA-I; csv_ref_v1 para APAC/AIH
+             * @description Padrão: bpa_mag_v202412 para BPA-C/BPA-I; apac_mag_v202607 para APAC; csv_ref_v1 para AIH
              * @enum {string}
              */
-            layout?: "bpa_mag_ref_v1" | "csv_ref_v1";
+            layout?: "bpa_mag_v202412" | "apac_mag_v202607" | "csv_ref_v1";
         };
         /** @enum {string} */
         ProductionBatchStatus: "draft" | "approved" | "exported" | "transmitted" | "processed";

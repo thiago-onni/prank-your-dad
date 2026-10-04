@@ -24,9 +24,12 @@ import java.util.regex.Pattern;
 /**
  * Layout versionado (YAML) dos arquivos do conector SIA/SIH. Cada {@link Kind} declara o grupo
  * (pasta) de origem, o padrão do nome do arquivo, o formato ({@code delimited} com cabeçalho e
- * aliases normalizados, como no SISREG, ou {@code fixed-width} com posições 1-based inclusivas), o
- * {@code source_system}, a entidade canônica e, para retornos, o status de homologação ({@code A
- * CONFIRMAR} até validar com o faturamento/DATASUS).
+ * aliases normalizados, como no SISREG; {@code fixed-width} com posições 1-based inclusivas; ou
+ * {@code dbf} — tabela dBase dos arquivos de disseminação do DATASUS, {@code .dbf} ou {@code .dbc},
+ * com os nomes de campo resolvidos por aliases como no {@code delimited}), o {@code source_system},
+ * a entidade canônica e, para retornos, o status ({@code oficial} quando confirmado em fonte
+ * oficial do DATASUS; {@code A CONFIRMAR} enquanto não confirmado nem homologado com o
+ * faturamento).
  *
  * <pre>
  * version: "1.0.0"
@@ -35,7 +38,7 @@ import java.util.regex.Pattern;
  *     group: producao                # producao | retorno
  *     entity: production_record      # production_record | production_outcome
  *     file_pattern: "(?i).*producao.*\\.csv"
- *     format: delimited              # delimited | fixed-width
+ *     format: delimited              # delimited | fixed-width | dbf
  *     delimiter: ";"
  *     charset: UTF-8
  *     source_system: ORIGEM
@@ -44,11 +47,14 @@ import java.util.regex.Pattern;
  *     defaults: { quantidade: "1" }
  *     columns:
  *       id_registro: [id_registro, codigo, id]          # delimited: aliases (coalesce)
- *   - name: retorno_sih_txt
+ *   - name: retorno_local_txt
  *     format: fixed-width
  *     line_filter: { start: 1, end: 2, equals: "02" } # só linhas de detalhe
  *     columns:
  *       numero_aih: { start: 3, end: 15 }              # fixed-width: posições
+ *   - name: retorno_sih_rj
+ *     format: dbf                                       # RJ<UF><AAMM>.dbc/.dbf (DATASUS)
+ *     row_filter: { column: situacao, in: ["1"] }      # filtro por coluna canônica
  * </pre>
  */
 public final class SiaLayout {
@@ -74,6 +80,25 @@ public final class SiaLayout {
     }
   }
 
+  /**
+   * Filtro de linha por coluna canônica (qualquer formato): {@code in} = valores aceitos; {@code
+   * not_in} = valores recusados (comparação após trim). Linhas recusadas não viram mensagem, mas
+   * mantêm a numeração (idempotência por arquivo + linha).
+   */
+  public record RowFilter(String column, List<String> in, List<String> notIn) {
+    public RowFilter {
+      in = in == null ? List.of() : List.copyOf(in);
+      notIn = notIn == null ? List.of() : List.copyOf(notIn);
+    }
+
+    boolean accepts(Map<String, String> canonical) {
+      String v = canonical.getOrDefault(column, "");
+      v = v == null ? "" : v.trim();
+      if (!in.isEmpty() && !in.contains(v)) return false;
+      return !notIn.contains(v);
+    }
+  }
+
   /** Filtro de linha em largura fixa (ex.: tipo de registro "02" = detalhe). */
   public record LineFilter(Position position, String equalsValue) {
     boolean accepts(String line) {
@@ -95,11 +120,13 @@ public final class SiaLayout {
       String idColumn,
       String versionColumn,
       LineFilter lineFilter,
+      List<RowFilter> rowFilters,
       Map<String, String> defaults,
       Map<String, List<String>> aliases,
       Map<String, Position> positions) {
 
     public Kind {
+      rowFilters = rowFilters == null ? List.of() : List.copyOf(rowFilters);
       defaults = defaults == null ? Map.of() : Map.copyOf(defaults);
       aliases = aliases == null ? Map.of() : Map.copyOf(aliases);
       positions = positions == null ? Map.of() : Map.copyOf(positions);
@@ -113,7 +140,20 @@ public final class SiaLayout {
       return "fixed-width".equalsIgnoreCase(format);
     }
 
-    /** Layout ainda não homologado (retornos oficiais): marcado "A CONFIRMAR". */
+    /** Tabela dBase ({@code .dbf}) ou DBC do DATASUS (descomprimido antes da leitura). */
+    public boolean dbf() {
+      return "dbf".equalsIgnoreCase(format);
+    }
+
+    /** A linha canônica passa nos {@code row_filter} do kind. */
+    public boolean accepts(Map<String, String> canonical) {
+      for (RowFilter f : rowFilters) {
+        if (!f.accepts(canonical)) return false;
+      }
+      return true;
+    }
+
+    /** Layout sem confirmação em fonte oficial nem homologação local: status "A CONFIRMAR". */
     public boolean pendingConfirmation() {
       return status != null && status.toUpperCase(Locale.ROOT).contains("CONFIRMAR");
     }
@@ -124,6 +164,9 @@ public final class SiaLayout {
      */
     public List<Map<String, String>> read(byte[] content, Charset fallback) {
       Charset cs = charset == null ? fallback : Charset.forName(charset);
+      if (dbf()) {
+        return DbfReader.read(content, cs).rows();
+      }
       if (!fixedWidth()) {
         return new DelimitedParser(delimiter, true, List.of()).parse(content, cs);
       }
@@ -234,6 +277,20 @@ public final class SiaLayout {
                 new Position(lf.path("start").asInt(1), lf.path("end").asInt(1)),
                 lf.path("equals").asText(""));
       }
+      List<RowFilter> rowFilters = new ArrayList<>();
+      JsonNode rf = k.get("row_filter");
+      if (rf != null) {
+        List<JsonNode> items = new ArrayList<>();
+        if (rf.isArray()) rf.forEach(items::add);
+        else items.add(rf);
+        for (JsonNode f : items) {
+          rowFilters.add(
+              new RowFilter(f.path("column").asText(), texts(f.get("in")), texts(f.get("not_in"))));
+        }
+      }
+      if (!List.of("delimited", "fixed-width", "dbf").contains(format.toLowerCase(Locale.ROOT))) {
+        throw new IllegalArgumentException("kind " + name + ": format inválido " + format);
+      }
       String delimiter = k.path("delimiter").asText(";");
       kinds.add(
           new Kind(
@@ -249,11 +306,20 @@ public final class SiaLayout {
               k.path("id_column").asText(null),
               k.path("version_column").asText(null),
               filter,
+              rowFilters,
               defaults,
               aliases,
               positions));
     }
     return new SiaLayout(root.path("version").asText("1.0.0"), kinds);
+  }
+
+  private static List<String> texts(JsonNode node) {
+    List<String> out = new ArrayList<>();
+    if (node == null || node.isNull()) return out;
+    if (node.isArray()) node.forEach(v -> out.add(v.asText().trim()));
+    else out.add(node.asText().trim());
+    return out;
   }
 
   public String version() {

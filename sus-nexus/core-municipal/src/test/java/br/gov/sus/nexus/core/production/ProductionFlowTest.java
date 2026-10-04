@@ -378,7 +378,7 @@ class ProductionFlowTest {
         .then()
         .statusCode(200)
         .body("status", equalTo("exported"))
-        .body("export.layout", equalTo("bpa_mag_ref_v1"))
+        .body("export.layout", equalTo("bpa_mag_v202412"))
         .body("export.lines", equalTo(2))
         .body("export.lines_missing_identifiers", equalTo(0))
         .body("export.file_ref", startsWith("file:"));

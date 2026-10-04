@@ -146,8 +146,9 @@ function SensitiveFileWarning() {
 
 function ExportCard({ batch, canExport }: { batch: ProductionBatch; canExport: boolean }) {
   const isBpa = batch.kind === 'bpa_c' || batch.kind === 'bpa_i';
+  const isApac = batch.kind === 'apac';
   const [layout, setLayout] = useState<ProductionExportLayout>(
-    isBpa ? 'bpa_mag_ref_v1' : 'csv_ref_v1',
+    isBpa ? 'bpa_mag_v202412' : isApac ? 'apac_mag_v202607' : 'csv_ref_v1',
   );
   const mutation = useExportProductionBatch();
   const { toast } = useToast();
@@ -236,7 +237,8 @@ function ExportCard({ batch, canExport }: { batch: ProductionBatch; canExport: b
               value={layout}
               onValueChange={(v) => setLayout(v as ProductionExportLayout)}
               options={[
-                ...(isBpa ? [{ value: 'bpa_mag_ref_v1', label: t.production.layoutBpaMag }] : []),
+                ...(isBpa ? [{ value: 'bpa_mag_v202412', label: t.production.layoutBpaMag }] : []),
+                ...(isApac ? [{ value: 'apac_mag_v202607', label: t.production.layoutApac }] : []),
                 { value: 'csv_ref_v1', label: t.production.layoutCsv },
               ]}
               className="max-w-md"

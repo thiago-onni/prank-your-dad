@@ -68,7 +68,59 @@ class SiaConnectorTest {
 
   private static final String PRODUCTION_FILE = "producao_esus_202609.csv";
   private static final String SIA_RETURN = "retorno_sia_202609.csv";
-  private static final String SIH_RETURN = "retorno_sih_202609.txt";
+
+  /** RJ sintético (AIH rejeitadas do SIH) no formato .dbc do DATASUS: nome oficial RJ<UF><AAMM>. */
+  private static final String SIH_RETURN = "RJMG2609.dbc";
+
+  private static final List<DatasusFiles.Col> RJ_COLS =
+      List.of(
+          new DatasusFiles.Col("UF_ZI", 6),
+          new DatasusFiles.Col("ANO_CMPT", 4),
+          new DatasusFiles.Col("MES_CMPT", 2),
+          new DatasusFiles.Col("N_AIH", 13),
+          new DatasusFiles.Col("CNES", 7),
+          new DatasusFiles.Col("ST_SITUAC", 1),
+          new DatasusFiles.Col("ST_BLOQ", 1),
+          new DatasusFiles.Col("ST_MOT_BLO", 2),
+          new DatasusFiles.Col("REMESSA", 21));
+
+  /** Duas AIH rejeitadas (ST_SITUAC 1) e uma autorizada (0, filtrada pelo layout). */
+  static byte[] sihRejectedDbc() {
+    return DatasusFiles.dbc(
+        DatasusFiles.dbf(
+            RJ_COLS,
+            List.of(
+                List.of(
+                    "310000",
+                    "2026",
+                    "09",
+                    "3126200098765",
+                    "2206997",
+                    "1",
+                    "2",
+                    "62",
+                    "HE31000001N202609.DTS"),
+                List.of(
+                    "310000",
+                    "2026",
+                    "09",
+                    "3126200098766",
+                    "2206997",
+                    "0",
+                    "0",
+                    "00",
+                    "HE31000001N202609.DTS"),
+                List.of(
+                    "310000",
+                    "2026",
+                    "09",
+                    "3126200098767",
+                    "2206997",
+                    "1",
+                    "2",
+                    "01",
+                    "HE31000001N202609.DTS"))));
+  }
 
   @Inject SiaConnector connector;
   @Inject SiaRoutes routes;
@@ -165,6 +217,7 @@ class SiaConnectorTest {
   }
 
   private static byte[] resource(String name) throws IOException {
+    if (SIH_RETURN.equals(name)) return sihRejectedDbc();
     try (InputStream in =
         SiaConnectorTest.class.getClassLoader().getResourceAsStream("samples/" + name)) {
       assertThat(in).as(name).isNotNull();
@@ -197,14 +250,38 @@ class SiaConnectorTest {
         .containsExactly("production_record", "production_outcome");
     assertThat(connector.layout().kinds())
         .extracting(SiaLayout.Kind::name)
-        .containsExactly("producao", "retorno_sia_csv", "retorno_sih_txt");
+        .containsExactly(
+            "producao",
+            "retorno_sia_pa",
+            "retorno_sih_rd",
+            "retorno_sih_rj",
+            "retorno_sih_er",
+            "retorno_sia_csv");
+    // layouts oficiais (dbf DATASUS) confirmados; a alternativa CSV local segue A CONFIRMAR
     assertThat(connector.layout().require("retorno_sia_csv").pendingConfirmation()).isTrue();
-    assertThat(connector.layout().require("retorno_sih_txt").pendingConfirmation()).isTrue();
+    for (String k :
+        List.of("retorno_sia_pa", "retorno_sih_rd", "retorno_sih_rj", "retorno_sih_er")) {
+      assertThat(connector.layout().require(k).pendingConfirmation()).as(k).isFalse();
+      assertThat(connector.layout().require(k).dbf()).as(k).isTrue();
+    }
     assertThat(connector.layout().require("producao").pendingConfirmation()).isFalse();
-    assertThat(connector.layout().forFile("retorno", "RETORNO_SIH_202609.TXT"))
+    assertThat(connector.layout().forFile("retorno", "RJMG2609.dbc"))
         .get()
         .extracting(SiaLayout.Kind::name)
-        .isEqualTo("retorno_sih_txt");
+        .isEqualTo("retorno_sih_rj");
+    assertThat(connector.layout().forFile("retorno", "PASP2609b.DBC"))
+        .get()
+        .extracting(SiaLayout.Kind::name)
+        .isEqualTo("retorno_sia_pa");
+    assertThat(connector.layout().forFile("retorno", "RDMG2609.dbf"))
+        .get()
+        .extracting(SiaLayout.Kind::name)
+        .isEqualTo("retorno_sih_rd");
+    assertThat(connector.layout().forFile("retorno", "ERMG2609.dbc"))
+        .get()
+        .extracting(SiaLayout.Kind::name)
+        .isEqualTo("retorno_sih_er");
+    assertThat(connector.layout().forFile("retorno", "RETORNO_SIH_202609.TXT")).isEmpty();
     assertThat(connector.layout().forFile("producao", "retorno_sih_202609.txt"))
         .get()
         .extracting(SiaLayout.Kind::name)
@@ -277,7 +354,7 @@ class SiaConnectorTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void retornosSiaCsvESihLarguraFixa() throws IOException {
+  void retornosSiaCsvESihRjDbc() throws IOException {
     List<RawMessage> sia =
         routes.toMessages(
             connector.layout().require("retorno_sia_csv"),
@@ -319,30 +396,184 @@ class SiaConnectorTest {
 
     List<RawMessage> sih =
         routes.toMessages(
-            connector.layout().require("retorno_sih_txt"),
+            connector.layout().require("retorno_sih_rj"),
             SIH_RETURN,
             "c".repeat(64),
             resource(SIH_RETURN),
             StandardCharsets.UTF_8);
-    assertThat(sih).hasSize(2); // cabeçalho "01" e rodapé "99" ignorados
-    CanonicalBatch sihPaid = connector.transform(sih.get(0));
-    Map<String, Object> pg = sihPaid.records().get(0).payload();
-    assertThat(pg)
-        .containsEntry("outcome", "paid")
-        .containsEntry("processed_at", "2026-09-30T00:00:00-03:00")
-        .containsEntry("protocol_number", "PROTSIH000000001")
-        .containsEntry("approved_quantity", 1);
-    assertThat((BigDecimal) pg.get("paid_amount")).isEqualByComparingTo("1234.56");
-    assertThat((Map<String, Object>) pg.get("record_source"))
+    assertThat(sih).hasSize(2); // ST_SITUAC 0 (AIH autorizada) filtrada pelo layout
+    assertThat(sih.get(1).sourceRecordId())
+        .isEqualTo("c".repeat(16) + ":3"); // numeração preservada
+    CanonicalBatch rjBatch = connector.transform(sih.get(0));
+    Map<String, Object> rj = rjBatch.records().get(0).payload();
+    assertThat(rj)
+        .containsEntry("outcome", "rejected")
+        .containsEntry("reason_code", "62")
+        .containsEntry("processed_at", "2026-09-01T00:00:00-03:00")
+        .containsEntry("protocol_number", "HE31000001N202609.DTS")
+        .doesNotContainKey("paid_amount");
+    assertThat((String) rj.get("reason")).contains("MOTBLOQUEIO");
+    assertThat((Map<String, Object>) rj.get("record_source"))
         .containsEntry("system", "HIS")
         .containsEntry("source_record_id", "3126200098765");
-    assertThat((Map<String, Object>) pg.get("source")).containsEntry("system", "SIH");
-    assertThat(connector.validate(sihPaid).isValid()).isTrue();
-    Map<String, Object> gl = connector.transform(sih.get(1)).records().get(0).payload();
-    assertThat(gl)
+    assertThat((Map<String, Object>) rj.get("source")).containsEntry("system", "SIH");
+    assertThat(rjBatch.attributes()).containsEntry(SiaConnector.ATTR_LAYOUT_STATUS, "oficial");
+    assertThat(connector.validate(rjBatch).isValid()).isTrue();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void retornosOficiaisDatasusPaRdErEmDbfEDbc() throws IOException {
+    // SIA — PA<UF><AAMM>.dbf: PA_INDICA 0/5/6; linhas sem nº de autorização (BPA) ignoradas
+    byte[] pa =
+        DatasusFiles.dbf(
+            List.of(
+                new DatasusFiles.Col("PA_CODUNI", 7),
+                new DatasusFiles.Col("PA_MVM", 6),
+                new DatasusFiles.Col("PA_CMP", 6),
+                new DatasusFiles.Col("PA_PROC_ID", 10),
+                new DatasusFiles.Col("PA_DOCORIG", 1),
+                new DatasusFiles.Col("PA_AUTORIZ", 13),
+                new DatasusFiles.Col("PA_QTDPRO", 11),
+                new DatasusFiles.Col("PA_QTDAPR", 11),
+                new DatasusFiles.Col("PA_INDICA", 1)),
+            List.of(
+                List.of(
+                    "2206997",
+                    "202609",
+                    "202608",
+                    "0301010030",
+                    "C",
+                    "0000000000000",
+                    "18",
+                    "18",
+                    "5"),
+                List.of(
+                    "2206997",
+                    "202609",
+                    "202608",
+                    "0304020010",
+                    "P",
+                    "3126200000001",
+                    "1",
+                    "0",
+                    "0"),
+                List.of(
+                    "2206997",
+                    "202609",
+                    "202608",
+                    "0304020010",
+                    "P",
+                    "3126200000002",
+                    "4",
+                    "3",
+                    "6"),
+                List.of(
+                    "2206997",
+                    "202609",
+                    "202608",
+                    "0304020010",
+                    "P",
+                    "3126200000003",
+                    "1",
+                    "1",
+                    "5")),
+            List.of(3)); // registro excluído no DBF
+    List<RawMessage> paRows =
+        routes.toMessages(
+            connector.layout().require("retorno_sia_pa"),
+            "PAMG2609.dbf",
+            "d".repeat(64),
+            pa,
+            StandardCharsets.UTF_8);
+    assertThat(paRows).hasSize(2);
+    Map<String, Object> notApproved = connector.transform(paRows.get(0)).records().get(0).payload();
+    assertThat(notApproved)
         .containsEntry("outcome", "rejected")
-        .containsEntry("reason_code", "0042")
-        .containsEntry("reason", "AIH COM PERMANÊNCIA INCOMPATÍVEL");
+        .containsEntry("processed_at", "2026-09-01T00:00:00-03:00")
+        .containsEntry("approved_quantity", 0);
+    assertThat((String) notApproved.get("reason")).contains("PA_INDICA = 0");
+    assertThat((Map<String, Object>) notApproved.get("record_source"))
+        .containsEntry("system", "PRODUCAO_MUNICIPAL")
+        .containsEntry("source_record_id", "3126200000001");
+    assertThat((Map<String, Object>) notApproved.get("source")).containsEntry("system", "SIA");
+    CanonicalBatch partialBatch = connector.transform(paRows.get(1));
+    assertThat(partialBatch.records().get(0).payload())
+        .containsEntry("outcome", "accepted")
+        .containsEntry("approved_quantity", 3);
+    assertThat(connector.validate(partialBatch).isValid()).isTrue();
+
+    // SIH — RD<UF><AAMM>.dbc (AIH aprovadas) e ER<UF><AAMM>.dbc (rejeitadas com erro)
+    byte[] rd =
+        DatasusFiles.dbc(
+            DatasusFiles.dbf(
+                List.of(
+                    new DatasusFiles.Col("ANO_CMPT", 4),
+                    new DatasusFiles.Col("MES_CMPT", 2),
+                    new DatasusFiles.Col("N_AIH", 13),
+                    new DatasusFiles.Col("CNES", 7),
+                    new DatasusFiles.Col("VAL_TOT", 14),
+                    new DatasusFiles.Col("REMESSA", 21)),
+                List.of(
+                    List.of(
+                        "2026",
+                        "09",
+                        "3126200098770",
+                        "2206997",
+                        "659.32",
+                        "HE31000001N202609.DTS"))));
+    List<RawMessage> rdRows =
+        routes.toMessages(
+            connector.layout().require("retorno_sih_rd"),
+            "RDMG2609.dbc",
+            "e".repeat(64),
+            rd,
+            StandardCharsets.UTF_8);
+    assertThat(rdRows).hasSize(1);
+    Map<String, Object> approved = connector.transform(rdRows.get(0)).records().get(0).payload();
+    assertThat(approved)
+        .containsEntry("outcome", "accepted")
+        .containsEntry("processed_at", "2026-09-01T00:00:00-03:00")
+        .containsEntry("protocol_number", "HE31000001N202609.DTS");
+    assertThat((Map<String, Object>) approved.get("record_source"))
+        .containsEntry("system", "HIS")
+        .containsEntry("source_record_id", "3126200098770");
+
+    byte[] er =
+        DatasusFiles.dbc(
+            DatasusFiles.dbf(
+                List.of(
+                    new DatasusFiles.Col("SEQUENCIA", 9),
+                    new DatasusFiles.Col("REMESSA", 21),
+                    new DatasusFiles.Col("CNES", 7),
+                    new DatasusFiles.Col("AIH", 13),
+                    new DatasusFiles.Col("ANO", 4),
+                    new DatasusFiles.Col("MES", 2),
+                    new DatasusFiles.Col("CO_ERRO", 6)),
+                List.of(
+                    List.of(
+                        "1",
+                        "HM31000001N202609.DTS",
+                        "2206997",
+                        "3126200098771",
+                        "2026",
+                        "9",
+                        "060082"))));
+    List<RawMessage> erRows =
+        routes.toMessages(
+            connector.layout().require("retorno_sih_er"),
+            "ERMG2609.dbc",
+            "f".repeat(64),
+            er,
+            StandardCharsets.UTF_8);
+    Map<String, Object> erro = connector.transform(erRows.get(0)).records().get(0).payload();
+    assertThat(erro)
+        .containsEntry("outcome", "rejected")
+        .containsEntry("reason_code", "060082")
+        .containsEntry("processed_at", "2026-09-01T00:00:00-03:00");
+    assertThat((String) erro.get("reason")).contains("MOTERRO");
+    assertThat((Map<String, Object>) erro.get("record_source"))
+        .containsEntry("source_record_id", "3126200098771");
   }
 
   @Test

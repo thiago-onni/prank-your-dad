@@ -11,22 +11,32 @@ ingestão `sus.ingest.production.v1` (consumidor `ingest-production-in`, `Produc
 O conector **não transmite nada ao DATASUS**: a transmissão oficial continua sendo feita pelo faturamento
 municipal no sistema oficial; o barramento só exporta lotes (core) e lê de volta os retornos (este conector).
 
-> **Premissa:** os layouts dos **retornos** (nomes de arquivo, colunas/posições, códigos de situação e de
-> motivo, casas decimais, identificação do registro) estão marcados **"A CONFIRMAR"** até a homologação com o
-> faturamento/DATASUS. Tudo é parametrizável em YAML versionado — ver [Itens a validar](#itens-a-validar-na-homologação).
+> **Retornos oficiais:** o que o DATASUS disponibiliza de forma oficial e verificável como resultado do
+> processamento são os **arquivos de disseminação** por UF e mês de processamento (FTP
+> `ftp.datasus.gov.br/dissemin/publicos/{SIASUS,SIHSUS}/200801_/Dados`, `.dbc`; o TabWin expande para `.dbf`):
+> SIA `PA` (produção ambulatorial com indicador de aprovação `PA_INDICA` e quantidade aprovada) e SIH `RD`
+> (AIH aprovadas), `RJ` (AIH rejeitadas, `ST_SITUAC`/`ST_MOT_BLO`) e `ER` (AIH rejeitadas com erro,
+> `CO_ERRO`). Esses layouts (kinds `retorno_sia_pa`, `retorno_sih_rd`, `retorno_sih_rj`, `retorno_sih_er`) estão
+> **confirmados** (estrutura física dos próprios arquivos oficiais; códigos nos CNV/DBF oficiais do TabWin) —
+> fontes e tabela de campos em [`docs/integracoes/layouts-sia-sih.md`](../../docs/integracoes/layouts-sia-sih.md).
+> Seguem **"A CONFIRMAR"**: (1) a **chave de conciliação** — os arquivos oficiais não trazem o id do barramento;
+> o alvo é o vínculo de origem com `id_registro_origem` = nº da AIH/APAC, o que exige que o sistema de origem
+> exporte a produção com esse id; (2) a alternativa **CSV local** `retorno_sia_csv` (planilha do faturamento, não
+> é layout DATASUS); (3) os relatórios de crítica/glosa dos aplicativos SIA/SIHD/SISAIH01 (não localizei layout
+> oficial publicado desses relatórios; a documentação do SIA/SIHD não foi acessível pela rede deste ambiente).
 
 | Metadado | Valor |
 |---|---|
 | connector_id / version | `connector-sia` / 0.1.0 |
 | source_system | `SIA` (retornos SIH: `SIH`; produção: `source_system` do layout ou coluna `sistema_origem`) |
 | supported_entities | `production_record`, `production_outcome` (`CanonicalBatch.PRODUCTION_*`) |
-| supported_protocols | file-csv, file-txt (largura fixa) → Kafka `sus.ingest.production.v1`; comandos em `sus.integration.command.v1` |
+| supported_protocols | file-csv, file-dbf/dbc (DATASUS), file-txt (largura fixa, configurável) → Kafka `sus.ingest.production.v1`; comandos em `sus.integration.command.v1` |
 | authentication_method | FILE_SYSTEM (pasta monitorada / SFTP montado); Kafka mTLS; core por client credentials (`connector-sia`) |
 | required_network_access | Kafka (9093), core-municipal:8080 (ledger espelho/heartbeat/reconciliação), MinIO (raw zone) |
 | data_classification | HIGHLY_RESTRICTED (CNS/CPF de cidadão e profissional nas exportações) |
 | polling_or_event_mode | FILE_DROP |
 | retry_policy | `connector.retry.*` (5 tentativas, 2 s ×2, máx. 5 min) — nack/timeout do Kafka é transitório; erro de layout/mapeamento/validação vai direto à DLQ |
-| field_mapping_version | `mappings/sia-production-record-1.0.0.yaml`, `mappings/sia-production-outcome-1.0.0.yaml` + `layouts/sia-layouts.yaml` 1.0.0 |
+| field_mapping_version | `mappings/sia-production-record-1.0.0.yaml`, `mappings/sia-production-outcome-1.1.0.yaml` + `layouts/sia-layouts.yaml` 2.0.0 |
 | porta HTTP | 8099 (`/q/health/ready`, `/q/metrics`) |
 
 ## Fluxo
@@ -63,8 +73,22 @@ Kafka sus.integration.command.v1 → ReprocessCommandHandler do SDK (reprocessam
 | kind | grupo / pasta | formato | entidade | status |
 |---|---|---|---|---|
 | `producao` | `producao` (`SIA_PRODUCTION_DIR`) | CSV `;` UTF-8 com cabeçalho (aliases) | `production_record` | homologado (layout do sistema de origem do município) |
-| `retorno_sia_csv` | `retorno` (`SIA_RETURNS_DIR`), `*sia*/*bpa*/*apac*.csv` | CSV `;` ISO-8859-1 | `production_outcome` | **A CONFIRMAR** |
-| `retorno_sih_txt` | `retorno`, `*sih*.txt` | largura fixa (detalhe `02`; `01`/`99` ignorados) | `production_outcome` | **A CONFIRMAR** |
+| `retorno_sia_pa` | `retorno` (`SIA_RETURNS_DIR`), `PA<UF><AAMM>[a-d].dbc\|.dbf` | dBase III (DATASUS), ISO-8859-1 | `production_outcome` | **oficial** (chave de conciliação A CONFIRMAR) |
+| `retorno_sih_rd` | `retorno`, `RD<UF><AAMM>.dbc\|.dbf` | dBase III (DATASUS) | `production_outcome` | **oficial** (idem) |
+| `retorno_sih_rj` | `retorno`, `RJ<UF><AAMM>.dbc\|.dbf` | dBase III (DATASUS); só `ST_SITUAC=1` | `production_outcome` | **oficial** (idem) |
+| `retorno_sih_er` | `retorno`, `ER<UF><AAMM>.dbc\|.dbf` | dBase III (DATASUS) | `production_outcome` | **oficial** (idem) |
+| `retorno_sia_csv` | `retorno`, `*sia*/*sih*/*bpa*/*apac*/*aih*.csv` | CSV `;` ISO-8859-1 (alternativa local) | `production_outcome` | **A CONFIRMAR** |
+
+O antigo `retorno_sih_txt` (largura fixa) foi **removido**: era um layout hipotético, sem fonte oficial — o
+DATASUS não publica retorno do SIH em TXT de largura fixa; o formato `fixed-width` continua disponível para
+um layout local declarado em YAML.
+
+Campos oficiais usados (nomes físicos do DBF): **PA** — `PA_INDICA` (situação), `PA_AUTORIZ` (nº APAC/autorização
+→ `id_registro_origem`), `PA_MVM` (AAAAMM de processamento → `processed_at` = dia 1), `PA_QTDAPR`; **RD** — `N_AIH`,
+`ANO_CMPT`+`MES_CMPT`, `REMESSA` (→ `protocol_number`); **RJ** — `ST_SITUAC`, `N_AIH`, `ST_MOT_BLO`
+(→ `reason_code`), `ANO_CMPT`+`MES_CMPT`, `REMESSA`; **ER** — `AIH`, `CO_ERRO` (→ `reason_code`), `ANO`+`MES`,
+`REMESSA`. O `.dbc` é descomprimido em memória (`DbcDecompressor`, porte do `blast.c` de Mark Adler — conferido
+byte a byte contra os DBF expandidos de `PARR2401.dbc`, `RDRR2401.dbc`, `RJRR2401.dbc` e `ERRR2401.dbc`).
 
 Colunas canônicas — produção: `id_registro`, `data_atualizacao`, `sistema_origem`, `instrumento`
 (BPA-C/BPA-I/APAC/AIH), `competencia` (`MM/yyyy`, `yyyyMM`), `cnes`, `cns_profissional`, `cbo`,
@@ -72,9 +96,10 @@ Colunas canônicas — produção: `id_registro`, `data_atualizacao`, `sistema_o
 `data_atendimento`, `carater_atendimento` (01–06 ou texto), `numero_apac`, `numero_aih`, `id_atendimento`,
 `id_agendamento`, `id_internacao`. Retornos: `id_retorno`, `situacao`, `id_registro_barramento` (`prod_…`),
 `sistema_origem_registro` + `id_registro_origem`, `lote`, `data_processamento`, `codigo_motivo`, `motivo`,
-`valor_pago`, `quantidade_aprovada`, `protocolo` (+ `valor_casas_implicitas` em largura fixa).
+`valor_pago`, `quantidade_aprovada`, `protocolo` (+ `valor_casas_implicitas` em largura fixa;
+`situacao_prefixo`, `ano_processamento`/`mes_processamento` nos layouts oficiais).
 
-Para trocar o layout sem recompilar: `SIA_LAYOUT=/caminho/sia-layouts-1.1.0.yaml`. Nunca edite uma versão
+Para trocar o layout sem recompilar: `SIA_LAYOUT=/caminho/sia-layouts-2.1.0.yaml`. Nunca edite uma versão
 já usada de layout/mapeamento: crie uma nova e aponte a configuração.
 
 ## Mapeamentos (YAML versionado, nunca no código)
@@ -82,8 +107,11 @@ já usada de layout/mapeamento: crie uma nova e aponte a configuração.
 - `instrumento` → `kind` (`bpa_c|bpa_i|apac|aih`, lookup estrito); `carater` → `character_of_care`
   (01 eletivo, 02 urgência, 03/04 acidente de trabalho, 05/06 outros).
 - `citizen_ref` (código, `SiaRules`): `cit_…` → CNS → CPF; BPA-I/APAC/AIH sem cidadão → DLQ.
-- `situacao` do retorno → `outcome` (REJEITADO/GLOSADO/RJ/GL → `rejected`; PAGO/PG/GLOSA PARCIAL → `paid`;
-  ACEITO/APROVADO/PROCESSADO/AP → `accepted`; RECEBIDO → `received`; TRANSMITIDO → `transmitted`) — **A CONFIRMAR**.
+- `situacao` do retorno → `outcome`. Oficiais: `SIA-PA:0` → `rejected`, `SIA-PA:5`/`SIA-PA:6` → `accepted`
+  (com `approved_quantity` = `PA_QTDAPR`), `SIH-RD` → `accepted`, `SIH-RJ:1` → `rejected`, `SIH-ER` → `rejected`.
+  Os arquivos de disseminação **não** informam pagamento (só aprovação): nenhum layout oficial gera `paid`.
+  Alternativa CSV (**A CONFIRMAR**): REJEITADO/GLOSADO/RJ/GL → `rejected`; PAGO/PG/GLOSA PARCIAL → `paid`;
+  ACEITO/APROVADO/PROCESSADO/AP → `accepted`; RECEBIDO → `received`; TRANSMITIDO → `transmitted`.
 - Alvo do retorno (o core exige exatamente um): `production_record_id` (`prod_…`) → `record_source`
   (`sistema_origem_registro` + `id_registro_origem`) → `batch_id`; os demais são descartados.
 - Valores: pt-BR (`1.234,56`), ponto decimal simples (`10.50`) e casas implícitas em largura fixa.
@@ -115,7 +143,7 @@ Correções de conteúdo (linha inválida) devem ser feitas na origem e reexport
 | `sia.file.charset` / `SIA_CHARSET` | `UTF-8` | Charset padrão (kinds podem declarar o seu) |
 | `sia.file.processed-registry` / `SIA_PROCESSED_REGISTRY` | `data/sia/processed-files.json` | Marca d'água por arquivo |
 | `sia.layout` / `SIA_LAYOUT` | `classpath:layouts/sia-layouts.yaml` | Layout versionado |
-| `sia.mapping.record` / `sia.mapping.outcome` | `mappings/sia-production-*-1.0.0.yaml` | Mapeamentos |
+| `sia.mapping.record` / `sia.mapping.outcome` | `mappings/sia-production-record-1.0.0.yaml` / `mappings/sia-production-outcome-1.1.0.yaml` | Mapeamentos |
 | `sia.publish.topic` / `sia.publish.ack-timeout` | `sus.ingest.production.v1` / `PT30S` | Publicação |
 | `sia.heartbeat.*` / `sia.reconciliation.*` | 60 s / 1 h, janela `P1D` | Agendamentos |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SSL_*` | `localhost:9092`, `PLAINTEXT` | Kafka (mTLS em cluster, KafkaUser `connector-sia`) |
@@ -137,13 +165,14 @@ Correções de conteúdo (linha inválida) devem ser feitas na origem e reexport
 
 ## Itens a validar na homologação
 
-- [ ] Nomes/padrões dos arquivos de retorno disponibilizados ao município (SIA: críticas/glosas do BPA/APAC;
-      SIH: espelho/rejeitadas/pagas da AIH) e periodicidade.
-- [ ] Layout real (colunas ou posições), charset e registros de cabeçalho/rodapé (`line_filter`).
-- [ ] Tabela de situações e códigos de motivo (lookup `situacao`), glosa parcial × total.
-- [ ] Como o retorno identifica o registro: nº AIH/APAC, sequencial do BPA, id do barramento no arquivo
-      exportado (`csv_ref_v1` do core tem `production_record_id`) ou lote.
-- [ ] Casas decimais e formato de valores; data de processamento × competência.
+- [x] Arquivos oficiais de retorno: PA (SIA), RD/RJ/ER (SIH) de disseminação do DATASUS — layout físico e
+      códigos de situação confirmados (ver `docs/integracoes/layouts-sia-sih.md`).
+- [ ] Chave de conciliação: o sistema de origem exporta AIH com `id_registro` = nº da AIH e APAC com
+      `id_registro` = nº da APAC? (BPA-C/BPA-I não são conciliáveis individualmente pelos arquivos de disseminação:
+      sem CNS do paciente em claro e sem nº de autorização.)
+- [ ] Relatórios de crítica/glosa dos aplicativos SIA/SIHD (layout não localizado em fonte oficial acessível);
+      se o faturamento os exportar, mapear pela alternativa CSV (`retorno_sia_csv`).
+- [ ] Data de processamento: os arquivos oficiais só têm ano/mês (usa-se o dia 1).
 - [ ] `source_system` e `id_column` da exportação de produção do sistema de origem de cada município.
 
 ## Build e testes
@@ -156,8 +185,10 @@ docker build -f connector-sia/src/main/docker/Dockerfile -t sus-nexus/connector-
 ```
 
 Testes sem Docker/Kafka: Kafka em memória (`smallrye-in-memory`), WireMock no lugar do core, fixtures sintéticas
-em `src/test/resources/samples` (CSV de produção, retorno SIA CSV ISO-8859-1, retorno SIH largura fixa). Cobrem:
+em `src/test/resources/samples` (CSV de produção, retorno SIA CSV ISO-8859-1) e arquivos DATASUS sintéticos gerados
+em teste (`DatasusFiles`: `.dbf` dBase III e `.dbc` com fluxo implode) com os nomes/tamanhos físicos dos campos
+oficiais. Cobrem: leitura DBF/DBC (registros excluídos, latin-1, arquivos truncados/inválidos),
 transformação/validação de BPA-I/BPA-C/APAC, retornos (rejeição por registro de origem, pagamento por `prod_`,
-transmissão por lote, SIH com casas implícitas), envelope/headers/chave, `event_id` determinístico, DLQ,
+transmissão por lote, PA/RD/RJ/ER oficiais com filtro de linhas), envelope/headers/chave, `event_id` determinístico, DLQ,
 marca d'água por arquivo, ledger espelho, reconciliação, heartbeat, reprocessamento por comando Kafka e ausência de
 CNS/CPF em logs, DLQ e chamadas ao core.

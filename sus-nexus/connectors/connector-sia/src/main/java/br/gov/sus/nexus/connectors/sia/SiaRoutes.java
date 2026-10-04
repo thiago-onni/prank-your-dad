@@ -149,6 +149,7 @@ public class SiaRoutes extends RouteBuilder {
     for (Map<String, String> row : rows) {
       line++;
       Map<String, String> canonical = kind.canonicalize(row);
+      if (!kind.accepts(canonical)) continue; // row_filter do layout (numeração preservada)
       Map<String, Object> wrapper = new LinkedHashMap<>();
       wrapper.put("layout_kind", kind.name());
       wrapper.put("layout_version", connector.layout().version());

@@ -90,7 +90,7 @@ competência não tem linha em `production.production_deadline`, `sus.production
 `sus.production.export-dir` (`SUS_PRODUCTION_EXPORT_DIR`; modo `file` — **diretório restrito**: o arquivo contém
 CNS em claro), `sus.production.s3.bucket` (`production-exports`) / `region` / `endpoint` (MinIO) / `path-style` /
 `access-key` / `secret-key` / `prefix` / `sse` (`AES256` padrão, `aws:kms` + `kms-key-id`, `none` só em dev sem
-KMS) — variáveis `SUS_PRODUCTION_S3_*` — e `sus.production.export-origin-name|acronym|document` (cabeçalho BPA-Mag).
+KMS) — variáveis `SUS_PRODUCTION_S3_*` — e `sus.production.export-origin-name|acronym|document` e `sus.production.export-destination-name|indicator` (cabeçalhos BPA-Mag/APAC).
 Os prazos de SLA de decisão regulatória ficam em `regulation.regulation_sla_policy` (seed global:
 elective 90 d, priority 30 d, urgent 7 d, emergency 1 d; sobrescrita por tenant via linha com `tenant_id`).
 O prazo do contato pós-alta fica em `tasks.sla_policy` (`post_discharge_followup` × prioridade = risco:
@@ -297,7 +297,7 @@ Dado **administrativo de faturamento**: nenhum consumidor do `journey` assina `s
 | `GET /production/issues` | auditor, gestor, **agente_ia**, admin_municipal (+ OPA `read`) | filtros severity/rule/competence/cnes/kind/status (padrão `open`)/record_id; sem dado do cidadão |
 | `POST /production/batches` | auditor (+ OPA `create_batch`) | todos os `validated` da competência/CNES/tipo fora de lote; sem elegíveis → 422; nasce `draft` |
 | `POST /production/batches/{id}/approve` | auditor, gestor (+ OPA `approve_batch`) | **aprovação humana obrigatória** (PRO-010) com justificativa; só `draft`; agente → 403; **quatro olhos**: quem gerou o lote não aprova → 403 `urn:sus-nexus:problem:four-eyes` (serviço e política) |
-| `POST /production/batches/{id}/export` | auditor (+ OPA `export_batch`) | só lote `approved`; `bpa_mag_ref_v1` (BPA-C/BPA-I) ou `csv_ref_v1`; grava via `ExportStorage` em `<tenant>/<competência>/<lote>/<arquivo>` sem sobrescrita — `file` (`CREATE_NEW`, `file://`) ou `s3` (`S3ExportStorage`: bucket `production-exports`, SSE, `If-None-Match: *`, `x-amz-checksum-sha256`, `s3://`) —, devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
+| `POST /production/batches/{id}/export` | auditor (+ OPA `export_batch`) | só lote `approved`; `bpa_mag_v202412` (BPA-C/BPA-I), `apac_mag_v202607` (APAC) ou `csv_ref_v1` (qualquer tipo; único para AIH) — layout incompatível com o tipo → 422; grava via `ExportStorage` em `<tenant>/<competência>/<lote>/<arquivo>` sem sobrescrita — `file` (`CREATE_NEW`, `file://`) ou `s3` (`S3ExportStorage`: bucket `production-exports`, SSE, `If-None-Match: *`, `x-amz-checksum-sha256`, `s3://`) —, devolve `file_ref` + SHA-256; registros → `exported`; o barramento **não transmite** |
 | `POST /production/outcomes` | operador_integracao, auditor (+ OPA `register_outcome`) | `transmitted`/`received`/`accepted` por lote ou registro (cada registro afetado publica `sus.production.outcome.<outcome>`, inclusive `transmitted` por lote); `rejected` (motivo oficial → pendência `official_rejection` + tarefa) e `paid` (valor obrigatório) só por registro; idempotente por origem do retorno; lote → `processed` quando todos os registros têm desfecho final |
 | `GET /production/summary?competence=&cnes=` | gestor, auditor, admin_municipal | totais por status, corrigidos, valores (estimado = Σ quantidade × `valor` SIGTAP, validado, pago, pendente, rejeitado) e **perda evitável estimada** (pendente + rejeitado), pendências por regra e por instrumento |
 | `POST /production/rules` | gestor, admin_municipal (+ OPA `create_rule_version`) | nova versão da regra `production-validation` do tenant: jsonb validado (gramática do `RuleEvaluator`, ids únicos, severidade, só fatos de `PreAuditor.FACTS`) e **casos de teste anexados executados antes de ativar** (falha → 422, nada gravado); versão sequencial ativa no tenant, revoga a anterior do tenant (a global continua para os demais); `audit_log` com justificativa; agente → 403 |
@@ -327,10 +327,28 @@ ProfessionalDirectory`) — avisos. Cada pendência grava `rule_version`; a reva
 novas, resolve as não mais violadas, mantém avisos dispensados). Pendências fora das regras: `deadline_missed`
 (workflow) e `official_rejection` (retorno oficial).
 
-**Layout de exportação** — `bpa_mag_ref_v1` é um BPA-Mag **simplificado de referência a homologar** com o
-validador oficial (registros 01/02/03 de largura fixa, campo de controle `(Σ procedimentos + Σ quantidades) mod
-1111 + 1111`, 20 linhas por folha; campos nominais não trafegam e são completados no sistema oficial;
-especificação em `ExportLayouts`). O arquivo contém CNS em claro (decifrados só para o arquivo), por isso o
+**Layouts de exportação** (`ExportLayouts`; tabela de campos, fontes e pendências em
+[`docs/integracoes/layouts-sia-sih.md`](../docs/integracoes/layouts-sia-sih.md)):
+
+- `bpa_mag_v202412` — **"Layout de Exportação BPA"** do DATASUS/SIA (`Layout_Exportacao_BPA.pdf`, 12/12/2024,
+  listado em <https://sia.datasus.gov.br/documentos/listar_ftp_bpa.php>): cabeçalho `01#BPA#` (130), BPA-C `02`
+  (48) e BPA-I `03` (350, com nome/nascimento/endereço do paciente, CNS **ou** CPF, INE e situação de rua), CR+LF;
+  campo de controle `cbc_smt_vrf = (Σ (procedimento + quantidade)) mod 1111 + 1111`; folhas de 20 linhas
+  (BPA-I quebra também por profissional). Raça/cor sai `99` (sem informação — não trafega na produção);
+  nacionalidade, etnia, serviço/classificação, equipe e telefone/e-mail saem em branco.
+- `apac_mag_v202607` — layout de interface texto **APAC/SIA** (registros `01` cabeçalho `#APAC` (137), `14` corpo
+  (537) e `13` procedimentos (97)); controle `(Σ nº das APAC + Σ (procedimento + quantidade)) mod 1111 + 1111`.
+  Os campos de autorização/laudo que o barramento não conhece (validade, tipo de APAC, médico responsável,
+  autorizador, datas de solicitação/autorização, emissor, motivo de saída, partes variáveis 06–20) saem em branco e
+  são completados no APAC-Mag/SIA.
+- `csv_ref_v1` — CSV de referência (alternativa local para qualquer tipo). **AIH** só sai neste layout: o
+  "Layout da interface texto do SISAIH01" (SIHD) não pôde ser obtido nem conferido (ver documento de layouts).
+- **Pendência de conferência:** os PDFs oficiais do BPA e da APAC estão nos portais do DATASUS
+  (`sia.datasus.gov.br`), bloqueados pela política de rede do ambiente em que foram implementados; as posições
+  vêm de transcrições do PDF oficial e foram conferidas pela soma dos tamanhos — conferir com o PDF original
+  (ou com o importador do SIA) antes da primeira transmissão.
+
+O arquivo contém CNS/CPF e dados nominais em claro (decifrados/lidos só para o arquivo), por isso o
 `export-dir`/bucket deve ser restrito: em produção use `sus.production.export-storage=s3` com o bucket
 `production-exports` (criado em `platform/compose/minio/init.sh` e no `minio-tenant` do Helm) acessível **somente**
 pela credencial do core (política dedicada com `s3:PutObject`/`s3:GetObject` nesse bucket — não reutilize a

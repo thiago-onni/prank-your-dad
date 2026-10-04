@@ -57,7 +57,7 @@ public interface SiaConfig {
     @WithDefault("mappings/sia-production-record-1.0.0.yaml")
     String record();
 
-    @WithDefault("mappings/sia-production-outcome-1.0.0.yaml")
+    @WithDefault("mappings/sia-production-outcome-1.1.0.yaml")
     String outcome();
   }
 

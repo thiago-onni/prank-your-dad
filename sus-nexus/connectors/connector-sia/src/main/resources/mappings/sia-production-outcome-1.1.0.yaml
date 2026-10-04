@@ -1,15 +1,31 @@
 # Retorno do processamento oficial SIA/SIH → ProductionOutcomeRegistration
 # (data de sus.ingest.production.v1, event_type sus.ingest.production.outcome; mesma porta do
-# POST /api/v1/production/outcomes). LOOKUPS E FORMATOS "A CONFIRMAR" NA HOMOLOGAÇÃO (códigos de
-# situação, casas decimais, identificação do registro no retorno).
+# POST /api/v1/production/outcomes).
+# Situações OFICIAIS (layouts dbf de disseminação do DATASUS; prefixo = situacao_prefixo do layout,
+# ver SiaRules.applySituationPrefix):
+#   SIA-PA:<PA_INDICA>  — CNV INDICA.CNV (TAB_SIA.zip): 0 não aprovado, 5 aprovado totalmente,
+#                         6 aprovado parcialmente
+#   SIH-RD              — AIH reduzida (aprovada no processamento)
+#   SIH-RJ:<ST_SITUAC>  — CNV SITREJEICAO.CNV (TAB_SIH.zip): 1 AIH rejeitada (0 é filtrado no layout)
+#   SIH-ER              — AIH rejeitada com erro (CO_ERRO, MOTERRO.DBF do TAB_SIH.zip)
+# Demais chaves: textos livres da ALTERNATIVA CSV local — "A CONFIRMAR" com o faturamento
+# municipal (códigos de situação, casas decimais, identificação do registro no retorno).
 # Alvo: exatamente um entre production_record_id, record_source e batch_id — o conector mantém o
 # mais específico (SiaRules.resolveOutcomeTarget). Valores com casas implícitas (layout
 # valor_casas_implicitas) são ajustados em código antes do mapeamento.
 mapping_set: sia-production-outcome
-version: "1.0.0"
+version: "1.1.0"
 entity_type: production_outcome
 lookups:
   situacao:
+    # oficiais (dbf DATASUS)
+    "SIA-PA:0": rejected
+    "SIA-PA:5": accepted
+    "SIA-PA:6": accepted
+    SIH-RD: accepted
+    "SIH-RJ:1": rejected
+    SIH-ER: rejected
+    # alternativa CSV local (A CONFIRMAR)
     REJEITADO: rejected
     REJEITADA: rejected
     REJEICAO: rejected

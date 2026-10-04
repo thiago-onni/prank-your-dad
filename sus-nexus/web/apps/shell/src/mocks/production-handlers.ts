@@ -283,11 +283,14 @@ export const productionHandlers = [
       if (batch.status !== 'approved')
         return problem(409, 'Lote não aprovado', 'Exportação exige lote aprovado.');
       const body = await readJson<{ layout?: ProductionExportLayout }>(request);
+      const isBpa = batch.kind === 'bpa_c' || batch.kind === 'bpa_i';
       const layout =
         body?.layout ??
-        (batch.kind === 'bpa_c' || batch.kind === 'bpa_i' ? 'bpa_mag_ref_v1' : 'csv_ref_v1');
-      if (layout === 'bpa_mag_ref_v1' && batch.kind !== 'bpa_c' && batch.kind !== 'bpa_i')
-        return problem(422, 'Layout incompatível', 'BPA-Mag aceita apenas BPA-C/BPA-I.');
+        (isBpa ? 'bpa_mag_v202412' : batch.kind === 'apac' ? 'apac_mag_v202607' : 'csv_ref_v1');
+      if (layout === 'bpa_mag_v202412' && !isBpa)
+        return problem(422, 'Layout incompatível', 'BPA-Magnético aceita apenas BPA-C/BPA-I.');
+      if (layout === 'apac_mag_v202607' && batch.kind !== 'apac')
+        return problem(422, 'Layout incompatível', 'O layout APAC aceita apenas APAC.');
       const ext = layout === 'csv_ref_v1' ? 'csv' : 'txt';
       batch.status = 'exported';
       batch.export = {

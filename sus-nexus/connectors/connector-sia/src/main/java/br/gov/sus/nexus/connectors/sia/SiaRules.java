@@ -111,4 +111,35 @@ public final class SiaRules {
     }
     return true;
   }
+
+  /**
+   * Situação qualificada pela origem: com {@code situacao_prefixo} (default do layout) a situação
+   * vira {@code <prefixo>:<valor>} (ou só {@code <prefixo>} sem coluna de situação), para que os
+   * códigos oficiais de domínios distintos (ex.: {@code PA_INDICA} do SIA e {@code ST_SITUAC} do RJ
+   * do SIH) não colidam na tabela de lookup {@code situacao} do mapeamento.
+   */
+  public static void applySituationPrefix(Map<String, String> canonical) {
+    String prefix = canonical.getOrDefault("situacao_prefixo", "").trim();
+    if (prefix.isEmpty()) return;
+    String v = canonical.getOrDefault("situacao", "").trim();
+    canonical.put("situacao", v.isEmpty() ? prefix : prefix + ":" + v);
+  }
+
+  /**
+   * Data de processamento a partir do mês de processamento quando o arquivo não traz data (os
+   * arquivos de disseminação do DATASUS trazem só ano/mês: {@code PA_MVM} AAAAMM no SIA; {@code
+   * ANO_CMPT}+{@code MES_CMPT} no RD/RJ e {@code ANO}+{@code MES} no ER do SIH) → {@code AAAAMM01}.
+   */
+  public static void applyProcessingMonth(Map<String, String> canonical) {
+    if (!canonical.getOrDefault("data_processamento", "").isBlank()) return;
+    String month = digits(canonical.get("mes_processamento"));
+    String year = digits(canonical.get("ano_processamento"));
+    String yyyymm = null;
+    if (month.length() == 6) {
+      yyyymm = month;
+    } else if (year.length() == 4 && !month.isEmpty() && month.length() <= 2) {
+      yyyymm = year + (month.length() == 1 ? "0" + month : month);
+    }
+    if (yyyymm != null) canonical.put("data_processamento", yyyymm + "01");
+  }
 }
