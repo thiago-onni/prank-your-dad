@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sus_nexus_ai.agents import mpi_duplicate_suggestion, post_discharge_followup
+from sus_nexus_ai.agents import (
+    exam_critical_result,
+    mpi_duplicate_suggestion,
+    post_discharge_followup,
+)
 from sus_nexus_ai.agents import regulation_completeness as regulation
 from sus_nexus_ai.agents.base import AgentDefinition
 from sus_nexus_ai.llm.client import FakeLLMClient, FakeResponder
 
-_MODULES = (regulation, mpi_duplicate_suggestion, post_discharge_followup)
+_MODULES = (regulation, mpi_duplicate_suggestion, post_discharge_followup, exam_critical_result)
 
 
 def build_catalog() -> dict[str, AgentDefinition[Any, Any]]:

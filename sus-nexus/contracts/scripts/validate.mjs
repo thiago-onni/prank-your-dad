@@ -1,6 +1,6 @@
 // Valida os contratos: envelope + schemas de dados, exemplos, tópicos e OpenAPI.
 // Uso: pnpm validate (ou node scripts/validate.mjs). Sai com código != 0 em falha.
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -82,12 +82,20 @@ for (const t of topics.topics) {
   if (t.class === "domain" && !t.events?.length) fail(`topic ${t.name}: tópico de domínio sem eventos declarados`);
 }
 
-// 4. OpenAPI
-try {
-  const api = await SwaggerParser.validate(join(root, "openapi", "core-municipal.yaml"));
-  ok(`openapi ${api.info.title} ${api.info.version} (${Object.keys(api.paths).length} paths)`);
-} catch (e) {
-  fail(`openapi: ${e.message}`);
+// 4. OpenAPI (core-municipal + ai-service, este último exportado por
+//    `python -m sus_nexus_ai.export_openapi` no ai-service)
+for (const name of ["core-municipal.yaml", "ai-service.yaml"]) {
+  const file = join(root, "openapi", name);
+  if (!existsSync(file)) {
+    fail(`openapi ${name}: arquivo ausente`);
+    continue;
+  }
+  try {
+    const api = await SwaggerParser.validate(file);
+    ok(`openapi ${name}: ${api.info.title} ${api.info.version} (${Object.keys(api.paths).length} paths)`);
+  } catch (e) {
+    fail(`openapi ${name}: ${e.message}`);
+  }
 }
 
 if (failures) {

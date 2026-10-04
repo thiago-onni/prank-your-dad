@@ -15,6 +15,8 @@ from sus_nexus_ai.service import AIService, build_service
 from sus_nexus_ai.tools.core_client import (
     CitizenOperationalSummary,
     CitizenSummary,
+    ExamOrder,
+    ExamResult,
     InMemoryCoreClient,
     MaskedIdentifier,
     MergeCase,
@@ -27,6 +29,9 @@ CITIZEN_ID = "cit_01J8X01ABCDEFGHJKMNPQRSTVW"
 CITIZEN_ID_2 = "cit_01J8X02ABCDEFGHJKMNPQRSTVW"
 REQUEST_ID = "reg_01J8XR01ABCDEFGHJKMNPQRSTV"
 CASE_ID = "case_01J8XM01ABCDEFGHJKMNPQRSTV"
+EXAM_ORDER_ID = "exo_01J8XX01ABCDEFGHJKMNPQRSTV"
+EXAM_RESULT_ID = "exr_01J8XY01ABCDEFGHJKMNPQRSTV"
+REQUESTING_CNES = "2143456"
 
 # PII sintética usada para garantir que NUNCA aparece em prompts/registros.
 PII_NAME = "Maria Aparecida da Silva"
@@ -51,34 +56,89 @@ def settings() -> Settings:
     )
 
 
+def regulation_request_fixture(**overrides: object) -> RegulationRequest:
+    """``RegulationRequest`` conforme o contrato do core — consulta sem justificativa clínica."""
+    data: dict[str, object] = {
+        "id": REQUEST_ID,
+        "citizen_id": CITIZEN_ID,
+        "kind": "consultation",
+        "status": "requested",
+        "priority": "priority",
+        "requested_at": "2026-09-30T10:00:00-03:00",
+        "requested_service_code": "0301010072",
+        "code_system": "SIGTAP",
+        "service_description": "Consulta em cardiologia",
+        "specialty": "cardiologia",
+        "requesting_cnes": REQUESTING_CNES,
+        "requesting_unit_name": "UBS Centro",
+        "requesting_professional_id": "prof_01J8XP01ABCDEFGHJKMNPQRSTV",
+        "justification_present": False,  # → pendência clinical_justification
+        "attached_documents_count": 1,
+        "waiting_days": 3,
+        "sla_due_at": "2026-10-30T10:00:00-03:00",
+        "sla_breached": False,
+        "issues": [],
+        "source_system": "SISREG",
+        "source_record_id": "sisreg-778",
+        # campos extras com PII (extra="allow") — devem sumir/virar token no contexto minimizado
+        "requesting_professional_name": PII_PROFESSIONAL,
+        "patient_name": PII_NAME,
+        "cpf": PII_CPF,
+        "cns": PII_CNS,
+        "phone": PII_PHONE,
+        "email": PII_EMAIL,
+        "notes": f"Paciente {PII_NAME}, CPF {PII_CPF}, tel {PII_PHONE}, e-mail {PII_EMAIL}.",
+    }
+    data.update(overrides)
+    return RegulationRequest.model_validate(data)
+
+
+def exam_order_fixture(**overrides: object) -> ExamOrder:
+    """``ExamOrder`` com resultado crítico e sem tarefa de seguimento."""
+    data: dict[str, object] = {
+        "id": EXAM_ORDER_ID,
+        "citizen_id": CITIZEN_ID,
+        "status": "reported",
+        "requested_at": "2026-09-28T08:00:00-03:00",
+        "exam_code": "0202010473",
+        "code_system": "SIGTAP",
+        "exam_description": "Dosagem de potássio",
+        "category": "laboratory",
+        "priority": "routine",
+        "requesting_cnes": REQUESTING_CNES,
+        "requesting_unit_name": "UBS Centro",
+        "reported_at": "2026-10-01T10:00:00-03:00",
+        "issues": ["critical"],
+        "results": [
+            ExamResult(
+                id=EXAM_RESULT_ID,
+                reported_at=datetime(2026, 10, 1, 13, 0, tzinfo=UTC),
+                status="final",
+                critical=True,
+                performer_cnes="7654321",
+                has_document=True,
+                observations_count=1,
+                source_system="LIS",
+            )
+        ],
+        "source_system": "LIS",
+    }
+    data.update(overrides)
+    return ExamOrder.model_validate(data)
+
+
 @pytest.fixture
 def core() -> InMemoryCoreClient:
     client = InMemoryCoreClient()
-    client.regulation_requests[REQUEST_ID] = RegulationRequest(
-        id=REQUEST_ID,
-        citizen_id=CITIZEN_ID,
-        specialty="cardiologia",
-        procedure_code="0301010072",
-        procedure_description="Consulta em cardiologia",
-        priority_requested="amarelo",
-        clinical_justification="Dor precordial aos esforços, HAS e DM2 descompensados.",
-        cid10=None,  # faltante → pendência sugerida
-        requesting_unit_cnes="2143456",
-        requesting_professional_name=PII_PROFESSIONAL,
-        requesting_professional_cbo="225125",
-        attachments=["encaminhamento"],
-        required_documents=["ecg", "encaminhamento"],
-        # campos extras com PII (extra="allow") — devem sumir no contexto minimizado
-        patient_name=PII_NAME,
-        cpf=PII_CPF,
-        cns=PII_CNS,
-        phone=PII_PHONE,
-        email=PII_EMAIL,
-        notes=f"Paciente {PII_NAME}, CPF {PII_CPF}, tel {PII_PHONE}, e-mail {PII_EMAIL}.",
-    )
+    client.regulation_requests[REQUEST_ID] = regulation_request_fixture()
     client.summaries[CITIZEN_ID] = CitizenOperationalSummary(
-        citizen_id=CITIZEN_ID, open_regulation_requests=1, contact_valid=False, care_gaps=1
+        citizen_id=CITIZEN_ID,
+        open_regulation_requests=1,
+        contact_valid=False,
+        care_gaps=1,
+        team_ine="0001234567",
     )
+    client.exam_orders[EXAM_ORDER_ID] = exam_order_fixture()
     client.merge_cases[CASE_ID] = MergeCase(
         id=CASE_ID,
         score=0.96,
@@ -102,6 +162,7 @@ def core() -> InMemoryCoreClient:
             MergeEvidence(attribute="name", agreement="agree", weight=0.2),
             MergeEvidence(attribute="birthdate", agreement="agree", weight=0.3),
         ],
+        conflicts=[],
         opened_at=datetime(2026, 9, 29, 12, 0, tzinfo=UTC),
     )
     return client
@@ -140,7 +201,7 @@ def discharge_input(**overrides: object) -> dict[str, object]:
     event.update(overrides)
     return {
         "event": event,
-        "reference_team": {"team_ine": "0001234567", "health_unit_cnes": "2143456"},
+        "reference_team": {"team_ine": "0001234567", "health_unit_cnes": REQUESTING_CNES},
     }
 
 

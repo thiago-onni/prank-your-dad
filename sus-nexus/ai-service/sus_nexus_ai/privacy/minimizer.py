@@ -94,6 +94,16 @@ NON_PERSON_NAME_KEYS: frozenset[str] = frozenset(
 )
 
 
+# Chaves cujo valor é um código/identificador operacional (INE, CNES, CBO, SIGTAP, ids pseudônimos).
+# Não passam pelos regex de PII: um INE de 10 dígitos "parece" telefone, mas não é — e o valor é
+# necessário intacto nos argumentos das ferramentas (ex.: assignee da tarefa).
+CODE_KEY_SUFFIXES: tuple[str, ...] = ("id", "ine", "cnes", "cbo", "code", "cid")
+
+
+def is_code_key(normalized_key: str) -> bool:
+    return normalized_key == "id" or normalized_key.endswith(CODE_KEY_SUFFIXES)
+
+
 def is_person_name_key(normalized_key: str) -> bool:
     if normalized_key in NAME_KEYS:
         return True
@@ -177,12 +187,16 @@ class Minimizer:
             return [self._walk(item, result, f"{path}[{i}]") for i, item in enumerate(node)]
         return node
 
-    def _scrub_strings(self, node: Any, result: MinimizationResult) -> Any:
+    def _scrub_strings(self, node: Any, result: MinimizationResult, key: str | None = None) -> Any:
         if isinstance(node, dict):
-            return {k: self._scrub_strings(v, result) for k, v in node.items()}
+            return {
+                k: self._scrub_strings(v, result, key=_norm_key(str(k))) for k, v in node.items()
+            }
         if isinstance(node, list):
-            return [self._scrub_strings(v, result) for v in node]
+            return [self._scrub_strings(v, result, key=key) for v in node]
         if isinstance(node, str):
+            if key is not None and is_code_key(key):
+                return node
             return self.scrub_text(node, result)
         return node
 

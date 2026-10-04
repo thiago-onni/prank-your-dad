@@ -10,6 +10,8 @@ from sus_nexus_ai.tools.registry import ToolNotRegistered, ToolSpec
 EXPECTED = {
     "core.get_citizen_summary": ("auto", "low", "read"),
     "core.get_regulation_request": ("auto", "low", "read"),
+    "core.get_exam_order": ("auto", "low", "read"),
+    "core.get_merge_case": ("auto", "low", "read"),
     "core.list_merge_case": ("auto", "low", "read"),
     "core.create_task": ("auto", "low", "write"),
     "core.create_pending_issue": ("requires_approval", "medium", "write"),
@@ -30,9 +32,26 @@ def test_default_registry_catalog() -> None:
         assert spec.scope and spec.description
         described = spec.describe()
         assert "input_schema" in described and "output_schema" in described
-    assert reg.get("core.get_regulation_request").stub is True
+    # Fase 2: regulação e exames são reais; só comunicação continua stub.
+    stubs = {spec.name for spec in reg.list() if spec.stub}
+    assert stubs == {"communication.request_message"}
     with pytest.raises(ToolNotRegistered):
         reg.get("nope")
+
+
+def test_opa_catalog_lists_every_registered_tool() -> None:
+    """``policies/data/agent_tools.json`` (OPA) deve conhecer todas as ferramentas do registro."""
+    import json
+    from pathlib import Path
+
+    catalog_path = Path(__file__).resolve().parents[2] / "policies" / "data" / "agent_tools.json"
+    if not catalog_path.exists():  # pragma: no cover - fora do monorepo
+        pytest.skip("policies/ não disponível")
+    catalog = json.loads(catalog_path.read_text("utf-8"))["agent_tools"]["tools"]
+    reg = build_default_registry()
+    for spec in reg.list():
+        assert spec.name in catalog, f"{spec.name} ausente em policies/data/agent_tools.json"
+        assert catalog[spec.name]["action_class"] == spec.action_class, spec.name
 
 
 def test_duplicate_registration_is_rejected() -> None:

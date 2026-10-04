@@ -504,6 +504,8 @@ class AgentRunner:
             self.repository.save_run(rec)
             scratch.record = rec
             metrics.agent_run_total.labels(agent_id=definition.id, status=status).inc()
+            for action in rec.actions:
+                metrics.record_action(definition.id, action.action_class, action.status)
             metrics.agent_run_duration_seconds.labels(agent_id=definition.id).observe(
                 time.perf_counter() - scratch.started_perf
             )
@@ -558,7 +560,15 @@ class AgentRunner:
 
 
 def _input_reference(raw_input: dict[str, Any]) -> str | None:
-    for key in ("event_id", "request_id", "case_id", "episode_id", "citizen_id", "id"):
+    for key in (
+        "event_id",
+        "request_id",
+        "case_id",
+        "order_id",
+        "episode_id",
+        "citizen_id",
+        "id",
+    ):
         value = raw_input.get(key)
         if isinstance(value, str):
             return value

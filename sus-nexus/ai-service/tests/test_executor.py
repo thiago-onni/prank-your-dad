@@ -91,8 +91,8 @@ async def test_requires_approval_needs_approver_identity(core: InMemoryCoreClien
     executor = _executor(core)
     args = {
         "request_id": REQUEST_ID,
-        "reason": "Pedido incompleto: falta cid10.",
-        "missing_fields": ["cid10"],
+        "kind": "clinical_justification",
+        "description": "Pedido sem justificativa clínica registrada.",
     }
     with pytest.raises(ApprovalRequired) as exc:
         await executor.call(
@@ -103,7 +103,7 @@ async def test_requires_approval_needs_approver_identity(core: InMemoryCoreClien
             run_id="run_1",
         )
     assert exc.value.record.status == "requires_approval"
-    assert core.pending_issues == []
+    assert core.issues == []
 
     result = await executor.call(
         agent=AGENT,
@@ -112,12 +112,15 @@ async def test_requires_approval_needs_approver_identity(core: InMemoryCoreClien
         args=args,
         run_id="run_1",
         approved_by="user:regulador-1",
+        correlation_id="corr_test_1",
     )
     assert result.record.status == "executed"
     assert result.record.approved_by == "user:regulador-1"
-    assert len(core.pending_issues) == 1
-    # identidade do agente (client credentials fake) foi usada na chamada ao core
-    assert core.calls[-1] == ("create_pending_issue", f"fake-token-t-{TENANT}", TENANT)
+    assert len(core.issues) == 1
+    assert core.issues[0].origin is not None and core.issues[0].origin.id == "t"
+    # identidade do agente (client credentials fake) e correlação foram usadas na chamada ao core
+    assert core.calls[-1] == ("add_regulation_issue", f"fake-token-t-{TENANT}", TENANT)
+    assert core.correlation_ids[-1] == "corr_test_1"
 
 
 async def test_record_masks_args_and_hashes_result(core: InMemoryCoreClient) -> None:

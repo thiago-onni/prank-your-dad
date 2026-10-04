@@ -1,17 +1,28 @@
-"""Ferramentas iniciais registradas no ``ToolRegistry``.
+"""Ferramentas registradas no ``ToolRegistry`` (alinhadas ao contrato real do core — Fase 2).
 
-| ferramenta                      | classe             | risco  |
-|---------------------------------|--------------------|--------|
-| core.get_citizen_summary        | auto (leitura)     | low    |
-| core.get_regulation_request     | auto (leitura, stub)| low   |
-| core.list_merge_case            | auto (leitura)     | low    |
-| core.create_task                | auto               | low    |
-| core.create_pending_issue       | requires_approval  | medium |
-| communication.request_message   | requires_approval  | medium |
-| regulation.change_priority      | forbidden          | high   |
-| regulation.decide               | forbidden          | high   |
-| production.transmit             | forbidden          | high   |
-| mpi.merge                       | forbidden          | high   |
+| ferramenta                    | classe            | endpoint do core                       |
+|-------------------------------|-------------------|----------------------------------------|
+| core.get_citizen_summary      | auto (leitura)    | GET  /citizens/{id}/summary            |
+| core.get_regulation_request   | auto (leitura)    | GET  /regulation/requests/{id}         |
+| core.get_exam_order           | auto (leitura)    | GET  /exams/orders/{id}                |
+| core.get_merge_case           | auto (leitura)    | GET  /mpi/cases/{id}                   |
+| core.list_merge_case          | auto (leitura)    | GET  /mpi/cases[/{id}]                 |
+| core.create_task              | auto              | POST /tasks (origin.kind=agent)        |
+| core.create_pending_issue     | requires_approval | POST /regulation/requests/{id}/issues  |
+| communication.request_message | requires_approval | **stub** (sem módulo de comunicação)   |
+| regulation.change_priority    | forbidden         | —                                      |
+| regulation.decide             | forbidden         | —                                      |
+| production.transmit           | forbidden         | —                                      |
+| mpi.merge                     | forbidden         | —                                      |
+
+``core.create_pending_issue`` chama ``POST …/issues`` com ``origin={kind:"agent", id, version}``.
+O core exige o papel ``agente_ia`` e cria a pendência já **aberta**: por isso a classe é
+``requires_approval`` e a chamada só acontece em ``POST /runs/{run}/actions/{action}/approve``.
+
+``communication.request_message`` permanece *stub*: o ``Domain`` ``communication`` existe no
+contrato, mas nenhum endpoint foi publicado. ``HttpCoreClient`` responde 501 e a ferramenta
+continua ``requires_approval`` para que o fluxo de aprovação já esteja coberto quando o módulo
+existir.
 
 As ferramentas ``forbidden`` existem no catálogo para que a negação seja explícita, auditável e
 testável (bloqueadas por OPA e pelo executor; nunca executam).
@@ -24,17 +35,19 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from sus_nexus_ai.tools.core_client import (
+    AgentOrigin,
     CitizenOperationalSummary,
+    ExamOrder,
+    IssueKind,
+    IssueOrigin,
     MergeCase,
     MessageRequest,
     MessageRequestResult,
-    PendingIssue,
-    PendingIssueCreate,
     Purpose,
+    RegulationIssueCreate,
     RegulationRequest,
     Task,
     TaskCreate,
-    TaskOrigin,
 )
 from sus_nexus_ai.tools.registry import ToolContext, ToolRegistry, ToolSpec
 
@@ -47,12 +60,20 @@ class ForbiddenToolInvoked(RuntimeError):
 
 
 class GetCitizenSummaryInput(BaseModel):
-    citizen_id: str = Field(pattern=r"^cit_[0-9A-Za-z]{26}$|^cit_[0-9A-Za-z_-]+$")
+    citizen_id: str = Field(pattern=r"^cit_[0-9A-Za-z_-]+$")
     purpose: Purpose = "care_coordination"
 
 
 class GetRegulationRequestInput(BaseModel):
-    request_id: str
+    request_id: str = Field(min_length=1)
+
+
+class GetExamOrderInput(BaseModel):
+    order_id: str = Field(min_length=1)
+
+
+class GetMergeCaseInput(BaseModel):
+    case_id: str = Field(min_length=1)
 
 
 class ListMergeCaseInput(BaseModel):
@@ -63,6 +84,14 @@ class ListMergeCaseInput(BaseModel):
 
 class ListMergeCaseOutput(BaseModel):
     items: list[MergeCase]
+
+
+class CreatePendingIssueInput(BaseModel):
+    """Entrada de ``core.create_pending_issue`` (a origem é preenchida pelo handler)."""
+
+    request_id: str = Field(min_length=1)
+    kind: IssueKind
+    description: str = Field(min_length=10, max_length=1000)
 
 
 class EmptyOutput(BaseModel):
@@ -98,7 +127,11 @@ async def _get_citizen_summary(
     ctx: ToolContext, args: GetCitizenSummaryInput
 ) -> CitizenOperationalSummary:
     return await ctx.core.get_citizen_summary(
-        args.citizen_id, args.purpose, token=ctx.token.access_token, tenant=ctx.tenant
+        args.citizen_id,
+        args.purpose,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
     )
 
 
@@ -106,38 +139,87 @@ async def _get_regulation_request(
     ctx: ToolContext, args: GetRegulationRequestInput
 ) -> RegulationRequest:
     return await ctx.core.get_regulation_request(
-        args.request_id, token=ctx.token.access_token, tenant=ctx.tenant
+        args.request_id,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
+
+
+async def _get_exam_order(ctx: ToolContext, args: GetExamOrderInput) -> ExamOrder:
+    return await ctx.core.get_exam_order(
+        args.order_id,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
+
+
+async def _get_merge_case(ctx: ToolContext, args: GetMergeCaseInput) -> MergeCase:
+    return await ctx.core.get_merge_case(
+        args.case_id,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
     )
 
 
 async def _list_merge_case(ctx: ToolContext, args: ListMergeCaseInput) -> ListMergeCaseOutput:
     if args.case_id:
         case = await ctx.core.get_merge_case(
-            args.case_id, token=ctx.token.access_token, tenant=ctx.tenant
+            args.case_id,
+            token=ctx.token.access_token,
+            tenant=ctx.tenant,
+            correlation_id=ctx.correlation_id,
         )
         return ListMergeCaseOutput(items=[case])
     items = await ctx.core.list_merge_cases(
-        args.status, token=ctx.token.access_token, tenant=ctx.tenant, limit=args.limit
+        args.status,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        limit=args.limit,
+        correlation_id=ctx.correlation_id,
     )
     return ListMergeCaseOutput(items=items)
 
 
 async def _create_task(ctx: ToolContext, args: TaskCreate) -> Task:
-    if args.origin is None:
-        args = args.model_copy(
-            update={"origin": TaskOrigin(kind="agent", id=ctx.agent_id, version=ctx.agent_version)}
-        )
-    return await ctx.core.create_task(args, token=ctx.token.access_token, tenant=ctx.tenant)
+    # A origem é sempre o agente em execução — nunca o que o LLM/planejador informou.
+    args = args.model_copy(
+        update={"origin": AgentOrigin(kind="agent", id=ctx.agent_id, version=ctx.agent_version)}
+    )
+    return await ctx.core.create_task(
+        args,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
 
 
-async def _create_pending_issue(ctx: ToolContext, args: PendingIssueCreate) -> PendingIssue:
-    return await ctx.core.create_pending_issue(
-        args, token=ctx.token.access_token, tenant=ctx.tenant
+async def _create_pending_issue(
+    ctx: ToolContext, args: CreatePendingIssueInput
+) -> RegulationRequest:
+    issue = RegulationIssueCreate(
+        kind=args.kind,
+        description=args.description,
+        origin=IssueOrigin(kind="agent", id=ctx.agent_id, version=ctx.agent_version),
+    )
+    return await ctx.core.add_regulation_issue(
+        args.request_id,
+        issue,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
     )
 
 
 async def _request_message(ctx: ToolContext, args: MessageRequest) -> MessageRequestResult:
-    return await ctx.core.request_message(args, token=ctx.token.access_token, tenant=ctx.tenant)
+    return await ctx.core.request_message(
+        args,
+        token=ctx.token.access_token,
+        tenant=ctx.tenant,
+        correlation_id=ctx.correlation_id,
+    )
 
 
 async def _forbidden(ctx: ToolContext, args: Any) -> EmptyOutput:
@@ -162,7 +244,10 @@ def build_default_registry() -> ToolRegistry:
     reg.register(
         ToolSpec(
             name="core.get_regulation_request",
-            description="Pedido de regulação (campos administrativos e documentos anexos).",
+            description=(
+                "Pedido de regulação (status, prioridade, justification_present, "
+                "attached_documents_count, pendências abertas) — sem texto clínico."
+            ),
             input_model=GetRegulationRequestInput,
             output_model=RegulationRequest,
             risk="low",
@@ -170,13 +255,38 @@ def build_default_registry() -> ToolRegistry:
             scope="regulation:request:read",
             handler=_get_regulation_request,
             kind="read",
-            stub=True,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="core.get_exam_order",
+            description="Pedido de exame com resultados (só metadados: crítico, laudo, tarefa).",
+            input_model=GetExamOrderInput,
+            output_model=ExamOrder,
+            risk="low",
+            action_class="auto",
+            scope="exam:order:read",
+            handler=_get_exam_order,
+            kind="read",
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="core.get_merge_case",
+            description="Caso de possível duplicidade do MPI com evidências e conflitos.",
+            input_model=GetMergeCaseInput,
+            output_model=MergeCase,
+            risk="low",
+            action_class="auto",
+            scope="mpi:case:read",
+            handler=_get_merge_case,
+            kind="read",
         )
     )
     reg.register(
         ToolSpec(
             name="core.list_merge_case",
-            description="Caso(s) de possível duplicidade do MPI com evidências por atributo.",
+            description="Fila de casos de duplicidade do MPI (ou um caso, por id).",
             input_model=ListMergeCaseInput,
             output_model=ListMergeCaseOutput,
             risk="low",
@@ -189,7 +299,7 @@ def build_default_registry() -> ToolRegistry:
     reg.register(
         ToolSpec(
             name="core.create_task",
-            description="Cria tarefa operacional no core (origem = agente).",
+            description="Cria tarefa operacional no core (origin.kind=agent).",
             input_model=TaskCreate,
             output_model=Task,
             risk="low",
@@ -202,21 +312,26 @@ def build_default_registry() -> ToolRegistry:
     reg.register(
         ToolSpec(
             name="core.create_pending_issue",
-            description="Abre pendência administrativa num pedido de regulação (devolve à origem).",
-            input_model=PendingIssueCreate,
-            output_model=PendingIssue,
+            description=(
+                "Registra pendência documental/administrativa num pedido de regulação "
+                "(POST /regulation/requests/{id}/issues, origin.kind=agent) — só após aprovação."
+            ),
+            input_model=CreatePendingIssueInput,
+            output_model=RegulationRequest,
             risk="medium",
             action_class="requires_approval",
-            scope="regulation:pending-issue:write",
+            scope="regulation:issue:write",
             handler=_create_pending_issue,
             kind="write",
-            stub=True,
         )
     )
     reg.register(
         ToolSpec(
             name="communication.request_message",
-            description="Solicita envio de mensagem ao cidadão por template (sem dado clínico).",
+            description=(
+                "Solicita envio de mensagem ao cidadão por template (sem dado clínico). "
+                "STUB: o core ainda não expõe módulo de comunicação."
+            ),
             input_model=MessageRequest,
             output_model=MessageRequestResult,
             risk="medium",

@@ -85,3 +85,29 @@ def test_mask_for_record_has_no_pii() -> None:
     masked = json.dumps(mask_for_record({"reason": f"ligar para {PII_PHONE}", "name": PII_NAME}))
     for pii in (PII_PHONE, PII_NAME):
         assert pii not in masked
+
+
+def test_operational_codes_are_not_mistaken_for_phones() -> None:
+    """INE (10 dígitos), CNES (7) e SIGTAP (10) ficam intactos; telefone em chave de contato não."""
+    data = {
+        "assignee": {"kind": "team", "id": "0001234567"},
+        "reference_team": {"team_ine": "0009876543", "health_unit_cnes": "2143456"},
+        "requested_service_code": "0301010072",
+        "requesting_professional_cbo": "225125",
+        "phone": PII_PHONE,
+        "notes": f"ligar para {PII_PHONE}; equipe 0001234567",
+    }
+    result = Minimizer().minimize(data)
+    assert result.data["assignee"] == {"kind": "team", "id": "0001234567"}
+    assert result.data["reference_team"] == {
+        "team_ine": "0009876543",
+        "health_unit_cnes": "2143456",
+    }
+    assert result.data["requested_service_code"] == "0301010072"
+    assert result.data["requesting_professional_cbo"] == "225125"
+    assert "phone" not in result.data
+    # em texto livre continua conservador: qualquer sequência "telefônica" é removida
+    assert PII_PHONE not in result.data["notes"] and REDACTED in result.data["notes"]
+    assert mask_for_record({"assignee": {"kind": "team", "id": "0001234567"}})["assignee"][
+        "id"
+    ] == ("0001234567")

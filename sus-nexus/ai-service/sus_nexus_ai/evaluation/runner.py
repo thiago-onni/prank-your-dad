@@ -3,7 +3,7 @@
 Formato de cada linha::
 
     {"id": "...", "input": {...}, "fixtures": {"regulation_requests": [...],
-     "merge_cases": [...], "citizen_summaries": [...]}, "expected": {...}}
+     "merge_cases": [...], "exam_orders": [...], "citizen_summaries": [...]}, "expected": {...}}
 
 O runner executa o agente com ``InMemoryCoreClient`` carregado com os fixtures, política local,
 SQLite em memória e o LLM configurado (fake por padrão) e compara com ``expected``.
@@ -23,6 +23,7 @@ from sus_nexus_ai.persistence.schemas import AgentRunRecord, Trigger
 from sus_nexus_ai.service import build_service
 from sus_nexus_ai.tools.core_client import (
     CitizenOperationalSummary,
+    ExamOrder,
     InMemoryCoreClient,
     MergeCase,
     RegulationRequest,
@@ -32,6 +33,7 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "regulation_completeness": 0.9,
     "mpi_duplicate_suggestion": 0.9,
     "post_discharge_followup": 0.9,
+    "exam_critical_result": 0.9,
 }
 
 
@@ -91,6 +93,9 @@ def _load_fixtures(core: InMemoryCoreClient, fixtures: dict[str, Any]) -> None:
     for item in fixtures.get("merge_cases", []):
         case = MergeCase.model_validate(item)
         core.merge_cases[case.id] = case
+    for item in fixtures.get("exam_orders", []):
+        order = ExamOrder.model_validate(item)
+        core.exam_orders[order.id] = order
     for item in fixtures.get("citizen_summaries", []):
         summary = CitizenOperationalSummary.model_validate(item)
         core.summaries[summary.citizen_id] = summary
@@ -105,18 +110,35 @@ def _compare_regulation(
     run: AgentRunRecord, expected: dict[str, Any], core: InMemoryCoreClient
 ) -> tuple[dict[str, Any], list[str]]:
     out = run.output or {}
+    pending = [
+        a
+        for a in run.actions
+        if a.tool == "core.create_pending_issue" and a.status == "pending_approval"
+    ]
     actual = {
-        "missing_fields": sorted(out.get("missing_fields", [])),
-        "pending_issue": out.get("suggested_pending_issue") is not None,
+        "missing_kinds": sorted(i.get("kind", "") for i in out.get("missing_items", [])),
+        "pending_actions": len(pending),
+        "pending_kinds": sorted(str(a.args.get("kind")) for a in pending),
+        "duplicate_suspected": bool(out.get("duplicate_suspected", False)),
+        "issues_created": len(core.issues),
     }
     mismatches = []
-    if sorted(expected.get("missing_fields", [])) != actual["missing_fields"]:
-        mismatches.append("missing_fields")
+    if sorted(expected.get("missing_kinds", [])) != actual["missing_kinds"]:
+        mismatches.append("missing_kinds")
     if (
-        expected.get("pending_issue") is not None
-        and expected["pending_issue"] != actual["pending_issue"]
+        expected.get("pending_actions") is not None
+        and expected["pending_actions"] != actual["pending_actions"]
     ):
-        mismatches.append("pending_issue")
+        mismatches.append("pending_actions")
+    if actual["pending_kinds"] != actual["missing_kinds"]:
+        mismatches.append("actions_must_match_items")
+    if (
+        expected.get("duplicate_suspected") is not None
+        and expected["duplicate_suspected"] != actual["duplicate_suspected"]
+    ):
+        mismatches.append("duplicate_suspected")
+    if actual["issues_created"] != 0:
+        mismatches.append("issue_created_without_approval")
     return actual, mismatches
 
 
@@ -153,10 +175,45 @@ def _compare_post_discharge(
     return actual, mismatches
 
 
+def _compare_exam_critical(
+    run: AgentRunRecord, expected: dict[str, Any], core: InMemoryCoreClient
+) -> tuple[dict[str, Any], list[str]]:
+    out = run.output or {}
+    task_created = any(a.tool == "core.create_task" and a.status == "executed" for a in run.actions)
+    task = core.tasks[-1] if task_created and core.tasks else None
+    actual: dict[str, Any] = {
+        "urgency": out.get("urgency"),
+        "task_created": task_created,
+        "assignee_kind": task.assignee.kind if task and task.assignee else None,
+        "assignee_id": task.assignee.id if task and task.assignee else None,
+    }
+    mismatches = []
+    if expected.get("urgency") != actual["urgency"]:
+        mismatches.append("urgency")
+    if expected.get("task_created") is not None and expected["task_created"] != task_created:
+        mismatches.append("task_created")
+    for key in ("assignee_kind", "assignee_id"):
+        if expected.get(key) is not None and expected[key] != actual[key]:
+            mismatches.append(key)
+    if task is not None:
+        if task.task_type != "exam_result_followup" or task.priority != "urgent":
+            mismatches.append("task_shape")
+        if task.origin is None or task.origin.kind != "agent":
+            mismatches.append("task_origin")
+        # EXA-008: nada do conteúdo clínico do pedido (código/descrição) pode ir para a tarefa.
+        blob = f"{task.title} {task.description}"
+        for order in core.exam_orders.values():
+            clinical = [order.exam_code, order.exam_description or ""]
+            if any(c and c in blob for c in clinical):
+                mismatches.append("clinical_content_in_task")
+    return actual, mismatches
+
+
 COMPARATORS: dict[str, Comparator] = {
     "regulation_completeness": _compare_regulation,
     "mpi_duplicate_suggestion": _compare_mpi,
     "post_discharge_followup": _compare_post_discharge,
+    "exam_critical_result": _compare_exam_critical,
 }
 
 

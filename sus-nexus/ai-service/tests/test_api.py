@@ -17,12 +17,14 @@ def test_health_and_catalog(client: TestClient) -> None:
     health = client.get("/health").json()
     assert health["status"] == "ok"
     assert health["agents"] == [
+        "exam_critical_result",
         "mpi_duplicate_suggestion",
         "post_discharge_followup",
         "regulation_completeness",
     ]
     agents = client.get("/agents", headers=HEADERS).json()
     assert {a["id"] for a in agents} == set(health["agents"])
+    assert all("input_schema" in a and "output_schema" in a for a in agents)
     tools = client.get("/tools", headers=HEADERS).json()
     forbidden = {t["name"] for t in tools if t["action_class"] == "forbidden"}
     assert forbidden == {
@@ -100,7 +102,7 @@ def test_approval_endpoints_require_role_and_justification(
     assert ok.status_code == 200, ok.text
     action = next(a for a in ok.json()["actions"] if a["id"] == action_id)
     assert action["status"] == "approved" and action["approver"] == "user:regulador-1"
-    assert len(core.pending_issues) == 1
+    assert len(core.issues) == 1
     assert client.post(url, json=body, headers=approver_headers()).status_code == 409
 
     reject = client.post(
@@ -123,7 +125,7 @@ def test_reject_endpoint(client: TestClient, core: InMemoryCoreClient) -> None:
     )
     assert resp.status_code == 200
     assert resp.json()["actions"][0]["status"] == "rejected"
-    assert core.pending_issues == []
+    assert core.issues == []
     assert (
         client.get("/approvals", params={"status": "rejected"}, headers=HEADERS).json()[0][
             "approver"
@@ -161,17 +163,39 @@ def test_metrics_endpoint_exposes_agent_series(client: TestClient) -> None:
         json={"tenant": TENANT, "input": discharge_input()},
         headers=HEADERS,
     )
+    run = client.post(
+        "/agents/regulation_completeness/run",
+        json={"tenant": TENANT, "input": {"request_id": REQUEST_ID}},
+        headers=HEADERS,
+    ).json()
+    client.post(
+        f"/runs/{run['id']}/actions/{run['actions'][0]['id']}/approve",
+        json={"justification": "Confirmo a pendência de justificativa."},
+        headers=approver_headers(),
+    )
     text = client.get("/metrics").text
     for name in (
         "agent_tool_call_total",
         "agent_tool_call_denied_total",
         "agent_human_approval_rate",
         "agent_run_total",
+        "agent_action_total",
     ):
         assert name in text
     assert 'agent_run_total{agent_id="post_discharge_followup",status="completed"}' in text
     assert (
         'agent_tool_call_total{agent_id="post_discharge_followup",status="executed",tool="core.create_task"}'
+        in text
+    )
+    assert (
+        'agent_action_total{agent="post_discharge_followup",class="auto",status="executed"}' in text
+    )
+    assert (
+        'agent_action_total{agent="regulation_completeness",class="requires_approval",status="pending_approval"}'
+        in text
+    )
+    assert (
+        'agent_action_total{agent="regulation_completeness",class="requires_approval",status="approved"}'
         in text
     )
 

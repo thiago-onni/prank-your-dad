@@ -36,6 +36,38 @@ class KillSwitchResponse(BaseModel):
     admin: KillSwitchState
 
 
+class AgentDescriptor(BaseModel):
+    id: str
+    version: str
+    prompt_version: str
+    description: str
+    tools: list[str]
+    rule_versions: dict[str, str]
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any]
+
+
+class ToolDescriptor(BaseModel):
+    name: str
+    description: str
+    risk: str
+    action_class: str
+    scope: str
+    kind: str
+    owner: str
+    stub: bool
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+    agents: list[str]
+    llm_model: str
+    kill_switch_global: bool
+
+
 def _check_tenant(principal: Principal, tenant: str, service: AIService) -> None:
     if principal.tenant and principal.tenant != tenant:
         if principal.has_any_role(service.settings.admin_roles):
@@ -46,32 +78,33 @@ def _check_tenant(principal: Principal, tenant: str, service: AIService) -> None
 # ---- agentes e ferramentas ----
 
 
-@router.get("/agents", tags=["agents"])
+@router.get("/agents", tags=["agents"], response_model=list[AgentDescriptor])
 def list_agents(
     request: Request,
     principal: Principal = Depends(get_principal),  # noqa: B008
-) -> list[dict[str, Any]]:
+) -> list[AgentDescriptor]:
     service = _service(request)
     return [
-        {
-            "id": d.id,
-            "version": d.version,
-            "prompt_version": d.prompt_version,
-            "description": d.description,
-            "tools": d.tools,
-            "rule_versions": d.rule_versions,
-            "output_schema": d.output_model.model_json_schema(),
-        }
+        AgentDescriptor(
+            id=d.id,
+            version=d.version,
+            prompt_version=d.prompt_version,
+            description=d.description,
+            tools=d.tools,
+            rule_versions=d.rule_versions,
+            input_schema=d.input_model.model_json_schema(),
+            output_schema=d.output_model.model_json_schema(),
+        )
         for d in service.catalog.values()
     ]
 
 
-@router.get("/tools", tags=["agents"])
+@router.get("/tools", tags=["agents"], response_model=list[ToolDescriptor])
 def list_tools(
     request: Request,
     principal: Principal = Depends(get_principal),  # noqa: B008
-) -> list[dict[str, Any]]:
-    return [spec.describe() for spec in _service(request).registry.list()]
+) -> list[ToolDescriptor]:
+    return [ToolDescriptor(**spec.describe()) for spec in _service(request).registry.list()]
 
 
 @router.post("/agents/{agent_id}/run", tags=["agents"], response_model=AgentRunRecord)
@@ -212,16 +245,16 @@ def set_kill_switch(
 # ---- operacional ----
 
 
-@router.get("/health", tags=["ops"])
-def health(request: Request) -> dict[str, Any]:
+@router.get("/health", tags=["ops"], response_model=HealthResponse)
+def health(request: Request) -> HealthResponse:
     service = _service(request)
-    return {
-        "status": "ok",
-        "service": service.settings.service_name,
-        "agents": sorted(service.catalog),
-        "llm_model": service.llm.model,
-        "kill_switch_global": service.kill_switch.state().global_,
-    }
+    return HealthResponse(
+        status="ok",
+        service=service.settings.service_name,
+        agents=sorted(service.catalog),
+        llm_model=service.llm.model,
+        kill_switch_global=service.kill_switch.state().global_,
+    )
 
 
 @router.get("/metrics", tags=["ops"])

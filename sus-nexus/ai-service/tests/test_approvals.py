@@ -34,9 +34,13 @@ async def test_approve_executes_tool_with_approver_identity(
     assert action is not None
     assert action.status == "approved" and action.approver == "user:regulador-1"
     assert action.justification and action.decided_at is not None and action.result_hash
-    assert len(core.pending_issues) == 1
-    assert core.pending_issues[0].request_id == REQUEST_ID
-    assert "cid10" in core.pending_issues[0].missing_fields
+    assert len(core.issues) == 1
+    issue = core.issues[0]
+    assert issue.request_id == REQUEST_ID and issue.kind == "clinical_justification"
+    assert issue.origin is not None and issue.origin.kind == "agent"
+    assert issue.origin.id == "regulation_completeness" and issue.origin.version == "2.0.0"
+    # o core registrou a pendência já aberta no pedido
+    assert core.regulation_requests[REQUEST_ID].open_issue_kinds() == {"clinical_justification"}
     approval = service.repository.get_approval(run.id, action_id)
     assert approval is not None and approval.status == "approved"
     assert approval.approver == "user:regulador-1"
@@ -58,7 +62,7 @@ async def test_reject_records_justification_and_executes_nothing(
     action = updated.action(action_id)
     assert action is not None and action.status == "rejected"
     assert action.approver == "user:regulador-2"
-    assert core.pending_issues == []
+    assert core.issues == [] and "add_regulation_issue" not in [c[0] for c in core.calls]
     approval = service.repository.get_approval(run.id, action_id)
     assert approval is not None and approval.status == "rejected"
 
@@ -94,4 +98,23 @@ async def test_kill_switch_at_approval_time_denies_execution(
     action = updated.action(action_id)
     assert action is not None and action.status == "denied"
     assert action.reasons == ["kill_switch:tool"]
-    assert core.pending_issues == []
+    assert core.issues == []
+
+
+async def test_second_run_after_approval_does_not_duplicate_issue(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    run = await _run_with_pending(service)
+    await service.approve_action(
+        run.id, run.actions[0].id, approver="user:regulador-1", justification="Aprovo a pendência."
+    )
+    assert len(core.issues) == 1
+    # evento "updated" chega depois: a pendência já está aberta no pedido → nada novo
+    again = await service.run_agent(
+        "regulation_completeness",
+        tenant=TENANT,
+        trigger=Trigger(kind="event", ref="evt_01J8XE09ABCDEFGHJKMNPQRSTV"),
+        input_data={"request_id": REQUEST_ID},
+    )
+    assert again.status == "completed" and again.actions == []
+    assert len(core.issues) == 1

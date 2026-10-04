@@ -21,6 +21,12 @@ agent_tool_call_denied_total = Counter(
 agent_run_total = Counter(
     "agent_run_total", "Execuções de agente por status", ["agent_id", "status"], registry=REGISTRY
 )
+agent_action_total = Counter(
+    "agent_action_total",
+    "Ações planejadas por agente, classe (auto/requires_approval/forbidden) e status final",
+    ["agent", "class", "status"],
+    registry=REGISTRY,
+)
 agent_human_decision_total = Counter(
     "agent_human_decision_total",
     "Decisões humanas sobre ações propostas",
@@ -41,6 +47,10 @@ agent_llm_cost_usd_total = Counter(
 )
 
 _decisions: dict[str, dict[str, int]] = {}
+
+
+def record_action(agent_id: str, action_class: str, status: str) -> None:
+    agent_action_total.labels(agent_id, action_class, status).inc()
 
 
 def record_human_decision(agent_id: str, decision: str) -> None:

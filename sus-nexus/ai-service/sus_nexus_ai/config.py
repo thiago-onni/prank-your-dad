@@ -80,7 +80,12 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
     kafka_consumer_group: str = "ai-service"
     kafka_topics: list[str] = Field(
-        default_factory=lambda: ["sus.hospital.discharge.v1", "sus.regulation.request.v1"]
+        default_factory=lambda: [
+            "sus.hospital.discharge.v1",
+            "sus.regulation.request.v1",
+            "sus.exam.result.v1",
+            "sus.identity.merge.v1",
+        ]
     )
 
     # --- paths ---

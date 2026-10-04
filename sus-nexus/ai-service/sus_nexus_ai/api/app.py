@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from sus_nexus_ai.api.auth import JwtVerifier
 from sus_nexus_ai.api.routes import router
@@ -18,6 +19,12 @@ from sus_nexus_ai.service import AIService, build_service
 log = get_logger(__name__)
 
 PROBLEM_JSON = "application/problem+json"
+API_VERSION = "0.2.0"
+
+
+def _operation_id(route: APIRoute) -> str:
+    """``operationId`` = nome da função da rota (estável para geração de tipos no web)."""
+    return route.name
 
 
 def _problem(status: int, title: str, detail: str | None = None, **extra: object) -> JSONResponse:
@@ -53,9 +60,15 @@ def create_app(settings: Settings | None = None, service: AIService | None = Non
 
     app = FastAPI(
         title="SUS Nexus — AI Service",
-        version="0.1.0",
-        description="Agentes de IA com ferramentas formais, OPA, kill switch e aprovação humana.",
+        version=API_VERSION,
+        description=(
+            "Agentes de IA com ferramentas formais, OPA, kill switch e aprovação humana. "
+            "Contrato exportado para contracts/openapi/ai-service.yaml "
+            "(python -m sus_nexus_ai.export_openapi)."
+        ),
         lifespan=lifespan,
+        servers=[{"url": "http://localhost:8000", "description": "dev local"}],
+        generate_unique_id_function=_operation_id,
     )
     # Disponibiliza settings/service antes do lifespan para dependências em testes síncronos.
     app.state.settings = settings

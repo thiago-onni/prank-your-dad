@@ -5,7 +5,17 @@ from sus_nexus_ai.persistence.schemas import Trigger
 from sus_nexus_ai.security.kill_switch import KillSwitchState
 from sus_nexus_ai.service import AIService, build_service
 from sus_nexus_ai.tools.core_client import InMemoryCoreClient
-from tests.conftest import CASE_ID, CITIZEN_ID, REQUEST_ID, TENANT, discharge_input
+from tests.conftest import (
+    CASE_ID,
+    CITIZEN_ID,
+    EXAM_ORDER_ID,
+    REQUEST_ID,
+    REQUESTING_CNES,
+    TENANT,
+    discharge_input,
+    exam_order_fixture,
+    regulation_request_fixture,
+)
 
 
 async def test_regulation_completeness_queues_pending_issue_for_approval(
@@ -19,21 +29,121 @@ async def test_regulation_completeness_queues_pending_issue_for_approval(
     )
     assert run.status == "completed" and run.validation_status == "valid"
     assert run.output is not None
-    assert set(run.output["missing_fields"]) == {"cid10", "document:ecg"}
-    assert run.output["suggested_pending_issue"] is not None
+    assert [i["kind"] for i in run.output["missing_items"]] == ["clinical_justification"]
+    assert run.output["duplicate_suspected"] is False
     assert [a.tool for a in run.actions] == ["core.create_pending_issue"]
     action = run.actions[0]
     assert action.action_class == "requires_approval" and action.status == "pending_approval"
-    assert core.pending_issues == []  # nada executado sem humano
+    assert action.args["kind"] == "clinical_justification"
+    assert action.args["request_id"] == REQUEST_ID and len(action.args["description"]) >= 10
+    assert core.issues == []  # nada executado sem humano
     approvals = service.repository.list_approvals(status="pending")
     assert len(approvals) == 1 and approvals[0].action_id == action.id
     tools = [t["tool"] for t in run.tools_called]
     assert tools[:2] == ["core.get_regulation_request", "core.get_citizen_summary"]
     assert run.tools_called[-1]["status"] == "requires_approval"
-    assert run.prompt_version == "v1" and run.rule_versions == {
-        "completeness": "completeness_rules_v1"
-    }
+    assert run.agent_version == "2.0.0" and run.prompt_version == "v2"
+    assert run.rule_versions == {"completeness": "completeness_rules_v2"}
     assert run.input_ref.hash and run.input_ref.ref == REQUEST_ID
+    findings = run.minimized_context["rule_findings"]
+    assert findings["actionable"] is True and findings["findings"][0]["already_open"] is False
+
+
+async def test_regulation_completeness_does_not_duplicate_open_issue(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    core.regulation_requests[REQUEST_ID] = regulation_request_fixture(
+        kind="exam",
+        status="pending_documents",
+        attached_documents_count=0,
+        issues=[
+            {
+                "id": "iss_01J8XI01ABCDEFGHJKMNPQRSTV",
+                "kind": "clinical_justification",
+                "status": "open",
+                "origin": {"kind": "user", "id": "user:regulador-1"},
+                "created_at": "2026-10-01T09:00:00-03:00",
+            }
+        ],
+    )
+    run = await service.run_agent(
+        "regulation_completeness",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data={"request_id": REQUEST_ID},
+    )
+    assert run.status == "completed" and run.output is not None
+    # justificativa já tem pendência aberta → só documento é proposto
+    assert [i["kind"] for i in run.output["missing_items"]] == ["missing_document"]
+    assert [a.args["kind"] for a in run.actions] == ["missing_document"]
+    findings = {
+        f["kind"]: f["already_open"] for f in run.minimized_context["rule_findings"]["findings"]
+    }
+    assert findings == {"clinical_justification": True, "missing_document": False}
+
+
+async def test_regulation_completeness_terminal_status_plans_nothing(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    core.regulation_requests[REQUEST_ID] = regulation_request_fixture(status="authorized")
+    run = await service.run_agent(
+        "regulation_completeness",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data={"request_id": REQUEST_ID},
+    )
+    assert run.status == "completed" and run.actions == []
+    assert run.output is not None and run.output["missing_items"] == []
+
+
+async def test_exam_critical_result_creates_followup_task_without_clinical_content(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    run = await service.run_agent(
+        "exam_critical_result",
+        tenant=TENANT,
+        trigger=Trigger(kind="event", ref="evt_01J8XE05ABCDEFGHJKMNPQRSTV"),
+        input_data={"order_id": EXAM_ORDER_ID, "result_id": "exr_01J8XY01ABCDEFGHJKMNPQRSTV"},
+    )
+    assert run.status == "completed" and run.output is not None
+    assert run.output["urgency"] == "urgent" and run.output["create_task"] is True
+    assert run.rule_versions == {"urgency": "exam_critical_rule_v1"}
+    assert [t["tool"] for t in run.tools_called][:2] == [
+        "core.get_exam_order",
+        "core.get_citizen_summary",
+    ]
+    assert len(run.actions) == 1 and run.actions[0].status == "executed"
+    assert run.actions[0].action_class == "auto"
+    task = core.tasks[0]
+    assert task.task_type == "exam_result_followup" and task.priority == "urgent"
+    assert task.citizen_id == CITIZEN_ID
+    assert task.assignee is not None and task.assignee.kind == "health_unit"
+    assert task.assignee.id == REQUESTING_CNES
+    assert task.origin is not None and task.origin.kind == "agent"
+    assert task.origin.id == "exam_critical_result" and task.origin.version == "1.0.0"
+    assert task.due_at is not None and task.due_at.day == 2  # laudo 01/10 13:00Z + 24 h
+    # EXA-008: nada clínico no título/descrição
+    blob = f"{task.title} {task.description}"
+    assert "0202010473" not in blob and "potássio" not in blob.lower()
+    # o LLM também não recebe código/descrição do exame
+    assert "exam_code" not in run.minimized_context["order"]
+    assert "0202010473" not in str(run.minimized_context)
+
+
+async def test_exam_critical_result_skips_when_core_already_created_task(
+    service: AIService, core: InMemoryCoreClient
+) -> None:
+    order = exam_order_fixture()
+    order.results[0].followup_task_id = "task_01J8XT01ABCDEFGHJKMNPQRSTV"
+    core.exam_orders[EXAM_ORDER_ID] = order
+    run = await service.run_agent(
+        "exam_critical_result",
+        tenant=TENANT,
+        trigger=Trigger(kind="manual"),
+        input_data={"order_id": EXAM_ORDER_ID},
+    )
+    assert run.status == "completed" and run.output is not None
+    assert run.output["urgency"] == "tracked" and run.actions == [] and core.tasks == []
 
 
 async def test_mpi_duplicate_suggestion_only_suggests(
@@ -49,6 +159,8 @@ async def test_mpi_duplicate_suggestion_only_suggests(
     assert run.output is not None and run.output["verdict"] == "probable_same_person"
     assert run.actions == []
     assert [c[0] for c in core.calls] == ["get_merge_case"]
+    assert run.agent_version == "2.0.0"
+    assert run.minimized_context["heuristic_reference"]["verdict"] == "probable_same_person"
     # nomes dos candidatos foram pseudonimizados no contexto enviado ao LLM
     names = [c["display_name"] for c in run.minimized_context["case"]["candidates"]]
     assert all(n.startswith("[PESSOA_") for n in names)
@@ -74,6 +186,7 @@ async def test_post_discharge_creates_task_automatically(
     assert task.task_type == "post_discharge_followup" and task.priority == "urgent"
     assert task.citizen_id == CITIZEN_ID
     assert task.assignee is not None and task.assignee.kind == "team"
+    assert task.assignee.id == "0001234567"  # INE de 10 dígitos não é telefone: chega intacto
     assert task.origin is not None and task.origin.kind == "agent"
     assert task.due_at is not None and task.due_at.day == 3  # alta 01/10 + 2 dias
 
@@ -127,7 +240,7 @@ async def test_kill_switch_blocks_run_before_any_tool(
 async def test_tool_denied_during_context_marks_run_denied(
     service: AIService, core: InMemoryCoreClient
 ) -> None:
-    service.kill_switch.set_admin_state(KillSwitchState(tools=["core.list_merge_case"]))
+    service.kill_switch.set_admin_state(KillSwitchState(tools=["core.get_merge_case"]))
     run = await service.run_agent(
         "mpi_duplicate_suggestion",
         tenant=TENANT,

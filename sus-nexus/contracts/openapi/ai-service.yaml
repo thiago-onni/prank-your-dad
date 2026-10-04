@@ -1,0 +1,828 @@
+# Gerado por `python -m sus_nexus_ai.export_openapi` — não edite à mão.
+openapi: 3.1.0
+info:
+  title: SUS Nexus — AI Service
+  description: Agentes de IA com ferramentas formais, OPA, kill switch e aprovação humana. Contrato exportado
+    para contracts/openapi/ai-service.yaml (python -m sus_nexus_ai.export_openapi).
+  version: 0.2.0
+servers:
+- url: http://localhost:8000
+  description: dev local
+paths:
+  /agents:
+    get:
+      tags:
+      - agents
+      summary: List Agents
+      operationId: list_agents
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AgentDescriptor'
+                type: array
+                title: Response List Agents
+  /tools:
+    get:
+      tags:
+      - agents
+      summary: List Tools
+      operationId: list_tools
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ToolDescriptor'
+                type: array
+                title: Response List Tools
+  /agents/{agent_id}/run:
+    post:
+      tags:
+      - agents
+      summary: Run Agent
+      operationId: run_agent
+      parameters:
+      - name: agent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Agent Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /runs:
+    get:
+      tags:
+      - runs
+      summary: List Runs
+      operationId: list_runs
+      parameters:
+      - name: agent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentRunRecord'
+                title: Response List Runs
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /runs/{run_id}:
+    get:
+      tags:
+      - runs
+      summary: Get Run
+      operationId: get_run
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /runs/{run_id}/actions/{action_id}/approve:
+    post:
+      tags:
+      - approvals
+      summary: Approve Action
+      operationId: approve_action
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: action_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Action Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /runs/{run_id}/actions/{action_id}/reject:
+    post:
+      tags:
+      - approvals
+      summary: Reject Action
+      operationId: reject_action
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: action_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Action Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /approvals:
+    get:
+      tags:
+      - approvals
+      summary: List Approvals
+      operationId: list_approvals
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: pending
+          title: Status
+      - name: agent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentApproval'
+                title: Response List Approvals
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /admin/kill-switch:
+    get:
+      tags:
+      - admin
+      summary: Get Kill Switch
+      operationId: get_kill_switch
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchResponse'
+    post:
+      tags:
+      - admin
+      summary: Set Kill Switch
+      operationId: set_kill_switch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillSwitchState'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - ops
+      summary: Health
+      operationId: health
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /metrics:
+    get:
+      tags:
+      - ops
+      summary: Prometheus Metrics
+      operationId: prometheus_metrics
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    AgentAction:
+      properties:
+        id:
+          type: string
+          title: Id
+        tool:
+          type: string
+          title: Tool
+        action_class:
+          type: string
+          enum:
+          - auto
+          - requires_approval
+          - forbidden
+          title: Action Class
+        status:
+          type: string
+          enum:
+          - executed
+          - pending_approval
+          - approved
+          - rejected
+          - blocked
+          - denied
+          - failed
+          title: Status
+        args:
+          additionalProperties: true
+          type: object
+          title: Args
+        result_hash:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Result Hash
+        approver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approver
+        justification:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Justification
+        decided_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Decided At
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+      type: object
+      required:
+      - id
+      - tool
+      - action_class
+      - status
+      title: AgentAction
+    AgentApproval:
+      properties:
+        id:
+          type: string
+          title: Id
+        run_id:
+          type: string
+          title: Run Id
+        action_id:
+          type: string
+          title: Action Id
+        agent_id:
+          type: string
+          title: Agent Id
+        tenant:
+          type: string
+          title: Tenant
+        tool:
+          type: string
+          title: Tool
+        status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+          title: Status
+          default: pending
+        requested_at:
+          type: string
+          format: date-time
+          title: Requested At
+        decided_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Decided At
+        approver:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approver
+        justification:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Justification
+      type: object
+      required:
+      - id
+      - run_id
+      - action_id
+      - agent_id
+      - tenant
+      - tool
+      - requested_at
+      title: AgentApproval
+    AgentDescriptor:
+      properties:
+        id:
+          type: string
+          title: Id
+        version:
+          type: string
+          title: Version
+        prompt_version:
+          type: string
+          title: Prompt Version
+        description:
+          type: string
+          title: Description
+        tools:
+          items:
+            type: string
+          type: array
+          title: Tools
+        rule_versions:
+          additionalProperties:
+            type: string
+          type: object
+          title: Rule Versions
+        input_schema:
+          additionalProperties: true
+          type: object
+          title: Input Schema
+        output_schema:
+          additionalProperties: true
+          type: object
+          title: Output Schema
+      type: object
+      required:
+      - id
+      - version
+      - prompt_version
+      - description
+      - tools
+      - rule_versions
+      - input_schema
+      - output_schema
+      title: AgentDescriptor
+    AgentRunRecord:
+      properties:
+        id:
+          type: string
+          title: Id
+        agent_id:
+          type: string
+          title: Agent Id
+        agent_version:
+          type: string
+          title: Agent Version
+        prompt_version:
+          type: string
+          title: Prompt Version
+        model:
+          type: string
+          title: Model
+        model_params:
+          additionalProperties: true
+          type: object
+          title: Model Params
+        rule_versions:
+          additionalProperties:
+            type: string
+          type: object
+          title: Rule Versions
+        tenant:
+          type: string
+          title: Tenant
+        trigger:
+          $ref: '#/components/schemas/Trigger'
+        input_ref:
+          $ref: '#/components/schemas/InputRef'
+        minimized_context:
+          additionalProperties: true
+          type: object
+          title: Minimized Context
+        tools_called:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Tools Called
+        output:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Output
+        validation_status:
+          type: string
+          enum:
+          - not_run
+          - valid
+          - invalid_output
+          title: Validation Status
+          default: not_run
+        validation_attempts:
+          type: integer
+          title: Validation Attempts
+          default: 0
+        status:
+          type: string
+          enum:
+          - running
+          - completed
+          - invalid_output
+          - failed
+          - denied
+          title: Status
+          default: running
+        actions:
+          items:
+            $ref: '#/components/schemas/AgentAction'
+          type: array
+          title: Actions
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+        cost_estimate:
+          type: number
+          title: Cost Estimate
+          default: 0.0
+        tokens_in:
+          type: integer
+          title: Tokens In
+          default: 0
+        tokens_out:
+          type: integer
+          title: Tokens Out
+          default: 0
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - id
+      - agent_id
+      - agent_version
+      - prompt_version
+      - model
+      - tenant
+      - trigger
+      - input_ref
+      - started_at
+      title: AgentRunRecord
+    DecisionRequest:
+      properties:
+        justification:
+          type: string
+          maxLength: 1000
+          minLength: 10
+          title: Justification
+      type: object
+      required:
+      - justification
+      title: DecisionRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        service:
+          type: string
+          title: Service
+        agents:
+          items:
+            type: string
+          type: array
+          title: Agents
+        llm_model:
+          type: string
+          title: Llm Model
+        kill_switch_global:
+          type: boolean
+          title: Kill Switch Global
+      type: object
+      required:
+      - status
+      - service
+      - agents
+      - llm_model
+      - kill_switch_global
+      title: HealthResponse
+    InputRef:
+      properties:
+        hash:
+          type: string
+          title: Hash
+        ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref
+        kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      type: object
+      required:
+      - hash
+      title: InputRef
+    KillSwitchResponse:
+      properties:
+        effective:
+          $ref: '#/components/schemas/KillSwitchState'
+        admin:
+          $ref: '#/components/schemas/KillSwitchState'
+      type: object
+      required:
+      - effective
+      - admin
+      title: KillSwitchResponse
+    KillSwitchState:
+      properties:
+        global:
+          type: boolean
+          title: Global
+          default: false
+        agents:
+          items:
+            type: string
+          type: array
+          title: Agents
+        tools:
+          items:
+            type: string
+          type: array
+          title: Tools
+        tenants:
+          items:
+            type: string
+          type: array
+          title: Tenants
+      type: object
+      title: KillSwitchState
+      description: Estado serializável (também é o contrato enviado ao OPA).
+    RunRequest:
+      properties:
+        tenant:
+          type: string
+          pattern: ^ibge_\d{7}$
+          title: Tenant
+        trigger:
+          $ref: '#/components/schemas/Trigger'
+        input:
+          additionalProperties: true
+          type: object
+          title: Input
+      type: object
+      required:
+      - tenant
+      - input
+      title: RunRequest
+    ToolDescriptor:
+      properties:
+        name:
+          type: string
+          title: Name
+        description:
+          type: string
+          title: Description
+        risk:
+          type: string
+          title: Risk
+        action_class:
+          type: string
+          title: Action Class
+        scope:
+          type: string
+          title: Scope
+        kind:
+          type: string
+          title: Kind
+        owner:
+          type: string
+          title: Owner
+        stub:
+          type: boolean
+          title: Stub
+        input_schema:
+          additionalProperties: true
+          type: object
+          title: Input Schema
+        output_schema:
+          additionalProperties: true
+          type: object
+          title: Output Schema
+      type: object
+      required:
+      - name
+      - description
+      - risk
+      - action_class
+      - scope
+      - kind
+      - owner
+      - stub
+      - input_schema
+      - output_schema
+      title: ToolDescriptor
+    Trigger:
+      properties:
+        kind:
+          type: string
+          enum:
+          - event
+          - user
+          - workflow
+          - eval
+          - manual
+          title: Kind
+          default: manual
+        ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref
+        on_behalf_of:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: On Behalf Of
+      type: object
+      title: Trigger
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

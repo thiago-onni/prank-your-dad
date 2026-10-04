@@ -158,6 +158,7 @@ class AIService:
         self.repository.save_approval(approval)
         self.repository.save_run(run)
         metrics.record_human_decision(run.agent_id, "approved")
+        metrics.record_action(run.agent_id, action.action_class, action.status)
         log.info("approval.decided", run_id=run.id, action_id=action_id, decision="approved")
         return run
 
@@ -181,6 +182,7 @@ class AIService:
         self.repository.save_approval(approval)
         self.repository.save_run(run)
         metrics.record_human_decision(run.agent_id, "rejected")
+        metrics.record_action(run.agent_id, action.action_class, action.status)
         log.info("approval.decided", run_id=run.id, action_id=action_id, decision="rejected")
         return run
 

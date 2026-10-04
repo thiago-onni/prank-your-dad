@@ -23,6 +23,7 @@ dependencies = [
   "prometheus-client>=0.20",
   "pyjwt[crypto]>=2.8",
   "python-ulid>=2.7",
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -30,9 +31,11 @@ dev = [
   "pytest>=8.2",
   "pytest-asyncio>=0.23",
   "respx>=0.21",
+  "jsonschema>=4.20",
   "ruff>=0.5",
   "mypy>=1.10",
   "types-requests",
+  "types-PyYAML",
 ]
 observability = [
   "opentelemetry-api>=1.25",

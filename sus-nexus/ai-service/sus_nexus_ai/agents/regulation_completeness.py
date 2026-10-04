@@ -1,7 +1,22 @@
-"""Agente ``regulation_completeness``: completude e resumo de pedido de regulação (F2).
+"""Agente ``regulation_completeness`` v2: completude de pedido de regulação (contrato real).
 
-Autonomia: sugestão + pendência com aprovação humana (``core.create_pending_issue`` é
-``requires_approval``). Nunca altera prioridade nem decide (ferramentas ``forbidden``).
+Entrada: ``RegulationRequest`` de ``GET /regulation/requests/{id}`` (status, priority,
+``justification_present``, ``attached_documents_count``, ``issues[]`` já abertas, ``kind``,
+``requesting_cnes``, ``specialty``, ``requested_service_code``, ``sla_due_at``, ``waiting_days``).
+
+Regra determinística **pré-LLM** (``completeness_rules_v2``) decide *o que* falta; o LLM só
+redige a descrição de cada item e o resumo. Cada item vira uma ação ``core.create_pending_issue``
+(``requires_approval``) → ao aprovar, ``POST /regulation/requests/{id}/issues``.
+
+* ``justification_present == false`` → ``clinical_justification``;
+* ``attached_documents_count == 0`` e ``kind`` ∈ ``DOCUMENTS_REQUIRED_KINDS`` →
+  ``missing_document``;
+* ``requesting_cnes`` ausente, ou ``specialty`` ausente em consulta → ``missing_field``;
+* pendência do mesmo ``kind`` já **aberta** no pedido → não duplica (``already_open``);
+* pedido em status não acionável (autorizado, negado, cancelado, realizado, expirado…) → nada.
+
+Autonomia: sugestão + pendência com aprovação humana. Nunca altera prioridade nem decide
+(ferramentas ``forbidden``). ``duplicate_suspected`` é só sinal para o regulador — não gera ação.
 """
 
 from __future__ import annotations
@@ -13,56 +28,130 @@ from pydantic import BaseModel, Field
 
 from sus_nexus_ai.agents.base import AgentDefinition, PlannedAction, ToolCaller
 from sus_nexus_ai.llm.client import LLMMessage
+from sus_nexus_ai.tools.core_client import IssueKind
 
 AGENT_ID = "regulation_completeness"
-VERSION = "1.0.0"
-PROMPT_VERSION = "v1"
-RULES_VERSION = "completeness_rules_v1"
+VERSION = "2.0.0"
+PROMPT_VERSION = "v2"
+RULES_VERSION = "completeness_rules_v2"
 
-REQUIRED_FIELDS: tuple[str, ...] = (
-    "specialty",
-    "procedure_code",
-    "clinical_justification",
-    "cid10",
-    "requesting_unit_cnes",
-    "requesting_professional_cbo",
+DOCUMENTS_REQUIRED_KINDS: frozenset[str] = frozenset({"exam", "procedure", "surgery", "admission"})
+ACTIONABLE_STATUSES: frozenset[str] = frozenset(
+    {"requested", "pending_documents", "returned", "under_review"}
 )
-MIN_JUSTIFICATION_CHARS = 20
+ACTION_KIND_ORDER: tuple[IssueKind, ...] = (
+    "clinical_justification",
+    "missing_document",
+    "missing_field",
+)
+DEFAULT_DESCRIPTIONS: dict[str, str] = {
+    "clinical_justification": (
+        "Pedido sem justificativa clínica registrada. Solicitar à unidade solicitante que "
+        "complemente a justificativa antes da análise reguladora."
+    ),
+    "missing_document": (
+        "Pedido sem documentos anexados, obrigatórios para este tipo de solicitação. "
+        "Solicitar à unidade solicitante o envio dos documentos."
+    ),
+    "missing_field": (
+        "Pedido com campos administrativos obrigatórios ausentes ({codes}). "
+        "Solicitar à unidade solicitante a complementação."
+    ),
+}
+DuplicateSignal = Literal["none", "possible"]
 
 
 class RegulationCompletenessInput(BaseModel):
-    request_id: str
+    request_id: str = Field(min_length=1)
     citizen_id: str | None = None
 
 
-class SuggestedPendingIssue(BaseModel):
-    reason: str = Field(min_length=10, max_length=1000)
-    missing_fields: list[str] = Field(default_factory=list)
-    return_to: Literal["requesting_unit", "citizen"] = "requesting_unit"
+class MissingItem(BaseModel):
+    kind: IssueKind
+    description: str = Field(min_length=10, max_length=1000)
 
 
 class RegulationCompletenessOutput(BaseModel):
-    missing_fields: list[str] = Field(default_factory=list)
+    missing_items: list[MissingItem] = Field(default_factory=list)
     summary: str = Field(min_length=1, max_length=2000)
-    suggested_pending_issue: SuggestedPendingIssue | None = None
+    duplicate_suspected: bool = False
     confidence: float = Field(ge=0.0, le=1.0)
+
+
+class Finding(BaseModel):
+    kind: IssueKind
+    code: str
+    already_open: bool = False
+
+
+class RuleResult(BaseModel):
+    rules_version: str = RULES_VERSION
+    actionable: bool
+    open_issue_kinds: list[str] = Field(default_factory=list)
+    findings: list[Finding] = Field(default_factory=list)
+    duplicate_signal: DuplicateSignal = "none"
+
+    def pending_kinds(self) -> list[IssueKind]:
+        """Kinds a abrir (ordem fixa, sem repetição, sem os já abertos)."""
+        wanted = {f.kind for f in self.findings if not f.already_open}
+        return [k for k in ACTION_KIND_ORDER if k in wanted]
+
+    def codes_for(self, kind: str) -> list[str]:
+        return [f.code for f in self.findings if f.kind == kind]
+
+
+def evaluate_rules(request: dict[str, Any], summary: dict[str, Any] | None = None) -> RuleResult:
+    """Regra determinística de referência (``completeness_rules_v2``)."""
+    status = str(request.get("status") or "")
+    actionable = status in ACTIONABLE_STATUSES
+    open_kinds = sorted(
+        {
+            str(i.get("kind"))
+            for i in request.get("issues") or []
+            if isinstance(i, dict) and i.get("status", "open") == "open"
+        }
+    )
+    result = RuleResult(actionable=actionable, open_issue_kinds=open_kinds)
+    if not actionable:
+        return result
+
+    def add(kind: IssueKind, code: str) -> None:
+        result.findings.append(Finding(kind=kind, code=code, already_open=kind in open_kinds))
+
+    if request.get("justification_present") is False:
+        add("clinical_justification", "justification_present=false")
+    kind = str(request.get("kind") or "")
+    attached = request.get("attached_documents_count")
+    if attached == 0 and kind in DOCUMENTS_REQUIRED_KINDS:
+        add("missing_document", "attached_documents_count=0")
+    if not request.get("requesting_cnes"):
+        add("missing_field", "requesting_cnes")
+    if kind == "consultation" and not request.get("specialty"):
+        add("missing_field", "specialty")
+
+    if int((summary or {}).get("open_regulation_requests") or 0) >= 2:
+        result.duplicate_signal = "possible"
+    return result
 
 
 async def build_context(tools: ToolCaller, inp: RegulationCompletenessInput) -> dict[str, Any]:
     request = await tools.call("core.get_regulation_request", request_id=inp.request_id)
     request_data = request.model_dump(mode="json")
     citizen_id = inp.citizen_id or request_data.get("citizen_id")
-    context: dict[str, Any] = {
-        "request": request_data,
-        "required_fields": list(REQUIRED_FIELDS),
-        "min_justification_chars": MIN_JUSTIFICATION_CHARS,
-        "rules_version": RULES_VERSION,
-    }
+    summary_data: dict[str, Any] | None = None
     if citizen_id:
         summary = await tools.call(
             "core.get_citizen_summary", citizen_id=citizen_id, purpose="regulation"
         )
-        context["citizen_summary"] = summary.model_dump(mode="json")
+        summary_data = summary.model_dump(mode="json")
+    rules = evaluate_rules(request_data, summary_data)
+    context: dict[str, Any] = {
+        "request": request_data,
+        "rule_findings": rules.model_dump(mode="json"),
+        "documents_required_kinds": sorted(DOCUMENTS_REQUIRED_KINDS),
+    }
+    if summary_data is not None:
+        context["citizen_summary"] = summary_data
     return context
 
 
@@ -71,69 +160,65 @@ def plan_actions(
     context: dict[str, Any],
     inp: RegulationCompletenessInput,
 ) -> list[PlannedAction]:
-    if output.suggested_pending_issue is None or not output.missing_fields:
+    rules = RuleResult.model_validate(context.get("rule_findings") or {"actionable": False})
+    if not rules.actionable:
         return []
-    issue = output.suggested_pending_issue
-    return [
-        PlannedAction(
-            tool="core.create_pending_issue",
-            args={
-                "request_id": inp.request_id,
-                "reason": issue.reason,
-                "missing_fields": sorted(set(issue.missing_fields) | set(output.missing_fields)),
-                "return_to": issue.return_to,
-            },
-            rationale=output.summary,
+    described = {item.kind: item.description for item in output.missing_items}
+    actions: list[PlannedAction] = []
+    for kind in rules.pending_kinds():
+        description = described.get(kind) or DEFAULT_DESCRIPTIONS[kind].format(
+            codes=", ".join(rules.codes_for(kind))
         )
-    ]
-
-
-def compute_missing_fields(request: dict[str, Any]) -> list[str]:
-    """Regra determinística de referência (``completeness_rules_v1``)."""
-    missing: list[str] = []
-    for field_name in REQUIRED_FIELDS:
-        value = request.get(field_name)
-        if value in (None, "", []) or (
-            field_name == "clinical_justification"
-            and (not isinstance(value, str) or len(value.strip()) < MIN_JUSTIFICATION_CHARS)
-        ):
-            missing.append(field_name)
-    attachments = {str(a).lower() for a in request.get("attachments") or []}
-    for doc in request.get("required_documents") or []:
-        if str(doc).lower() not in attachments:
-            missing.append(f"document:{doc}")
-    return missing
+        actions.append(
+            PlannedAction(
+                tool="core.create_pending_issue",
+                args={
+                    "request_id": inp.request_id,
+                    "kind": kind,
+                    "description": description[:1000],
+                },
+                rationale=output.summary,
+            )
+        )
+    return actions
 
 
 def fake_responder(messages: list[LLMMessage]) -> str:
-    """LLM fake determinístico: aplica a regra de referência ao contexto minimizado."""
+    """LLM fake determinístico: redige descrição/sumário a partir de ``rule_findings``."""
     context = _context_from_messages(messages)
     request = context.get("request", {})
-    missing = compute_missing_fields(request)
-    specialty = request.get("specialty") or "especialidade não informada"
-    procedure = request.get("procedure_description") or request.get("procedure_code") or "—"
-    summary = (
-        f"Pedido {request.get('id', '?')}: {specialty}, procedimento {procedure}, "
-        f"prioridade solicitada {request.get('priority_requested') or 'não informada'}. "
-        + (
-            f"Faltam {len(missing)} item(ns): {', '.join(missing)}."
-            if missing
-            else "Pedido completo para análise do regulador."
-        )
-    )
-    issue: dict[str, Any] | None = None
-    if missing:
-        issue = {
-            "reason": "Pedido incompleto: " + ", ".join(missing) + ". Devolver à unidade.",
-            "missing_fields": missing,
-            "return_to": "requesting_unit",
+    rules = RuleResult.model_validate(context.get("rule_findings") or {"actionable": False})
+    items = [
+        {
+            "kind": kind,
+            "description": DEFAULT_DESCRIPTIONS[kind].format(
+                codes=", ".join(rules.codes_for(kind))
+            ),
         }
+        for kind in rules.pending_kinds()
+    ]
+    skipped = sorted({f.kind for f in rules.findings if f.already_open})
+    specialty = request.get("specialty") or "especialidade não informada"
+    summary = (
+        f"Pedido {request.get('id', '?')} ({request.get('kind', '?')}): {specialty}, "
+        f"serviço {request.get('requested_service_code') or '—'}, prioridade "
+        f"{request.get('priority') or 'não informada'}, status {request.get('status')}, "
+        f"{request.get('waiting_days', 0)} dia(s) em espera. "
+    )
+    if not rules.actionable:
+        summary += "Pedido fora da fase de completude; nada a fazer."
+    elif items:
+        summary += f"Faltam {len(items)} item(ns): {', '.join(i['kind'] for i in items)}."
+    else:
+        summary += "Pedido completo para análise do regulador."
+    if skipped:
+        summary += f" Pendência(s) já aberta(s), não duplicada(s): {', '.join(skipped)}."
     return json.dumps(
         {
-            "missing_fields": missing,
+            "missing_items": items,
             "summary": summary,
-            "suggested_pending_issue": issue,
-            "confidence": 0.95 if not missing else 0.9,
+            "duplicate_suspected": rules.duplicate_signal == "possible",
+            "confidence": 0.95 if not items else 0.9,
         },
         ensure_ascii=False,
     )
@@ -153,7 +238,10 @@ def definition() -> AgentDefinition[RegulationCompletenessInput, RegulationCompl
         id=AGENT_ID,
         version=VERSION,
         prompt_version=PROMPT_VERSION,
-        description="Verifica campos/documentos faltantes num pedido de regulação e o resume.",
+        description=(
+            "Verifica completude administrativa de um pedido de regulação (regra versionada) "
+            "e propõe pendências para aprovação humana, sem duplicar as já abertas."
+        ),
         input_model=RegulationCompletenessInput,
         output_model=RegulationCompletenessOutput,
         tools=[

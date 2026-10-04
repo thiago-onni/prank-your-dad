@@ -1,6 +1,10 @@
-"""Agente ``mpi_duplicate_suggestion``: sugestão sobre caso de possível duplicidade (F2).
+"""Agente ``mpi_duplicate_suggestion`` v2: sugestão sobre caso de possível duplicidade (F2).
+
+Lê o ``MergeCase`` real (``GET /mpi/cases/{id}``: ``evidence[]`` por atributo e ``conflicts[]``)
+e aplica a heurística versionada ``duplicate_heuristics_v1`` como referência para o LLM.
 
 Autonomia: SOMENTE sugestão. Não planeja nenhuma ação; ``mpi.merge`` é ``forbidden``.
+Gatilho: ``sus.identity.merge.case_opened``.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from sus_nexus_ai.agents.base import AgentDefinition, PlannedAction, ToolCaller
 from sus_nexus_ai.llm.client import LLMMessage
 
 AGENT_ID = "mpi_duplicate_suggestion"
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 PROMPT_VERSION = "v1"
 RULES_VERSION = "duplicate_heuristics_v1"
 
@@ -35,10 +39,14 @@ class MpiDuplicateOutput(BaseModel):
 
 
 async def build_context(tools: ToolCaller, inp: MpiDuplicateInput) -> dict[str, Any]:
-    result = await tools.call("core.list_merge_case", case_id=inp.case_id)
-    items = result.model_dump(mode="json")["items"]
-    case = items[0] if items else {}
-    return {"case": case, "rules_version": RULES_VERSION}
+    case_model = await tools.call("core.get_merge_case", case_id=inp.case_id)
+    case = case_model.model_dump(mode="json")
+    verdict, confidence, key = suggest(case)
+    return {
+        "case": case,
+        "rules_version": RULES_VERSION,
+        "heuristic_reference": {"verdict": verdict, "confidence": confidence, "key": key[:8]},
+    }
 
 
 def plan_actions(
@@ -111,7 +119,7 @@ def definition() -> AgentDefinition[MpiDuplicateInput, MpiDuplicateOutput]:
         description="Sugere se um caso de duplicidade do MPI é a mesma pessoa (sem ação).",
         input_model=MpiDuplicateInput,
         output_model=MpiDuplicateOutput,
-        tools=["core.list_merge_case"],
+        tools=["core.get_merge_case"],
         build_context=build_context,
         plan_actions=plan_actions,
         rule_versions={"heuristics": RULES_VERSION},
