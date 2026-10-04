@@ -1,0 +1,411 @@
+# Gerado inicialmente por script; mantenha à mão.
+version: 2
+models:
+- name: stg_identity__citizen
+  description: Eventos de cidadão (estado cadastral e território), sem PII. Envelope tipado, replay=false, dedupe por event_id
+    (staging — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - linked
+          - updated
+          - registration_state_changed
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+  - name: municipal_citizen_id
+    description: 'Identificador interno do cidadão (cit_). Uso interno: nunca exposto em marts pseudonimizados.'
+    data_tests:
+    - not_null
+- name: stg_aps__appointment
+  description: Eventos de agendamento da APS (sus.aps.appointment.*). Envelope tipado, replay=false, dedupe por event_id (staging
+    — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - confirmed
+          - cancelled
+          - rescheduled
+          - attended
+          - no_show
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: appointment_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_schedule__appointment
+  description: Eventos de agendamento da rede (sus.schedule.appointment.*). Envelope tipado, replay=false, dedupe por event_id
+    (staging — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - confirmed
+          - cancelled
+          - rescheduled
+          - attended
+          - no_show
+          - duplicate_detected
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: appointment_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_regulation__request
+  description: Eventos de solicitação regulatória. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno
+    do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - updated
+          - returned
+          - cancelled
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: regulation_request_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_regulation__status
+  description: Mudanças de status regulatório (sistema oficial). Envelope tipado, replay=false, dedupe por event_id (staging
+    — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - changed
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: regulation_request_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_exam__order
+  description: Eventos de pedido de exame. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - status_changed
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: exam_order_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_exam__result
+  description: Eventos de resultado/laudo de exame (metadados). Envelope tipado, replay=false, dedupe por event_id (staging
+    — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - available
+          - critical_flagged
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: exam_order_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_hospital__adt
+  description: Movimentação hospitalar (ADT). Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do
+    pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - admitted
+          - transferred
+          - bed_changed
+          - discharged
+          - deceased
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: hospital_episode_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_hospital__discharge
+  description: Altas e contrarreferências. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - completed
+          - counter_referral_received
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: hospital_episode_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_careplan__careplan
+  description: Eventos de plano de cuidado. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - updated
+          - closed
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: care_plan_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_caregap__caregap
+  description: Eventos de lacuna de cuidado. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do
+    pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - detected
+          - resolved
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: care_gap_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_task__task
+  description: Eventos de tarefa operacional. Envelope tipado, replay=false, dedupe por event_id (staging — uso interno do
+    pipeline).
+  columns:
+  - name: event_id
+    description: ULID do evento (evt_). Único após dedupe de reentregas.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_action
+    description: Ação (último segmento de event_type).
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - created
+          - assigned
+          - completed
+          - escalated
+          - sla_breached
+          - cancelled
+  - name: tenant_id
+    description: Município (ibge_<7 dígitos>).
+    data_tests:
+    - not_null
+  - name: task_id
+    description: Identificador da entidade principal.
+    data_tests:
+    - not_null
+  - name: occurred_at
+    description: Quando o fato aconteceu (horário local America/Sao_Paulo, sem fuso).
+    data_tests:
+    - not_null
+- name: stg_production__events
+  description: 'Eventos de produção (contracts/events/production: record, validation, submission, outcome) tipados,
+    replay=false, dedupe por event_id. Não projeta identificadores de cidadão/profissional. Leitura tolerante: vazio
+    com schema se a fonte não existir.'
+  columns:
+  - name: event_id
+    data_tests:
+    - unique
+  - name: production_entity
+    description: record | validation | submission | outcome
+    data_tests:
+    - accepted_values:
+        arguments:
+          values: [record, validation, submission, outcome]
+  - name: event_action
+    data_tests:
+    - accepted_values:
+        arguments:
+          values: [created, validated, pending, corrected, issue_found, issue_resolved, batch_generated, batch_approved,
+            exported, transmitted, received, accepted, rejected, paid]
+  - name: production_kind
+    description: Instrumento (`kind` no contrato).
+    data_tests:
+    - accepted_values:
+        arguments:
+          values: [bpa_c, bpa_i, apac, aih]
+  - name: severity
+    data_tests:
+    - accepted_values:
+        arguments:
+          values: [error, warning]

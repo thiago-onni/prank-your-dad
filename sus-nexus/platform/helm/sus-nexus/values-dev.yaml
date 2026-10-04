@@ -95,12 +95,16 @@ cnpg:
       sharedBuffers: 1GB
       effectiveCacheSize: 3GB
       maxConnections: "150"
+      # lakehouse: usuário somente leitura do Trino (catálogo postgresql) — OpenBao dev/data/core-db-analytics-ro
+      managedRoles:
+        - { name: analytics_ro, bypassrls: true, inRoles: [pg_read_all_data], comment: "Trino analytics (somente leitura)" }
     fhir-db: { instances: 1, storageSize: 20Gi }
     temporal-db: { instances: 1, storageSize: 10Gi }
     keycloak-db: { instances: 1, storageSize: 5Gi }
     langfuse-db: { instances: 1, storageSize: 10Gi }
     ai-db: { instances: 1, storageSize: 10Gi }
     apicurio-db: { instances: 1, storageSize: 5Gi }
+    lakehouse-db: { enabled: true, instances: 1, storageSize: 5Gi }
 
 strimzi:
   enabled: true
@@ -183,3 +187,22 @@ temporal:
       numHistoryShards: 64
   web:
     enabled: true
+
+# Lakehouse (Fase 4) — ligado em dev. No Argo, `lakehouse` segue o campo `lakehouse` do ambiente e o
+# Trino é publicado pelo componente `analytics` (argocd/apps/20-sus-nexus-envs.yaml).
+lakehouse:
+  enabled: true
+  connector: { tasksMax: 1 }
+trino:
+  enabled: true
+  server: { workers: 1 }
+  coordinator:
+    jvm: { maxHeapSize: 2G }
+    resources:
+      requests: { cpu: 250m, memory: 3Gi }
+      limits: { cpu: "2", memory: 3Gi }
+  worker:
+    jvm: { maxHeapSize: 3G }
+    resources:
+      requests: { cpu: 500m, memory: 4Gi }
+      limits: { cpu: "2", memory: 4Gi }

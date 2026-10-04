@@ -93,7 +93,7 @@ spec:
       objectLock: false
     - name: audit-archive
       objectLock: true
-    {{- if .Values.minio.lakehouseBucket }}
+    {{- if or .Values.minio.lakehouseBucket (and .Values.lakehouse .Values.lakehouse.enabled) }}
     - name: lakehouse
       objectLock: false
     {{- end }}

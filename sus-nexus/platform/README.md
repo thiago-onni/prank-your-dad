@@ -6,18 +6,21 @@ segurança de cluster, observabilidade, backup/DR e CI. Derivada de `docs/sus-ne
 
 ```text
 platform/
-├── compose/          docker-compose local com perfis (infra | core | ai | observability) + init scripts
+├── compose/          docker-compose local com perfis (infra | core | ai | connectors | observability | analytics | catalog)
+│                     + init scripts; lakehouse: kafka-connect/ (Iceberg sink), trino/, metabase/, openmetadata/
 ├── helm/
 │   ├── charts/       sus-nexus-core, sus-nexus-fhir, sus-nexus-web, sus-nexus-ai, sus-nexus-connector (templates idênticos)
 │   ├── sus-nexus/    chart umbrella: componentes + CNPG, Strimzi (KRaft), Kafka Connect/Debezium, Apicurio,
 │   │                 Keycloak Operator, OPA, MinIO Tenant, Redis, Temporal; values-dev|hml|prod.yaml
-│   └── scripts/      gen-kafka-topics.py (topics.yaml → KafkaTopic), sync-chart-templates.sh, sync-realm.sh
+│   ├── openmetadata/ values do chart oficial do OpenMetadata (opcional)
+│   └── scripts/      gen-kafka-topics.py (topics.yaml → KafkaTopic), sync-chart-templates.sh, sync-realm.sh,
+│                     sync-lakehouse-files.sh (rules.json/DDL bronze do Trino → files/)
 ├── argocd/           AppProject por ambiente, root app-of-apps, ApplicationSets (operadores, baseline, envs, DR)
 ├── terraform/        módulos network, onprem-rke2, cluster (EKS|RKE2), storage (S3|MinIO), dns, registry; envs dev|hml|prod
 ├── security/         Kyverno (cosign, PSS), cert-manager ClusterIssuers, External Secrets → OpenBao
 ├── observability/    kube-prometheus-stack/Loki/Tempo/OTel values, alertas SLO (burn rate), dashboards JSON
 ├── backup-dr/        CNPG backups + teste PITR mensal, Velero, MirrorMaker 2, RUNBOOK-DR.md
-└── images/           Dockerfiles de plataforma (kafka-connect-debezium)
+└── images/           Dockerfiles de plataforma (kafka-connect-debezium: Debezium + Apache Iceberg sink)
 ```
 
 ## Topologia por ambiente
@@ -52,6 +55,8 @@ Caminhos de Dockerfile são variáveis (`CORE_DOCKERFILE=src/main/docker/Dockerf
 core 8080 · fhir 8081 · conectores 8090+ · ai 8000 · web 3000 · Postgres 5432 · Kafka 9092 · Apicurio 8085 ·
 Keycloak 8180 · OPA 8181 · Temporal 7233 / UI 8233 · MinIO 9000 / 9001 · Redis 6379 · Grafana 3001.
 Extras: Kafka UI 8086, Connect 8083, OpenBao 8200, LiteLLM 4000, Langfuse 3003, Prometheus 9090, Metabase 3002.
+Lakehouse (perfis `analytics`/`catalog`): Trino 8088, Connect lakehouse 8084, OpenMetadata 8585 — ver
+[`../data/README.md`](../data/README.md).
 
 ### Credenciais de dev (somente local)
 
@@ -110,6 +115,25 @@ Copie `helm/charts/sus-nexus-ai` (ou core) → ajuste `Chart.yaml`, `values.yaml
 `externalSecret.data`, `networkPolicy`, `apisix`), registre no umbrella (dependência + `values*.yaml`),
 no Argo (`20-sus-nexus-envs.yaml`), no compose e nas matrizes de imagem do CI. Os templates são
 compartilhados: edite só em `sus-nexus-core/templates` e rode `scripts/sync-chart-templates.sh`.
+
+## Lakehouse (Fase 4)
+
+Eventos de domínio `sus.*` (exceto `sus.ingest.*`, `sus.dlq.v1`, `sus.audit.v1`) → **Kafka Connect Iceberg sink**
+(no cluster `sus-connect`; imagem `images/kafka-connect-debezium` agora inclui o plugin) → tabelas
+`bronze.events_<domínio>` (Iceberg, partição `tenant.municipality_id` + `day(occurred_at)`; catálogo JDBC no
+CNPG `lakehouse-db`; dados no bucket MinIO `lakehouse`) → **dbt** (`../data/dbt`) → **Trino** (chart oficial,
+`trino.enabled`) → Metabase/Superset/OpenMetadata.
+
+- Umbrella: `lakehouse.enabled` (KafkaConnector `bronze-iceberg-sink`, tópico `_connect.iceberg-control`, ACLs de
+  leitura/transação no `KafkaUser debezium-connect`, ExternalSecret, bucket), `cnpg.clusters.lakehouse-db`,
+  `cnpg.clusters.core-db.managedRoles` (`analytics_ro`: `pg_read_all_data` + BYPASSRLS, réplica `core-db-ro`) e
+  `trino.enabled` (`templates/lakehouse-trino.yaml`: regras de acesso, credenciais, Job de bootstrap do bronze).
+  Ligados em `values-dev.yaml`; no Argo o campo `lakehouse` do ambiente controla o sink (componente `data`) e o
+  Trino (componente `analytics`, onda 25).
+- OpenBao: `<env>/data/lakehouse-db`, `<env>/data/lakehouse-s3`, `<env>/data/core-db-analytics-ro`.
+- Regras de acesso do Trino: fonte `compose/trino/rules.json` (copiada para o chart por
+  `helm/scripts/sync-lakehouse-files.sh`; o CI confere com `--check`). Colunas identificáveis negadas fora de
+  `iceberg.marts_identified`; BI só lê `marts_aggregated` + dimensões.
 
 ## Hardening aplicado
 

@@ -1,0 +1,21 @@
+indicator_code,indicator_name,unit,direction,target,source_fact,periodicity,owner,reference
+AGE_ABSENTEISMO,Taxa de absenteísmo (no-show),proporcao,menor_melhor,0.15,fct_appointments,mensal,Coordenação da APS,AGE-010
+AGE_COMPARECIMENTO,Taxa de comparecimento,proporcao,maior_melhor,0.85,fct_appointments,mensal,Coordenação da APS,AGE-010
+AGE_CANCELAMENTO,Taxa de cancelamento,proporcao,menor_melhor,0.10,fct_appointments,mensal,Coordenação da APS,AGE-010
+AGE_REAPROVEITAMENTO,Reaproveitamento de vagas canceladas,proporcao,maior_melhor,0.50,fct_appointments,mensal,Central de agendamento,AGE-010
+REG_ESPERA_P50_DIAS,Tempo de espera até agendamento (mediana),dias,menor_melhor,30,fct_regulation_requests,mensal,Complexo regulador,PLANO 4.9
+REG_ESPERA_P90_DIAS,Tempo de espera até agendamento (p90),dias,menor_melhor,90,fct_regulation_requests,mensal,Complexo regulador,PLANO 4.9
+REG_SLA_CUMPRIDO,Solicitações reguladas dentro do SLA,proporcao,maior_melhor,0.80,fct_regulation_requests,mensal,Complexo regulador,PLANO 4.9
+REG_DEVOLUCAO,Taxa de devolução de solicitações,proporcao,menor_melhor,0.10,fct_regulation_requests,mensal,Complexo regulador,PLANO 4.9
+REG_REALIZACAO,Solicitações encerradas com realização,proporcao,maior_melhor,0.85,fct_regulation_requests,mensal,Complexo regulador,PLANO 4.9
+EXA_CICLO_COMPLETO,Pedidos de exame com ciclo completo (retorno),proporcao,maior_melhor,0.60,fct_exam_cycle,mensal,Coordenação de apoio diagnóstico,EXA-010
+EXA_RESULTADO_SEM_RETORNO,Resultados sem retorno ao solicitante,proporcao,menor_melhor,0.30,fct_exam_cycle,mensal,Coordenação de apoio diagnóstico,EXA-010
+EXA_DIAS_PEDIDO_RESULTADO_P50,Dias do pedido ao resultado (mediana),dias,menor_melhor,15,fct_exam_cycle,mensal,Coordenação de apoio diagnóstico,EXA-010
+HOS_REINTERNACAO_30D,Reinternação em até 30 dias,proporcao,menor_melhor,0.10,fct_hospital_episodes,mensal,Diretoria hospitalar,HOS-005
+HOS_CONTATO_POS_ALTA_7D,Contato da APS em até 7 dias após a alta,proporcao,maior_melhor,0.80,fct_hospital_episodes,mensal,Coordenação da APS,HOS-003
+HOS_PERMANENCIA_MEDIA_DIAS,Tempo médio de permanência (internação),dias,menor_melhor,5,fct_hospital_episodes,mensal,Diretoria hospitalar,HOS-001
+CUI_LACUNAS_RESOLVIDAS,Lacunas de cuidado resolvidas,proporcao,maior_melhor,0.60,fct_care_gaps,mensal,Coordenação de linhas de cuidado,CUI-003
+TAR_SLA_CUMPRIDO,Tarefas concluídas dentro do SLA,proporcao,maior_melhor,0.85,fct_tasks,mensal,Gestão operacional,PLANO 4.9
+TAR_AUTOMACAO,Tarefas criadas por automação (agente/workflow/regra/conector),proporcao,maior_melhor,0.50,fct_tasks,mensal,Escritório de IA,PLANO 9.3
+TAR_AGENTE_SLA_CUMPRIDO,Tarefas criadas por agentes concluídas no SLA,proporcao,maior_melhor,0.85,fct_tasks,mensal,Escritório de IA,PLANO 9.3
+PRO_GLOSA,Taxa de glosa (rejeição) da produção,proporcao,menor_melhor,0.05,fct_production,mensal,Controle e avaliação,PRO-006

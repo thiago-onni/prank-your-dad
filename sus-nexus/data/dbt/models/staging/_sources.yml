@@ -1,0 +1,83 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Camada bronze do lakehouse: tabelas Iceberg `bronze.events_<domínio>` gravadas pelo Kafka Connect Iceberg
+      sink a partir dos tópicos de domínio `sus.*` (exceto `sus.ingest.*`, `sus.dlq.v1`, `sus.audit.v1`).
+      Uma linha por mensagem Kafka (at-least-once: pode haver reentrega do mesmo `event_id`). Particionadas por
+      `tenant.municipality_id` e `day(occurred_at)`. Layout = envelope (contracts/events/envelope.schema.json) com
+      `data` em texto JSON + metadados Kafka (`_kafka_metadata_*`). DDL: platform/compose/trino/bronze-ddl.sql.
+    schema: bronze
+    loaded_at_field: published_at
+    freshness:
+      warn_after: { count: 24, period: hour }
+      error_after: { count: 72, period: hour }
+    meta:
+      owner: plataforma-dados
+      contains_pii: true   # subject.identifiers (mascarado + hash) — acesso só do pipeline
+    tables:
+      - name: events_identity
+        description: "sus.identity.citizen.v1, sus.identity.merge.v1"
+        columns: &envelope_columns
+          - name: event_id
+            data_tests: [not_null]
+          - name: event_type
+            data_tests: [not_null]
+          - name: occurred_at
+            data_tests: [not_null]
+          - name: published_at
+            data_tests: [not_null]
+        freshness:
+          warn_after: { count: 7, period: day }
+          error_after: { count: 30, period: day }
+      - name: events_aps
+        description: "sus.aps.appointment.v1, sus.aps.encounter.v1, sus.aps.home-visit.v1"
+        columns: *envelope_columns
+      - name: events_schedule
+        description: "sus.schedule.appointment.v1 (agenda da rede)"
+        columns: *envelope_columns
+      - name: events_regulation
+        description: "sus.regulation.request.v1, sus.regulation.status.v1, sus.regulation.queue.v1"
+        columns: *envelope_columns
+      - name: events_exam
+        description: "sus.exam.order.v1, sus.exam.result.v1"
+        columns: *envelope_columns
+      - name: events_hospital
+        description: "sus.hospital.adt.v1, sus.hospital.discharge.v1"
+        columns: *envelope_columns
+      - name: events_careplan
+        description: "sus.careplan.v1"
+        columns: *envelope_columns
+        freshness:
+          warn_after: { count: 7, period: day }
+          error_after: { count: 30, period: day }
+      - name: events_caregap
+        description: "sus.caregap.v1"
+        columns: *envelope_columns
+        freshness:
+          warn_after: { count: 7, period: day }
+          error_after: { count: 30, period: day }
+      - name: events_task
+        description: "sus.task.v1"
+        columns: *envelope_columns
+      - name: events_production
+        description: >
+          sus.production.record|validation|submission|outcome.v1 (contracts/events/production). Tolerante: se a
+          tabela ainda não existir no ambiente, stg_production__events materializa vazio (sem testes de fonte nem
+          frescor aqui).
+        freshness: null
+
+  - name: core
+    description: >
+      Réplica de leitura do PostgreSQL do core (catálogo Trino `postgresql`, usuário `analytics_ro`, somente
+      leitura). Usada apenas quando use_core_replica() é verdadeiro (alvo Trino); no CI as seeds substituem.
+    database: postgresql
+    schema: reference
+    meta:
+      owner: core-municipal
+    tables:
+      - name: health_unit
+      - name: care_team
+      - name: territory
+      - name: microarea

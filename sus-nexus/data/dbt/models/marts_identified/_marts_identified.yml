@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: rpt_care_gap_worklist_identified
+    description: >
+      Lista IDENTIFICADA de lacunas abertas para busca ativa. Schema `marts_identified`: único schema gold com
+      identificador individual (municipal_citizen_id). Acesso por RBAC/ABAC no Trino (rules.json, grupo
+      `analytics_identified`) e somente para finalidade care_coordination; reidentificação nominal só no core.
+    meta: { owner: Coordenação de linhas de cuidado, contains_pii: true, purpose: care_coordination }
+    columns:
+      - name: care_gap_id
+        data_tests: [unique, not_null]
+      - name: municipal_citizen_id
+        data_tests: [not_null]

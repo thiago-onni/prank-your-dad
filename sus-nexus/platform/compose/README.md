@@ -16,7 +16,21 @@ docker compose --profile core up -d --build         # infra + core-municipal, fh
 docker compose --profile core --profile ai up -d    # + ai-service, LiteLLM, Langfuse
 docker compose --profile connectors up -d --build   # infra + core-municipal + SISREG, e-SUS Regulação, LIS, HIS, RIS
 docker compose --profile core --profile observability up -d   # + OTel, Prometheus, Grafana, Loki, Tempo, Metabase
+docker compose --profile analytics up -d --build    # lakehouse: infra + Trino, Kafka Connect (Iceberg sink), Metabase
+docker compose --profile catalog up -d --build      # analytics + OpenSearch + OpenMetadata
 ```
+
+Lakehouse (perfil `analytics`, detalhes em [`../../data/README.md`](../../data/README.md)): `lakehouse-init` cria as
+tabelas bronze no Trino (`trino/bootstrap-lakehouse.sh`); depois registre o sink e provisione o Metabase:
+
+```bash
+./kafka-connect/register-iceberg-sink.sh           # http://localhost:8084 (Connect do lakehouse)
+./metabase/download-trino-driver.sh && docker compose restart metabase
+./metabase/provision.sh                            # conexão Trino + painel "Sala de Situação"
+```
+
+Em volumes de Postgres já existentes, aplique o init do lakehouse manualmente:
+`docker compose exec postgres bash /docker-entrypoint-initdb.d/02-lakehouse.sh`.
 
 Após o core aplicar as migrações Flyway (tabela `platform.event_outbox`), registre o Debezium:
 
@@ -59,7 +73,10 @@ exportarem telemetria.
 | Grafana | http://localhost:3001 | `admin`/`admin` |
 | Prometheus | http://localhost:9090 | — |
 | Loki / Tempo | :3100 / :3200 | — |
-| Metabase | http://localhost:3002 | configurar no 1º acesso |
+| Metabase | http://localhost:3002 | configurar no 1º acesso (ou `metabase/provision.sh`) |
+| Trino | http://localhost:8088 | sem senha em dev; usuário define o grupo (`trino/groups.txt`: `admin`, `dbt`, `metabase`, `analista`, `gestor`) |
+| Kafka Connect (lakehouse) | http://localhost:8084 | — |
+| OpenMetadata | http://localhost:8585 | `admin@sus-nexus.local`/`admin` |
 
 Usuários do realm (senha `sus-nexus-dev`, `municipality_id=ibge_3143302`): `admin.municipal`, `gestor`,
 `prof.aps`, `acs`, `regulador`, `agendador`, `prof.hospitalar`, `auditor`, `dpo`, `operador.integracao`,
@@ -70,7 +87,9 @@ Usuários do realm (senha `sus-nexus-dev`, `municipality_id=ibge_3143302`): `adm
 `sus_nexus_core`, `sus_nexus_fhir`, `sus_nexus_ai`, `sus_nexus_test`, `sus_nexus_fhir_test` (owner `sus_nexus`,
 extensões `pg_trgm`, `unaccent`, `pgcrypto`, `uuid-ossp`, `pg_stat_statements`, `vector`), `temporal`,
 `temporal_visibility`, `keycloak`, `langfuse`, `apicurio`, `metabase`, `litellm`. Postgres roda com
-`wal_level=logical` (Debezium) e papel `debezium` (REPLICATION).
+`wal_level=logical` (Debezium) e papel `debezium` (REPLICATION). Lakehouse (`postgres/init/02-lakehouse.sh`):
+`iceberg_catalog` (catálogo JDBC do Iceberg, owner `iceberg`), `openmetadata_db` e papel `analytics_ro`
+(somente leitura, BYPASSRLS — catálogo Trino `postgresql`).
 
 ## Buckets MinIO
 

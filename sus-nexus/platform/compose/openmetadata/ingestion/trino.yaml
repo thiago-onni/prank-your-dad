@@ -1,0 +1,29 @@
+# Ingestão de metadados do Trino (lakehouse) no OpenMetadata — schemas, tabelas, colunas, descrições
+# (persist_docs do dbt) e perfil opcional. Execução: `metadata ingest -c trino.yaml` (ver ../README.md).
+# Variáveis: TRINO_HOST_PORT (localhost:8088), OM_SERVER (http://localhost:8585/api), OM_JWT_TOKEN.
+source:
+  type: trino
+  serviceName: sus_nexus_lakehouse
+  serviceConnection:
+    config:
+      type: Trino
+      hostPort: ${TRINO_HOST_PORT}
+      username: openmetadata          # grupo `pipeline` no rules.json (somente metadados/leitura)
+      catalog: iceberg
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      markDeletedTables: true
+      includeViews: true
+      schemaFilterPattern:
+        includes: ["^bronze$", "^staging$", "^intermediate$", "^marts$", "^marts_aggregated$", "^marts_identified$", "^reference$"]
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: ${OM_SERVER}
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OM_JWT_TOKEN}

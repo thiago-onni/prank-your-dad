@@ -2,6 +2,7 @@
 # values-<env>.yaml e habilita apenas o seu bloco (helm.values). Sync waves:
 #   20 data (CNPG, Strimzi, Kafka Connect, MinIO, Redis, Apicurio)
 #   30 security (Keycloak, OPA, NetworkPolicies default-deny)
+#   25 analytics (Trino — lakehouse, Fase 4; só nos ambientes com `lakehouse: "true"`)
 #   35 workflows (Temporal)
 #   40 core → 50 fhir/ai → 60 web/connectors
 #
@@ -22,9 +23,10 @@ spec:
         generators:
           - list:
               elements:
-                - { env: dev, cluster: in-cluster, revision: main, automated: "true" }
-                - { env: hml, cluster: hml, revision: main, automated: "true" }
-                - { env: prod, cluster: prod, revision: main, automated: "false" }
+                # lakehouse: liga o Iceberg sink (componente data) e o Trino (componente analytics) — Fase 4
+                - { env: dev, cluster: in-cluster, revision: main, automated: "true", lakehouse: "true" }
+                - { env: hml, cluster: hml, revision: main, automated: "true", lakehouse: "false" }
+                - { env: prod, cluster: prod, revision: main, automated: "false", lakehouse: "false" }
           - list:
               elements:
                 - component: data
@@ -37,6 +39,11 @@ spec:
                     minio: { enabled: true }
                     redis: { enabled: true }
                     apicurio: { enabled: true }
+                - component: analytics
+                  wave: "25"
+                  namespace: data
+                  enable: |
+                    # Trino é ligado abaixo conforme o campo `lakehouse` do ambiente
                 - component: security
                   wave: "30"
                   namespace: security
@@ -132,6 +139,8 @@ spec:
             opa: { enabled: false }
             networkPolicies: { defaultDeny: false }
             temporal: { enabled: false }
+            lakehouse: { enabled: {{ .lakehouse }} }
+            trino: { enabled: {{ and (eq .component "analytics") (eq .lakehouse "true") }} }
             {{ .enable }}
           skipCrds: true
       destination:

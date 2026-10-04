@@ -45,6 +45,30 @@ spec:
       remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}", property: username }
     - secretKey: password
       remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}", property: password }
+{{- range $c.managedRoles }}
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ $name }}-{{ .name | replace "_" "-" }}-user
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" $root | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ $root.Values.global.secretStore.name }}
+    kind: {{ $root.Values.global.secretStore.kind }}
+  target:
+    name: {{ $name }}-{{ .name | replace "_" "-" }}-user
+    template:
+      type: kubernetes.io/basic-auth
+  data:
+    - secretKey: username
+      remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}-{{ .name | replace "_" "-" }}", property: username }
+    - secretKey: password
+      remoteRef: { key: "{{ $root.Values.global.environment }}/data/{{ $name }}-{{ .name | replace "_" "-" }}", property: password }
+{{- end }}
 ---
 # CloudNativePG — cluster {{ $name }} ({{ $c.database }})
 apiVersion: postgresql.cnpg.io/v1
@@ -103,15 +127,33 @@ spec:
       number: 1
       dataDurability: required
     {{- end }}
-  {{- if $c.logicalReplicationUser }}
+  {{- if or $c.logicalReplicationUser $c.managedRoles }}
   managed:
     roles:
+      {{- if $c.logicalReplicationUser }}
       - name: debezium
         ensure: present
         login: true
         replication: true
         passwordSecret:
           name: {{ $name }}-debezium-user
+      {{- end }}
+      {{- /* papéis adicionais (ex.: analytics_ro do lakehouse: pg_read_all_data + bypassrls) */}}
+      {{- range $c.managedRoles }}
+      - name: {{ .name }}
+        ensure: present
+        login: true
+        bypassrls: {{ .bypassrls | default false }}
+        {{- with .inRoles }}
+        inRoles:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .comment }}
+        comment: {{ . | quote }}
+        {{- end }}
+        passwordSecret:
+          name: {{ $name }}-{{ .name | replace "_" "-" }}-user
+      {{- end }}
   {{- end }}
   storage:
     size: {{ $c.storageSize | default $root.Values.cnpg.defaults.storageSize }}

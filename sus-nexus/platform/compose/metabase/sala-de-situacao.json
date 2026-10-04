@@ -1,0 +1,189 @@
+{
+  "name": "Sala de Situação",
+  "description": "Painel de gestão do SUS Nexus (Fase 4): regulação, agenda, exames, hospital, lacunas de cuidado, tarefas e automação. Fonte: Trino iceberg.marts_aggregated (pseudonimizado, supressão n<5). Dicionário: sus-nexus/data/INDICADORES.md.",
+  "collection": "SUS Nexus — Gestão",
+  "database": {
+    "name": "SUS Nexus Lakehouse (Trino)",
+    "engine": "starburst",
+    "details": {
+      "host": "trino",
+      "port": 8080,
+      "catalog": "iceberg",
+      "schema": "marts_aggregated",
+      "user": "metabase",
+      "ssl": false
+    }
+  },
+  "parameter": {
+    "name": "Município",
+    "slug": "municipio",
+    "type": "string/=",
+    "default": null,
+    "template_tag": "tenant"
+  },
+  "cards": [
+    {
+      "key": "kpis",
+      "name": "Indicadores do último mês fechado × meta",
+      "display": "table",
+      "description": "Valor municipal de cada indicador no último mês fechado, meta e situação (fonte: agg_indicadores_mensais; células n<5 suprimidas).",
+      "sql": "select indicator_name as indicador, competence as competencia, indicator_value as valor, target_value as meta,\n       case when is_on_target then 'na meta' when is_on_target = false then 'fora da meta' else 'sem dado' end as situacao,\n       denominator as base\nfrom iceberg.marts_aggregated.agg_indicadores_mensais\nwhere aggregation_level = 'municipio'\n  and month_start = date_trunc('month', current_date) - interval '1' month\n  [[and tenant_id = {{tenant}}]]\norder by indicator_code",
+      "layout": {
+        "row": 0,
+        "col": 0,
+        "size_x": 24,
+        "size_y": 7
+      }
+    },
+    {
+      "key": "fila",
+      "name": "Fila de regulação atual (especialidade × prioridade)",
+      "display": "table",
+      "description": "Solicitações em aberto sem agendamento, em atraso de SLA e espera p50/p90 em dias (agg_regulation_queue_current).",
+      "sql": "select specialty as especialidade, priority as prioridade, sum(n_open) as em_fila, sum(n_overdue) as fora_do_sla,\n       max(days_waiting_p50) as espera_p50_dias, max(days_waiting_p90) as espera_p90_dias\nfrom iceberg.marts_aggregated.agg_regulation_queue_current\nwhere 1 = 1 [[and tenant_id = {{tenant}}]]\ngroup by specialty, priority\norder by em_fila desc nulls last",
+      "layout": {
+        "row": 7,
+        "col": 0,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "espera",
+      "name": "Tempo de espera da regulação — p50 e p90 (dias)",
+      "display": "line",
+      "description": "Dias da solicitação ao agendamento por mês de solicitação (REG_ESPERA_P50_DIAS / REG_ESPERA_P90_DIAS).",
+      "sql": "select month_start as mes,\n       max(case when indicator_code = 'REG_ESPERA_P50_DIAS' then indicator_value end) as p50_dias,\n       max(case when indicator_code = 'REG_ESPERA_P90_DIAS' then indicator_value end) as p90_dias\nfrom iceberg.marts_aggregated.agg_indicadores_mensais\nwhere aggregation_level = 'municipio' and indicator_code in ('REG_ESPERA_P50_DIAS', 'REG_ESPERA_P90_DIAS') [[and tenant_id = {{tenant}}]]\ngroup by month_start\norder by month_start",
+      "viz": {
+        "graph.dimensions": [
+          "mes"
+        ],
+        "graph.metrics": [
+          "p50_dias",
+          "p90_dias"
+        ]
+      },
+      "layout": {
+        "row": 7,
+        "col": 12,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "noshow",
+      "name": "Absenteísmo (no-show) por unidade — últimos 6 meses",
+      "display": "table",
+      "description": "Faltas / (comparecimentos + faltas) por unidade e mês (AGE_ABSENTEISMO). Nulo = célula suprimida (n<5).",
+      "sql": "select h.health_unit_name as unidade, i.month_start as mes, i.indicator_value as absenteismo, i.denominator as consultas_realizadas\nfrom iceberg.marts_aggregated.agg_indicadores_mensais as i\nleft join iceberg.marts.dim_health_unit as h on i.health_unit_key = h.health_unit_key\nwhere i.indicator_code = 'AGE_ABSENTEISMO' and i.aggregation_level = 'unidade'\n  and i.month_start >= date_trunc('month', current_date) - interval '6' month\n  [[and i.tenant_id = {{tenant}}]]\norder by mes desc, absenteismo desc nulls last",
+      "layout": {
+        "row": 15,
+        "col": 0,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "exames",
+      "name": "Ciclo de exames — conclusão e dias até o resultado",
+      "display": "line",
+      "description": "Pedidos com retorno ao solicitante / pedidos (EXA_CICLO_COMPLETO) e mediana de dias do pedido ao laudo.",
+      "sql": "select month_start as mes,\n       max(case when indicator_code = 'EXA_CICLO_COMPLETO' then indicator_value end) as ciclo_completo,\n       max(case when indicator_code = 'EXA_RESULTADO_SEM_RETORNO' then indicator_value end) as resultado_sem_retorno,\n       max(case when indicator_code = 'EXA_DIAS_PEDIDO_RESULTADO_P50' then indicator_value end) as dias_ate_resultado_p50\nfrom iceberg.marts_aggregated.agg_indicadores_mensais\nwhere aggregation_level = 'municipio' and indicator_code like 'EXA\\_%' escape '\\' [[and tenant_id = {{tenant}}]]\ngroup by month_start\norder by month_start",
+      "viz": {
+        "graph.dimensions": [
+          "mes"
+        ],
+        "graph.metrics": [
+          "ciclo_completo",
+          "resultado_sem_retorno"
+        ]
+      },
+      "layout": {
+        "row": 15,
+        "col": 12,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "hospital",
+      "name": "Reinternação 30 dias e contato pós-alta em 7 dias",
+      "display": "line",
+      "description": "HOS_REINTERNACAO_30D e HOS_CONTATO_POS_ALTA_7D por mês da alta (município).",
+      "sql": "select month_start as mes,\n       max(case when indicator_code = 'HOS_REINTERNACAO_30D' then indicator_value end) as reinternacao_30d,\n       max(case when indicator_code = 'HOS_CONTATO_POS_ALTA_7D' then indicator_value end) as contato_pos_alta_7d\nfrom iceberg.marts_aggregated.agg_indicadores_mensais\nwhere aggregation_level = 'municipio' and indicator_code in ('HOS_REINTERNACAO_30D', 'HOS_CONTATO_POS_ALTA_7D') [[and tenant_id = {{tenant}}]]\ngroup by month_start\norder by month_start",
+      "viz": {
+        "graph.dimensions": [
+          "mes"
+        ],
+        "graph.metrics": [
+          "reinternacao_30d",
+          "contato_pos_alta_7d"
+        ]
+      },
+      "layout": {
+        "row": 23,
+        "col": 0,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "lacunas",
+      "name": "Lacunas de cuidado por território — últimos 3 meses",
+      "display": "table",
+      "description": "Lacunas detectadas, abertas e taxa de resolução por unidade/equipe e linha de cuidado (agg_care_gaps_monthly).",
+      "sql": "select h.health_unit_name as unidade, g.team_ine as equipe, g.care_line as linha_de_cuidado,\n       sum(g.n_detected) as detectadas, sum(g.n_open) as abertas, sum(g.n_resolved) as resolvidas\nfrom iceberg.marts_aggregated.agg_care_gaps_monthly as g\nleft join iceberg.marts.dim_health_unit as h on g.health_unit_key = h.health_unit_key\nwhere g.month_start >= date_trunc('month', current_date) - interval '3' month\n  [[and g.tenant_id = {{tenant}}]]\ngroup by h.health_unit_name, g.team_ine, g.care_line\norder by abertas desc nulls last",
+      "layout": {
+        "row": 23,
+        "col": 12,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "tarefas",
+      "name": "Tarefas e SLA por origem",
+      "display": "bar",
+      "description": "Tarefas criadas e cumprimento de SLA por mês e origem (automação × humano) — agg_tasks_monthly.",
+      "sql": "select month_start as mes, origin_group as origem, sum(n_created) as criadas, sum(n_completed) as concluidas,\n       sum(n_sla_met) as no_sla, sum(n_sla_breached) as fora_do_sla\nfrom iceberg.marts_aggregated.agg_tasks_monthly\nwhere 1 = 1 [[and tenant_id = {{tenant}}]]\ngroup by month_start, origin_group\norder by month_start",
+      "viz": {
+        "graph.dimensions": [
+          "mes",
+          "origem"
+        ],
+        "graph.metrics": [
+          "criadas"
+        ]
+      },
+      "layout": {
+        "row": 31,
+        "col": 0,
+        "size_x": 12,
+        "size_y": 8
+      }
+    },
+    {
+      "key": "automacao",
+      "name": "Automação — participação e SLA das tarefas de agentes",
+      "display": "line",
+      "description": "TAR_AUTOMACAO (tarefas criadas por agente/workflow/regra/conector) e TAR_AGENTE_SLA_CUMPRIDO (PLANO 9.3).",
+      "sql": "select month_start as mes,\n       max(case when indicator_code = 'TAR_AUTOMACAO' then indicator_value end) as automacao,\n       max(case when indicator_code = 'TAR_AGENTE_SLA_CUMPRIDO' then indicator_value end) as sla_tarefas_de_agente,\n       max(case when indicator_code = 'TAR_SLA_CUMPRIDO' then indicator_value end) as sla_geral\nfrom iceberg.marts_aggregated.agg_indicadores_mensais\nwhere aggregation_level = 'municipio' and indicator_code like 'TAR\\_%' escape '\\' [[and tenant_id = {{tenant}}]]\ngroup by month_start\norder by month_start",
+      "viz": {
+        "graph.dimensions": [
+          "mes"
+        ],
+        "graph.metrics": [
+          "automacao",
+          "sla_tarefas_de_agente",
+          "sla_geral"
+        ]
+      },
+      "layout": {
+        "row": 31,
+        "col": 12,
+        "size_x": 12,
+        "size_y": 8
+      }
+    }
+  ]
+}

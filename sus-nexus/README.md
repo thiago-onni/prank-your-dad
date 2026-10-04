@@ -18,6 +18,7 @@ Plataforma municipal que integra, normaliza, identifica, correlaciona, coordena,
 | [`policies/`](policies/) | Autorização RBAC+ABAC, agentes, FHIR scopes, exportação | OPA / Rego v1 | `make test` |
 | [`ai-service/`](ai-service/) | Agentes com autonomia graduada, kill switch, avaliações | Python 3.11, FastAPI, LangGraph, Pydantic v2 | `pytest` |
 | [`platform/`](platform/) | docker-compose local, Helm, Argo CD, Terraform, segurança, observabilidade, DR | Kubernetes, Helm, GitOps | `helm lint`, `kubeconform` |
+| [`data/`](data/) | Camada analítica (Fase 4): lakehouse Iceberg (Kafka Connect Iceberg sink), dbt bronze→silver→gold pseudonimizado, indicadores com supressão n<5, Trino, Metabase "Sala de Situação", OpenMetadata | dbt (Trino / DuckDB no CI), Apache Iceberg, Trino | `dbt build --profile duckdb --target ci` (ver [`data/README.md`](data/README.md)) |
 
 ## Fluxo de dados (padrão único de escrita)
 

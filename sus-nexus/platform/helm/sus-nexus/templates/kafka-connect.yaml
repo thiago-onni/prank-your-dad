@@ -28,6 +28,22 @@ spec:
       - resource: { type: topic, name: core., patternType: prefix }
         operations: [Describe, Write, Create]
         host: "*"
+      {{- if .Values.lakehouse.enabled }}
+      # Lakehouse — Kafka Connect Iceberg sink (templates/lakehouse.yaml): lê sus.*, grupos do conector e do
+      # canal de controle, produtor transacional do coordenador (KIP-447)
+      - resource: { type: topic, name: sus., patternType: prefix }
+        operations: [Read]
+        host: "*"
+      - resource: { type: group, name: connect-{{ .Values.lakehouse.connector.name }}, patternType: literal }
+        operations: [Read, Describe]
+        host: "*"
+      - resource: { type: group, name: {{ .Values.lakehouse.connector.controlGroupPrefix }}, patternType: prefix }
+        operations: [Read, Describe]
+        host: "*"
+      - resource: { type: transactionalId, name: {{ .Values.lakehouse.connector.transactionalPrefix }}, patternType: prefix }
+        operations: [Describe, Write]
+        host: "*"
+      {{- end }}
 ---
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret

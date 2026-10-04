@@ -8,11 +8,15 @@
 #   connectors     infra + core-municipal + conectores SISREG, e-SUS Regulação, LIS, HIS e RIS
 #                  (MLLP: LIS 2575, HIS 2576, RIS 2577)
 #   observability  OTel Collector, Prometheus, Grafana, Loki, Tempo, Metabase
+#   analytics      lakehouse (Fase 4): infra + Trino, Kafka Connect com Iceberg sink, Metabase
+#                  (ver sus-nexus/data/README.md)
+#   catalog        analytics + OpenMetadata (catálogo/linhagem) + OpenSearch
 #
 # Exemplos:
 #   docker compose --profile core up -d
 #   docker compose --profile core --profile observability up -d
 #   docker compose --profile infra up -d           # apenas dependências
+#   docker compose --profile analytics up -d --build   # lakehouse local (Trino em :8088)
 #
 # Portas: ver sus-nexus/CONVENTIONS.md (seção "Portas locais"). Variáveis em .env (copie .env.example).
 #
@@ -29,7 +33,7 @@ x-logging: &default-logging
     max-file: "3"
 
 x-infra-profiles: &infra-profiles
-  profiles: ["infra", "core", "ai", "connectors"]
+  profiles: ["infra", "core", "ai", "connectors", "analytics", "catalog"]
 
 x-postgres-env: &postgres-env
   POSTGRES_HOST: postgres
@@ -101,6 +105,13 @@ services:
       POSTGRES_DB: postgres
       SUS_DB_APP_USER: ${SUS_DB_APP_USER:-sus_nexus}
       SUS_DB_APP_PASSWORD: ${SUS_DB_APP_PASSWORD:-sus_nexus}
+      # lakehouse (postgres/init/02-lakehouse.sh)
+      ICEBERG_CATALOG_USER: ${ICEBERG_CATALOG_USER:-iceberg}
+      ICEBERG_CATALOG_PASSWORD: ${ICEBERG_CATALOG_PASSWORD:-iceberg}
+      ANALYTICS_RO_USER: ${ANALYTICS_RO_USER:-analytics_ro}
+      ANALYTICS_RO_PASSWORD: ${ANALYTICS_RO_PASSWORD:-analytics_ro}
+      OPENMETADATA_DB_USER: ${OPENMETADATA_DB_USER:-openmetadata}
+      OPENMETADATA_DB_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -358,6 +369,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       AUDIT_ARCHIVE_RETENTION_DAYS: ${AUDIT_ARCHIVE_RETENTION_DAYS:-30}
+      LAKEHOUSE_S3_ACCESS_KEY: ${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}
+      LAKEHOUSE_S3_SECRET_KEY: ${LAKEHOUSE_S3_SECRET_KEY:-sus-lakehouse-secret}
     volumes:
       - ./minio/init.sh:/scripts/init.sh:ro
     restart: "no"
@@ -997,10 +1010,15 @@ services:
     logging: *default-logging
 
   metabase:
-    profiles: ["observability"]
+    profiles: ["observability", "analytics"]
     image: metabase/metabase:v0.52.4
     container_name: sus-metabase
+    # Driver Trino (Starburst) em ./metabase/plugins — baixe com ./metabase/download-trino-driver.sh.
+    # Provisionamento da conexão Trino + "Sala de Situação": ./metabase/provision.sh
+    volumes:
+      - ./metabase/plugins:/plugins
     environment:
+      MB_PLUGINS_DIR: /plugins
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: metabase
       MB_DB_PORT: "5432"
@@ -1020,6 +1038,169 @@ services:
       start_period: 60s
     logging: *default-logging
 
+  # ---------------------------------------------------------------------------
+  # Lakehouse / analytics (Fase 4 — sus-nexus/data/README.md)
+  # ---------------------------------------------------------------------------
+  # Trino: catálogos `iceberg` (JDBC no Postgres + MinIO) e `postgresql` (réplica do core, analytics_ro);
+  # controle de acesso por arquivo (trino/rules.json + grupos em trino/groups.txt).
+  trino:
+    profiles: ["analytics", "catalog"]
+    image: trinodb/trino:476
+    container_name: sus-trino
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      ICEBERG_CATALOG_USER: ${ICEBERG_CATALOG_USER:-iceberg}
+      ICEBERG_CATALOG_PASSWORD: ${ICEBERG_CATALOG_PASSWORD:-iceberg}
+      LAKEHOUSE_S3_ACCESS_KEY: ${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}
+      LAKEHOUSE_S3_SECRET_KEY: ${LAKEHOUSE_S3_SECRET_KEY:-sus-lakehouse-secret}
+      CORE_REPLICA_USER: ${ANALYTICS_RO_USER:-analytics_ro}
+      CORE_REPLICA_PASSWORD: ${ANALYTICS_RO_PASSWORD:-analytics_ro}
+    ports:
+      - "${TRINO_PORT:-8088}:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./trino/group-provider.properties:/etc/trino/group-provider.properties:ro
+      - ./trino/rules.json:/etc/trino/rules.json:ro
+      - ./trino/groups.txt:/etc/trino/groups.txt:ro
+    healthcheck:
+      test: ["CMD", "/usr/lib/trino/bin/health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    logging: *default-logging
+
+  # Cria schemas e tabelas bronze (Iceberg) — idempotente.
+  lakehouse-init:
+    profiles: ["analytics", "catalog"]
+    image: trinodb/trino:476
+    container_name: sus-lakehouse-init
+    depends_on:
+      trino:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/bootstrap-lakehouse.sh"]
+    environment:
+      TRINO_SERVER: http://trino:8080
+    volumes:
+      - ./trino:/scripts:ro
+    restart: "no"
+    logging: *default-logging
+
+  # Kafka Connect do lakehouse: Debezium Connect + Apache Iceberg sink (build local, ~10 min na 1ª vez).
+  # Registre o sink com ./kafka-connect/register-iceberg-sink.sh após o lakehouse-init.
+  connect-lakehouse:
+    profiles: ["analytics", "catalog"]
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
+    image: ${IMAGE_REGISTRY:-ghcr.io/sus-nexus}/kafka-connect-lakehouse:${IMAGE_TAG:-local}
+    container_name: sus-connect-lakehouse
+    depends_on:
+      kafka:
+        condition: service_healthy
+      lakehouse-init:
+        condition: service_completed_successfully
+    environment:
+      BOOTSTRAP_SERVERS: kafka:19092
+      GROUP_ID: sus-connect-lakehouse
+      CONFIG_STORAGE_TOPIC: _connect-lakehouse.configs
+      OFFSET_STORAGE_TOPIC: _connect-lakehouse.offsets
+      STATUS_STORAGE_TOPIC: _connect-lakehouse.status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      AWS_REGION: us-east-1
+      HEAP_OPTS: -Xms512m -Xmx1g
+    ports:
+      - "${CONNECT_LAKEHOUSE_PORT:-8084}:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/connector-plugins | grep -q IcebergSinkConnector"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Catálogo de dados (perfil `catalog`) — OpenMetadata + OpenSearch. Ingestão: openmetadata/README.md
+  # ---------------------------------------------------------------------------
+  opensearch:
+    profiles: ["catalog"]
+    image: opensearchproject/opensearch:2.17.1
+    container_name: sus-opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    logging: *default-logging
+
+  openmetadata-migrate:
+    profiles: ["catalog"]
+    image: docker.getcollate.io/openmetadata/server:1.6.4
+    container_name: sus-openmetadata-migrate
+    command: ["./bootstrap/openmetadata-ops.sh", "migrate"]
+    environment: &openmetadata-env
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_USE_SSL: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${OPENMETADATA_DB_USER:-openmetadata}
+      DB_USER_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata}
+      OM_DATABASE: openmetadata_db
+      SEARCH_TYPE: opensearch
+      ELASTICSEARCH_HOST: opensearch
+      ELASTICSEARCH_PORT: "9200"
+      ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"   # ingestão via CLI `metadata ingest` (sem Airflow)
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_ADMIN_PRINCIPALS: "[admin]"
+      AUTHORIZER_PRINCIPAL_DOMAIN: sus-nexus.local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  openmetadata:
+    profiles: ["catalog"]
+    image: docker.getcollate.io/openmetadata/server:1.6.4
+    container_name: sus-openmetadata
+    environment: *openmetadata-env
+    depends_on:
+      openmetadata-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${OPENMETADATA_PORT:-8585}:8585"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8586/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    logging: *default-logging
+
 volumes:
   postgres-data:
   kafka-data:
@@ -1028,6 +1209,7 @@ volumes:
   loki-data:
   tempo-data:
   grafana-data:
+  opensearch-data:
   connector-sisreg-data:
   connector-esus-regulacao-data:
   connector-lis-data:

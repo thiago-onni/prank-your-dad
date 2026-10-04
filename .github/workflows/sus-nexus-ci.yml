@@ -42,6 +42,7 @@ jobs:
       policies: ${{ steps.filter.outputs.policies }}
       ai: ${{ steps.filter.outputs.ai }}
       platform: ${{ steps.filter.outputs.platform }}
+      data: ${{ steps.filter.outputs.data }}
       any_code: ${{ steps.filter.outputs.any_code }}
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +72,11 @@ jobs:
               - 'sus-nexus/platform/**'
               - 'sus-nexus/contracts/events/topics.yaml'
               - '.github/workflows/sus-nexus-*.yml'
+            data:
+              - 'sus-nexus/data/**'
+              - 'sus-nexus/contracts/events/**'
+              - 'sus-nexus/tools/synthetic-data/**'
+              - '.github/workflows/sus-nexus-ci.yml'
             any_code:
               - 'sus-nexus/**'
 
@@ -315,12 +321,14 @@ jobs:
           python3 helm/scripts/gen-kafka-topics.py --check
           bash helm/scripts/sync-chart-templates.sh --check
           bash helm/scripts/sync-realm.sh --check
+          bash helm/scripts/sync-lakehouse-files.sh --check
           bash observability/scripts/gen-dashboards-configmap.sh && git diff --exit-code -- observability/dashboards-configmap.yaml
       - name: helm lint (charts de componente)
         run: for c in helm/charts/*; do helm lint "$c" --strict; done
       - name: helm dependency build (umbrella)
         run: |
           helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo add trino https://trinodb.github.io/charts
           helm dependency build helm/sus-nexus
       - name: helm lint + template (umbrella, dev/hml/prod)
         run: |
@@ -346,12 +354,66 @@ jobs:
       - name: compose — scripts e YAML
         run: |
           bash -n compose/kafka/create-topics.sh compose/debezium/register-outbox-connector.sh compose/postgres/init/01-databases.sh
+          bash -n compose/postgres/init/02-lakehouse.sh compose/kafka-connect/register-iceberg-sink.sh compose/trino/bootstrap-lakehouse.sh
+          DRY_RUN=true bash compose/kafka-connect/register-iceberg-sink.sh >/dev/null
+          python3 -c "import json; json.load(open('compose/trino/rules.json')); json.load(open('compose/metabase/sala-de-situacao.json'))"
+          DRY_RUN=true python3 compose/metabase/provision.py compose/metabase/sala-de-situacao.json
           sh -n compose/minio/init.sh
           DRY_RUN=true KAFKA_TOPICS_CMD=echo bash compose/kafka/create-topics.sh | grep -c '^>>'
       - uses: actions/upload-artifact@v4
         with:
           name: rendered-manifests
           path: sus-nexus/platform/rendered
+          retention-days: 7
+
+  # ------------------------------------------------------------------------------------------------
+  # Camada analítica (Fase 4): dbt em DuckDB com bronze sintético (fixtures validadas contra os contratos)
+  data:
+    name: data (dbt duckdb, sqlfluff)
+    needs: changes
+    if: needs.changes.outputs.data == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults: { run: { working-directory: sus-nexus/data/dbt } }
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/sus-nexus/data/dbt
+      DBT_CITIZEN_KEY_SALT: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: sus-nexus/data/requirements.txt
+      - name: instalar dbt-duckdb, sqlfluff
+        run: pip install -r ../requirements.txt
+      - name: gerar fixtures (eventos sintéticos validados contra contracts/events)
+        run: python ci/generate_fixtures.py --anchor now
+      - name: carregar bronze no DuckDB
+        run: python ci/load_bronze_duckdb.py
+      - run: dbt deps
+      - name: dbt build (DuckDB)
+        run: dbt build --profile duckdb --target ci
+      - name: dbt source freshness
+        run: dbt source freshness --profile duckdb --target ci
+      - name: produção ausente (modelo tolerante materializa vazio)
+        run: |
+          python ci/generate_fixtures.py --anchor now --no-production --out /tmp/fx-np
+          python ci/load_bronze_duckdb.py --fixtures /tmp/fx-np --db /tmp/np.duckdb
+          DBT_DUCKDB_PATH=/tmp/np.duckdb dbt build --profile duckdb --target ci --target-path /tmp/np-target
+      - name: sqlfluff lint (dialeto trino)
+        run: sqlfluff lint models tests
+      - name: dbt docs (artefatos para OpenMetadata)
+        run: dbt docs generate --profile duckdb --target ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dbt-artifacts
+          path: |
+            sus-nexus/data/dbt/target/manifest.json
+            sus-nexus/data/dbt/target/catalog.json
+            sus-nexus/data/dbt/target/run_results.json
+          if-no-files-found: ignore
           retention-days: 7
 
   # ------------------------------------------------------------------------------------------------
@@ -536,7 +598,7 @@ jobs:
   # ------------------------------------------------------------------------------------------------
   ci-ok:
     name: ci ok
-    needs: [changes, contracts, core, fhir, connectors, web, policies, ai, platform, security]
+    needs: [changes, contracts, core, fhir, connectors, web, policies, ai, platform, data, security]
     if: always()
     runs-on: ubuntu-latest
     steps:

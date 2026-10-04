@@ -331,6 +331,20 @@ cnpg:
       owner: apicurio
       instances: 2
       storageSize: 10Gi
+    # Catálogo JDBC do Apache Iceberg (lakehouse — Fase 4). Tabelas de metadados criadas no bootstrap
+    # (o Trino exige que existam; schema V1 = com views). Ligue junto com `lakehouse.enabled`.
+    lakehouse-db:
+      enabled: false
+      database: iceberg_catalog
+      owner: iceberg
+      instances: 2
+      storageSize: 10Gi
+      extensions: [pg_stat_statements]
+      postInitSQL:
+        - CREATE TABLE IF NOT EXISTS iceberg_tables (catalog_name VARCHAR(255) NOT NULL, table_namespace VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, metadata_location VARCHAR(1000), previous_metadata_location VARCHAR(1000), iceberg_type VARCHAR(5), PRIMARY KEY (catalog_name, table_namespace, table_name));
+        - CREATE TABLE IF NOT EXISTS iceberg_namespace_properties (catalog_name VARCHAR(255) NOT NULL, namespace VARCHAR(255) NOT NULL, property_key VARCHAR(255), property_value VARCHAR(1000), PRIMARY KEY (catalog_name, namespace, property_key));
+        - ALTER TABLE iceberg_tables OWNER TO iceberg;
+        - ALTER TABLE iceberg_namespace_properties OWNER TO iceberg;
 
 strimzi:
   enabled: false
@@ -445,6 +459,122 @@ redis:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { cpu: "1", memory: 1280Mi }
+
+# ----------------------------------------------------------------------------------------------------
+# Lakehouse (Fase 4 — PLANO 10, ADR-015): tópicos de domínio sus.* → Kafka Connect Iceberg sink →
+# tabelas bronze.events_<domínio> (Iceberg; catálogo JDBC no lakehouse-db; dados no MinIO bucket lakehouse)
+# → dbt (sus-nexus/data/dbt) → Trino → Metabase/Superset. Requer strimzi + kafkaConnect + minio +
+# cnpg.clusters.lakehouse-db. A imagem kafkaConnect.image já inclui o plugin do Iceberg sink.
+# Segredos no OpenBao: <env>/data/lakehouse-db (username/password), <env>/data/lakehouse-s3 (access_key/secret_key).
+# ----------------------------------------------------------------------------------------------------
+lakehouse:
+  enabled: false
+  bucket: lakehouse
+  warehouse: s3://lakehouse/warehouse
+  s3Endpoint: https://minio.data.svc.cluster.local
+  catalog:
+    name: iceberg                  # catalog_name no JDBC (igual ao iceberg.jdbc-catalog.catalog-name do Trino)
+    jdbcUrl: jdbc:postgresql://lakehouse-db-rw.data.svc.cluster.local:5432/iceberg_catalog?sslmode=require
+  connector:
+    name: bronze-iceberg-sink
+    tasksMax: 2
+    commitIntervalMs: 60000
+    controlTopic: _connect.iceberg-control
+    controlGroupPrefix: cg-control-
+    transactionalPrefix: iceberg-bronze-
+    # tópicos de domínio sus.* exceto ingestão, DLQ e auditoria (e sem os tópicos .retry.N)
+    topicsRegex: '^sus\.(?!ingest\.|dlq\.|audit\.)[a-z][a-z-]*(\.[a-z][a-z-]*)?\.v[0-9]+$'
+    # uma tabela bronze por domínio; roteamento por event_type = sus.<domínio>.*
+    domains: [identity, aps, schedule, regulation, exam, hospital, careplan, caregap, task, production, communication, consent, integration]
+  bootstrap:
+    # Job (hook pós-sync) que cria schemas/tabelas bronze via Trino (files/bronze-ddl.sql). Requer trino.enabled.
+    enabled: true
+    image: trinodb/trino:476
+
+# Trino — chart oficial (dependência, https://trinodb.github.io/charts). Valores repassados integralmente.
+# Catálogos: iceberg (JDBC + MinIO) e postgresql (réplica de leitura do core, usuário analytics_ro).
+# Regras de acesso: files/trino-rules.json (cópia de compose/trino/rules.json; helm/scripts/sync-lakehouse-files.sh)
+# montadas pelo ConfigMap trino-access-rules (templates/lakehouse-trino.yaml). Credenciais: ExternalSecret
+# trino-lakehouse-credentials (OpenBao <env>/data/lakehouse-db, lakehouse-s3, core-db-analytics-ro).
+trino:
+  enabled: false
+  fullnameOverride: trino
+  image:
+    tag: "476"
+  server:
+    workers: 2
+    node:
+      environment: sus_nexus
+    config:
+      query:
+        maxMemory: 8GB
+  coordinator:
+    jvm: { maxHeapSize: 6G }
+    resources:
+      requests: { cpu: "1", memory: 8Gi }
+      limits: { cpu: "4", memory: 8Gi }
+  worker:
+    jvm: { maxHeapSize: 12G }
+    resources:
+      requests: { cpu: "2", memory: 16Gi }
+      limits: { cpu: "6", memory: 16Gi }
+  envFrom:
+    - secretRef:
+        name: trino-lakehouse-credentials
+  catalogs:
+    iceberg: |
+      connector.name=iceberg
+      iceberg.catalog.type=jdbc
+      iceberg.jdbc-catalog.catalog-name=iceberg
+      iceberg.jdbc-catalog.driver-class=org.postgresql.Driver
+      iceberg.jdbc-catalog.connection-url=jdbc:postgresql://lakehouse-db-rw.data.svc.cluster.local:5432/iceberg_catalog?sslmode=require
+      iceberg.jdbc-catalog.connection-user=${ENV:ICEBERG_CATALOG_USER}
+      iceberg.jdbc-catalog.connection-password=${ENV:ICEBERG_CATALOG_PASSWORD}
+      iceberg.jdbc-catalog.default-warehouse-dir=s3://lakehouse/warehouse
+      iceberg.jdbc-catalog.schema-version=V1
+      iceberg.file-format=PARQUET
+      iceberg.compression-codec=ZSTD
+      iceberg.unique-table-location=true
+      fs.native-s3.enabled=true
+      s3.endpoint=https://minio.data.svc.cluster.local
+      s3.region=us-east-1
+      s3.path-style-access=true
+      s3.aws-access-key=${ENV:LAKEHOUSE_S3_ACCESS_KEY}
+      s3.aws-secret-key=${ENV:LAKEHOUSE_S3_SECRET_KEY}
+    postgresql: |
+      connector.name=postgresql
+      connection-url=jdbc:postgresql://core-db-ro.data.svc.cluster.local:5432/sus_nexus_core?sslmode=require&readOnly=true&ApplicationName=trino-analytics
+      connection-user=${ENV:CORE_REPLICA_USER}
+      connection-password=${ENV:CORE_REPLICA_PASSWORD}
+  accessControl:
+    type: properties
+    properties: |
+      access-control.name=file
+      security.config-file=/etc/trino/access-rules/rules.json
+      security.refresh-period=60s
+  configMounts:
+    - name: trino-access-rules
+      configMap: trino-access-rules
+      path: /etc/trino/access-rules/rules.json
+      subPath: rules.json
+  # Grupos (rules.json): admins, pipeline (dbt, openmetadata), analysts, analytics_identified, bi, gestor_<tenant>.
+  # Em hml/prod use auth OAuth2/JWT (Keycloak) ou LDAP e um group provider corporativo.
+  auth:
+    groups: |-
+      admins:admin
+      pipeline:dbt,openmetadata
+      analysts:analista
+      analytics_identified:busca.ativa
+      bi:metabase,superset,ai-bi-agent
+      gestor_ibge_3143302:gestor
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    seccompProfile: { type: RuntimeDefault }
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities: { drop: [ALL] }
 
 # ----------------------------------------------------------------------------------------------------
 # Segurança

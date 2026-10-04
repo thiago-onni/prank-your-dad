@@ -1,0 +1,44 @@
+version: 2
+
+seeds:
+  - name: seed_competencias
+    description: Calendário de competências (AAAAMM) com início, fim e prazo de envio da produção.
+    config:
+      column_types:
+        competencia: varchar
+        inicio: date
+        fim: date
+        prazo_envio: date
+        descricao: varchar
+    columns:
+      - name: competencia
+        data_tests: [unique, not_null]
+
+  - name: seed_metas_indicadores
+    description: >
+      Metas de exemplo por indicador (pactuar com a gestão na Fase 0 — PLANO 10.2). `direction` define se o
+      indicador melhora para cima (maior_melhor) ou para baixo (menor_melhor).
+    config:
+      column_types:
+        indicator_code: varchar
+        indicator_name: varchar
+        unit: varchar
+        direction: varchar
+        target: double
+        source_fact: varchar
+        periodicity: varchar
+        owner: varchar
+        reference: varchar
+    columns:
+      - name: indicator_code
+        data_tests: [unique, not_null]
+      - name: direction
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [maior_melhor, menor_melhor]
+      - name: unit
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [proporcao, dias, horas, contagem]

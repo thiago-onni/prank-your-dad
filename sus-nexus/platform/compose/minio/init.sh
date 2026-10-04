@@ -8,6 +8,7 @@
 #   backups        backups CNPG/WAL (versionado)
 #   audit-archive  arquivo WORM de auditoria — criado com Object Lock; em dev usa GOVERNANCE para permitir limpeza.
 #                  Em hml/prod: COMPLIANCE (ver platform/terraform/modules/storage e helm minio Tenant).
+#   lakehouse      tabelas Apache Iceberg (bronze/silver/gold) — Kafka Connect Iceberg sink + Trino (Fase 4)
 set -eu
 
 MINIO_URL="${MINIO_URL:-http://minio:9000}"
@@ -37,6 +38,7 @@ mk documents ""
 mk exports ""
 mk backups ""
 mk audit-archive "--with-lock"
+mk lakehouse ""
 
 mc version enable "$ALIAS/raw-zone" >/dev/null
 mc version enable "$ALIAS/backups" >/dev/null
@@ -74,6 +76,23 @@ EOF
 mc admin policy create "$ALIAS" sus-app /tmp/sus-app-policy.json >/dev/null 2>&1 || true
 mc admin user add "$ALIAS" "${SUS_S3_ACCESS_KEY:-sus-app}" "${SUS_S3_SECRET_KEY:-sus-app-secret}" >/dev/null 2>&1 || true
 mc admin policy attach "$ALIAS" sus-app --user "${SUS_S3_ACCESS_KEY:-sus-app}" >/dev/null 2>&1 || true
+
+# Usuário do lakehouse (Kafka Connect Iceberg sink + Trino): somente o bucket lakehouse
+cat > /tmp/sus-lakehouse-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketLocation", "s3:ListBucket", "s3:ListBucketMultipartUploads", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"],
+      "Resource": ["arn:aws:s3:::lakehouse", "arn:aws:s3:::lakehouse/*"]
+    }
+  ]
+}
+EOF
+mc admin policy create "$ALIAS" sus-lakehouse /tmp/sus-lakehouse-policy.json >/dev/null 2>&1 || true
+mc admin user add "$ALIAS" "${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}" "${LAKEHOUSE_S3_SECRET_KEY:-sus-lakehouse-secret}" >/dev/null 2>&1 || true
+mc admin policy attach "$ALIAS" sus-lakehouse --user "${LAKEHOUSE_S3_ACCESS_KEY:-sus-lakehouse}" >/dev/null 2>&1 || true
 
 echo ">> buckets:"
 mc ls "$ALIAS"

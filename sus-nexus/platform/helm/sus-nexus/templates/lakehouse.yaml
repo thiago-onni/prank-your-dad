@@ -1,0 +1,137 @@
+{{- if and .Values.lakehouse.enabled .Values.strimzi.enabled .Values.kafkaConnect.enabled }}
+{{- $ns := .Values.strimzi.namespace | default (include "umbrella.ns.data" .) }}
+{{- $cluster := .Values.strimzi.clusterName }}
+{{- $lh := .Values.lakehouse }}
+# Lakehouse — ingestão bronze: Kafka Connect Iceberg sink no cluster sus-connect (mesma configuração de
+# platform/compose/kafka-connect/iceberg-sink-bronze.json). Tabelas bronze criadas antes pelo Job
+# lakehouse-bootstrap (templates/lakehouse-trino.yaml); auto-create desligado.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: lakehouse-connect-credentials
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: {{ .Values.global.secretStore.name }}
+    kind: {{ .Values.global.secretStore.kind }}
+  target:
+    name: lakehouse-connect-credentials
+  data:
+    - secretKey: catalog_user
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-db", property: username }
+    - secretKey: catalog_password
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-db", property: password }
+    - secretKey: s3_access_key
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-s3", property: access_key }
+    - secretKey: s3_secret_key
+      remoteRef: { key: "{{ .Values.global.environment }}/data/lakehouse-s3", property: secret_key }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sus-connect-lakehouse-secret-reader
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [lakehouse-connect-credentials]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sus-connect-lakehouse-secret-reader
+  namespace: {{ $ns }}
+  labels:
+    {{- include "umbrella.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: sus-connect-connect
+    namespace: {{ $ns }}
+roleRef:
+  kind: Role
+  name: sus-connect-lakehouse-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Tópico de controle do Iceberg sink (coordenação de commits entre tasks)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: connect-iceberg-control
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: {{ $cluster }}
+    {{- include "umbrella.labels" . | nindent 4 }}
+spec:
+  topicName: {{ $lh.connector.controlTopic }}
+  partitions: 1
+  replicas: {{ .Values.strimzi.topicReplication }}
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: {{ .Values.strimzi.topicMinInsyncReplicas | quote }}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: {{ $lh.connector.name }}
+  namespace: {{ $ns }}
+  labels:
+    strimzi.io/cluster: sus-connect
+    {{- include "umbrella.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  class: org.apache.iceberg.connect.IcebergSinkConnector
+  tasksMax: {{ $lh.connector.tasksMax }}
+  autoRestart:
+    enabled: true
+    maxRestarts: 10
+  config:
+    topics.regex: {{ $lh.connector.topicsRegex | quote }}
+    key.converter: org.apache.kafka.connect.storage.StringConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: false
+    header.converter: org.apache.kafka.connect.storage.SimpleHeaderConverter
+    consumer.override.auto.offset.reset: earliest
+    transforms: kafkaMetadata
+    transforms.kafkaMetadata.type: org.apache.iceberg.connect.transforms.KafkaMetadataTransform
+    iceberg.tables: {{ range $i, $d := $lh.connector.domains }}{{ if $i }},{{ end }}bronze.events_{{ $d }}{{ end }}
+    iceberg.tables.route-field: event_type
+    {{- range $d := $lh.connector.domains }}
+    iceberg.table.bronze.events_{{ $d }}.route-regex: {{ printf "sus\\.%s\\..+" $d | quote }}
+    {{- end }}
+    iceberg.tables.dynamic-enabled: false
+    iceberg.tables.auto-create-enabled: false
+    iceberg.tables.evolve-schema-enabled: false
+    iceberg.tables.schema-case-insensitive: true
+    iceberg.tables.write-props.write.format.default: parquet
+    iceberg.tables.write-props.write.parquet.compression-codec: zstd
+    iceberg.control.topic: {{ $lh.connector.controlTopic }}
+    iceberg.control.group-id-prefix: {{ $lh.connector.controlGroupPrefix }}
+    iceberg.control.commit.interval-ms: {{ $lh.connector.commitIntervalMs }}
+    iceberg.coordinator.transactional.prefix: {{ $lh.connector.transactionalPrefix }}
+    iceberg.catalog: {{ $lh.catalog.name }}
+    iceberg.catalog.catalog-impl: org.apache.iceberg.jdbc.JdbcCatalog
+    iceberg.catalog.uri: {{ $lh.catalog.jdbcUrl | quote }}
+    iceberg.catalog.jdbc.user: ${secrets:{{ $ns }}/lakehouse-connect-credentials:catalog_user}
+    iceberg.catalog.jdbc.password: ${secrets:{{ $ns }}/lakehouse-connect-credentials:catalog_password}
+    iceberg.catalog.jdbc.schema-version: V1
+    iceberg.catalog.warehouse: {{ $lh.warehouse }}
+    iceberg.catalog.io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    iceberg.catalog.s3.endpoint: {{ $lh.s3Endpoint }}
+    iceberg.catalog.s3.path-style-access: true
+    iceberg.catalog.s3.access-key-id: ${secrets:{{ $ns }}/lakehouse-connect-credentials:s3_access_key}
+    iceberg.catalog.s3.secret-access-key: ${secrets:{{ $ns }}/lakehouse-connect-credentials:s3_secret_key}
+    iceberg.catalog.client.region: us-east-1
+    errors.tolerance: all
+    errors.log.enable: true
+    errors.log.include.messages: false
+    errors.deadletterqueue.topic.name: sus.dlq.v1
+    errors.deadletterqueue.context.headers.enable: true
+    errors.deadletterqueue.topic.replication.factor: {{ .Values.strimzi.topicReplication }}
+{{- end }}
