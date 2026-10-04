@@ -4,7 +4,18 @@ import type {
   AppointmentStatus,
   ApprovalStatus,
   AutonomyLevel,
+  CareGapKind,
+  CareGapResolution,
+  CarePlanItemKind,
+  CarePlanItemStatus,
+  CarePlanOriginKind,
+  CarePlanStatus,
   ConnectorHealth,
+  DischargeFollowupOutcome,
+  FollowupStatus,
+  HospitalEpisodeClass,
+  HospitalEpisodeStatus,
+  HospitalRiskLevel,
   Domain,
   ExamIssue,
   ExamOrderStatus,
@@ -12,6 +23,9 @@ import type {
   IdentityConfidence,
   IntegrationMessageStatus,
   MergeCaseStatus,
+  ProtocolItemPriority,
+  ProtocolStatus,
+  ProtocolTransitionAction,
   Purpose,
   RegistrationState,
   RegulationIssueFilter,
@@ -370,4 +384,181 @@ export const toolCallStatusLabels: Record<
   denied: { label: 'Negada pelo OPA', tone: 'danger' },
   requires_approval: { label: 'Aguardando aprovação', tone: 'warning' },
   error: { label: 'Erro', tone: 'danger' },
+};
+
+// ---------- hospital (visão da APS) ----------
+
+export const hospitalEpisodeStatusLabels: Record<
+  HospitalEpisodeStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  admitted: { label: 'Internado', tone: 'info' },
+  in_progress: { label: 'Em atendimento', tone: 'info' },
+  transferred: { label: 'Transferido', tone: 'warning' },
+  discharged: { label: 'Alta', tone: 'success' },
+  deceased: { label: 'Óbito', tone: 'neutral' },
+  cancelled: { label: 'Cancelado', tone: 'neutral' },
+};
+
+export const hospitalEpisodeClassLabels: Record<HospitalEpisodeClass, string> = {
+  inpatient: 'Internação',
+  emergency: 'Urgência/emergência',
+  observation: 'Observação',
+  day_hospital: 'Hospital-dia',
+};
+
+export const hospitalRiskLabels: Record<HospitalRiskLevel, { label: string; tone: BadgeTone }> = {
+  high: { label: 'Risco alto', tone: 'danger' },
+  medium: { label: 'Risco médio', tone: 'warning' },
+  low: { label: 'Risco baixo', tone: 'success' },
+};
+
+export const followupStatusLabels: Record<FollowupStatus, { label: string; tone: BadgeTone }> = {
+  pending: { label: 'Contato pendente', tone: 'warning' },
+  contacted: { label: 'Contato realizado', tone: 'success' },
+  scheduled: { label: 'Consulta agendada', tone: 'success' },
+  closed: { label: 'Encerrado', tone: 'neutral' },
+  escalated: { label: 'Escalonado', tone: 'danger' },
+};
+
+export const dischargeFollowupOutcomeLabels: Record<DischargeFollowupOutcome, string> = {
+  contact_made: 'Contato realizado',
+  appointment_scheduled: 'Consulta agendada na UBS',
+  deceased: 'Óbito',
+  moved: 'Mudou-se do território',
+  refused: 'Recusou acompanhamento',
+  not_found: 'Não localizado',
+};
+
+/** Destino na alta (`disposition`) — texto livre no contrato; rótulos dos valores conhecidos. */
+export const dischargeDispositionLabels: Record<string, string> = {
+  home: 'Domicílio',
+  home_with_care: 'Domicílio com cuidados',
+  transfer: 'Transferência',
+  against_advice: 'Alta a pedido',
+  deceased: 'Óbito',
+  other: 'Outro',
+};
+
+export const hospitalMovementLabels: Record<string, string> = {
+  admit: 'Admissão',
+  transfer: 'Transferência',
+  bed_change: 'Mudança de leito',
+  discharge: 'Alta',
+  death: 'Óbito',
+  cancel: 'Cancelamento',
+};
+
+export const admissionSourceLabels: Record<string, string> = {
+  emergency: 'Urgência',
+  regulation: 'Regulação',
+  transfer: 'Transferência',
+  elective: 'Eletiva',
+  other: 'Outra',
+};
+
+// ---------- plano de cuidado / lacunas / protocolos ----------
+
+/** Rótulos das linhas de cuidado conhecidas; demais valores são exibidos como vieram. */
+export const careLineLabels: Record<string, string> = {
+  pre_natal: 'Pré-natal',
+  hipertensao: 'Hipertensão',
+  diabetes: 'Diabetes',
+  saude_mental: 'Saúde mental',
+  pos_alta: 'Pós-alta',
+  puericultura: 'Puericultura',
+};
+
+export function careLineLabel(careLine: string): string {
+  return careLineLabels[careLine] ?? careLine;
+}
+
+export const carePlanStatusLabels: Record<CarePlanStatus, { label: string; tone: BadgeTone }> = {
+  active: { label: 'Ativo', tone: 'primary' },
+  on_hold: { label: 'Suspenso', tone: 'warning' },
+  completed: { label: 'Concluído', tone: 'success' },
+  cancelled: { label: 'Cancelado', tone: 'neutral' },
+};
+
+export const carePlanItemStatusLabels: Record<
+  CarePlanItemStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  planned: { label: 'Previsto', tone: 'neutral' },
+  scheduled: { label: 'Agendado', tone: 'info' },
+  done: { label: 'Realizado', tone: 'success' },
+  missed: { label: 'Não realizado', tone: 'danger' },
+  cancelled: { label: 'Cancelado', tone: 'neutral' },
+};
+
+export const carePlanItemKindLabels: Record<CarePlanItemKind, string> = {
+  consultation: 'Consulta',
+  exam: 'Exame',
+  vaccine: 'Vacina',
+  return: 'Retorno',
+  home_visit: 'Visita domiciliar',
+  procedure: 'Procedimento',
+  education: 'Ação educativa',
+  other: 'Outro',
+};
+
+export const carePlanOriginLabels: Record<CarePlanOriginKind, string> = {
+  professional: 'Profissional',
+  rule: 'Regra',
+  workflow: 'Fluxo',
+  hospital_discharge: 'Alta hospitalar',
+};
+
+export const careGapKindLabels: Record<CareGapKind, string> = {
+  consultation_overdue: 'Consulta em atraso',
+  exam_overdue: 'Exame em atraso',
+  vaccine_overdue: 'Vacina em atraso',
+  return_overdue: 'Retorno em atraso',
+  no_contact: 'Sem contato',
+  lost_to_followup: 'Perda de seguimento',
+  post_discharge_no_contact: 'Pós-alta sem contato',
+};
+
+export const careGapResolutionLabels: Record<CareGapResolution, string> = {
+  performed: 'Realizado',
+  scheduled: 'Agendado',
+  contact_made: 'Contato realizado',
+  refused: 'Recusou',
+  moved: 'Mudou-se',
+  deceased: 'Óbito',
+  not_found: 'Não localizado',
+  cancelled: 'Cancelado (não se aplica)',
+};
+
+export const protocolStatusLabels: Record<ProtocolStatus, { label: string; tone: BadgeTone }> = {
+  draft: { label: 'Rascunho', tone: 'neutral' },
+  in_review: { label: 'Em revisão', tone: 'warning' },
+  approved: { label: 'Aprovada', tone: 'info' },
+  active: { label: 'Vigente', tone: 'success' },
+  revoked: { label: 'Revogada', tone: 'neutral' },
+};
+
+export const protocolItemPriorityLabels: Record<
+  ProtocolItemPriority,
+  { label: string; tone: BadgeTone }
+> = {
+  low: { label: 'Baixa', tone: 'neutral' },
+  medium: { label: 'Média', tone: 'info' },
+  high: { label: 'Alta', tone: 'warning' },
+  urgent: { label: 'Urgente', tone: 'danger' },
+};
+
+export const protocolTransitionLabels: Record<ProtocolTransitionAction, string> = {
+  submit: 'Enviar para revisão',
+  approve: 'Aprovar',
+  activate: 'Ativar',
+  revoke: 'Revogar',
+};
+
+/** Próxima ação do ciclo de aprovação a partir do status atual (ou `undefined`). */
+export const PROTOCOL_NEXT_ACTION: Partial<Record<ProtocolStatus, ProtocolTransitionAction>> = {
+  draft: 'submit',
+  in_review: 'approve',
+  approved: 'activate',
+  active: 'revoke',
 };

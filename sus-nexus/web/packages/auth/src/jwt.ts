@@ -32,3 +32,28 @@ export function extractRoles(payload: Record<string, unknown>, clientId?: string
   }
   return [...roles];
 }
+
+export interface UserScope {
+  cnes?: string[];
+  teams?: string[];
+  microareas?: string[];
+}
+
+function stringList(value: unknown): string[] | undefined {
+  if (typeof value === 'string') return value ? [value] : undefined;
+  if (!Array.isArray(value)) return undefined;
+  const list = value.filter((v): v is string => typeof v === 'string' && v.length > 0);
+  return list.length > 0 ? list : undefined;
+}
+
+/** Lotação (claims `cnes`, `teams`, `microareas`) — somente para usabilidade na UI. */
+export function extractScope(payload: Record<string, unknown>): UserScope {
+  const scope: UserScope = {};
+  const cnes = stringList(payload.cnes);
+  const teams = stringList(payload.teams);
+  const microareas = stringList(payload.microareas);
+  if (cnes) scope.cnes = cnes;
+  if (teams) scope.teams = teams;
+  if (microareas) scope.microareas = microareas;
+  return scope;
+}

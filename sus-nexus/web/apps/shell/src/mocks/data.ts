@@ -21,7 +21,7 @@ import type {
  */
 
 // Gerador determinístico (mulberry32) para dados estáveis entre execuções.
-function rng(seed: number) {
+export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

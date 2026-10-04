@@ -10,6 +10,10 @@ export const ROLES = {
   GESTOR: 'gestor',
   DPO: 'dpo',
   ADMIN: 'admin',
+  /** Papéis do realm Keycloak (`platform/compose/keycloak`). */
+  PROFISSIONAL_APS: 'profissional_aps',
+  PROFISSIONAL_HOSPITALAR: 'profissional_hospitalar',
+  ADMIN_MUNICIPAL: 'admin_municipal',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -20,6 +24,13 @@ export interface SessionUser {
   email?: string;
   /** `municipality_id` do token (tenant). */
   municipalityId?: string;
+  /**
+   * Lotação do usuário (claims `cnes`, `teams`, `microareas` do token). Usada apenas para
+   * filtros padrão na UI (ex.: UBS de referência, microárea do ACS) — o escopo real é do OPA.
+   */
+  cnes?: string[];
+  teams?: string[];
+  microareas?: string[];
 }
 
 /** Sessão visível ao navegador — nunca contém tokens. */

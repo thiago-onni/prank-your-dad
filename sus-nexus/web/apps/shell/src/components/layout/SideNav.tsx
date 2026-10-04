@@ -12,6 +12,8 @@ import {
   Gauge,
   HeartPulse,
   Home,
+  Hospital,
+  ScrollText,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -31,6 +33,8 @@ const icons: Record<string, LucideIcon> = {
   '/producao': Briefcase,
   '/agentes': Bot,
   '/situacao': Activity,
+  '/hospital': Hospital,
+  '/admin/protocolos': ScrollText,
 };
 
 export function SideNav({ onNavigate }: { onNavigate?: () => void }) {

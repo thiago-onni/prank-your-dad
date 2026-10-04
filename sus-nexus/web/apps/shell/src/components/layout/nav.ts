@@ -9,8 +9,10 @@ export interface NavItem {
   description: string;
 }
 
-/** Papéis clínicos da APS ("profissional_aps" no PLANO = enfermagem + médico). */
-export const APS_ROLES = [ROLES.ACS, ROLES.ENFERMAGEM, ROLES.MEDICO];
+/** Papéis clínicos da APS ("profissional_aps" no realm = enfermagem + médico no shell). */
+export const APS_ROLES = [ROLES.ACS, ROLES.ENFERMAGEM, ROLES.MEDICO, ROLES.PROFISSIONAL_APS];
+/** Gestão (admin municipal incluso). */
+export const MANAGER_ROLES = [ROLES.GESTOR, ROLES.ADMIN_MUNICIPAL];
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: t.nav.home, roles: [], description: 'Atalhos e visão geral' },
@@ -39,6 +41,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: 'Workbench de cuidado da equipe/UBS',
   },
   {
+    href: '/hospital',
+    label: t.nav.hospital,
+    roles: [ROLES.PROFISSIONAL_HOSPITALAR, ...APS_ROLES, ...MANAGER_ROLES],
+    description: 'Internações, altas, risco e contato pós-alta da população da UBS',
+  },
+  {
     href: '/regulacao',
     label: t.nav.regulation,
     roles: [ROLES.REGULADOR, ROLES.GESTOR],
@@ -61,6 +69,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: t.nav.agents,
     roles: [ROLES.GESTOR, ROLES.DPO, ROLES.ADMIN],
     description: 'Cockpit de agentes: execuções, aprovações e kill switch',
+  },
+  {
+    href: '/admin/protocolos',
+    label: t.nav.protocols,
+    roles: MANAGER_ROLES,
+    description: 'Protocolos de linha de cuidado: versões, casos de teste e aprovação',
   },
   {
     href: '/situacao',
@@ -86,6 +100,31 @@ export const HOME_SHORTCUTS: NavItem[] = [
   },
 ];
 
+/**
+ * Atalho principal por papel ("Para o seu papel" na Home). A ordem define a prioridade quando
+ * o usuário tem mais de um papel. Apenas usabilidade.
+ */
+export const FEATURED_SHORTCUTS: NavItem[] = [
+  {
+    href: '/hospital',
+    label: 'Internações e pós-alta',
+    roles: [ROLES.PROFISSIONAL_HOSPITALAR],
+    description: 'Episódios, risco de reinternação e contrarreferência',
+  },
+  {
+    href: '/cuidado?aba=busca-ativa',
+    label: 'Busca ativa',
+    roles: APS_ROLES,
+    description: 'Lacunas de cuidado abertas da sua microárea/equipe, por dias de atraso',
+  },
+  {
+    href: '/admin/protocolos',
+    label: 'Protocolos de cuidado',
+    roles: MANAGER_ROLES,
+    description: 'Novas versões, casos de teste e fluxo de aprovação',
+  },
+];
+
 function visible(items: NavItem[], roles: string[]): NavItem[] {
   const isAdmin = roles.includes(ROLES.ADMIN);
   return items.filter(
@@ -103,4 +142,9 @@ export function homeShortcuts(roles: string[]): NavItem[] {
     ...visible(NAV_ITEMS, roles).filter((i) => i.href !== '/'),
     ...visible(HOME_SHORTCUTS, roles),
   ];
+}
+
+/** Atalhos em destaque para os papéis do usuário (admin vê todos). */
+export function featuredShortcuts(roles: string[]): NavItem[] {
+  return visible(FEATURED_SHORTCUTS, roles);
 }

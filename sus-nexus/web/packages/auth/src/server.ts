@@ -4,7 +4,7 @@ import type { JWT } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import type KeycloakProvider from 'next-auth/providers/keycloak';
 import { readAuthEnv, type AuthEnv } from './config';
-import { decodeJwtPayload, extractRoles } from './jwt';
+import { decodeJwtPayload, extractRoles, extractScope, type UserScope } from './jwt';
 import { toPublicSession, type PublicSession, type ServerSession } from './types';
 
 declare module 'next-auth' {
@@ -12,7 +12,12 @@ declare module 'next-auth' {
     roles: string[];
     accessToken?: string;
     error?: string;
-    user: { id: string; name?: string | null; email?: string | null; municipalityId?: string };
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      municipalityId?: string;
+    } & UserScope;
   }
 }
 
@@ -24,6 +29,7 @@ declare module 'next-auth/jwt' {
     expiresAt?: number;
     roles?: string[];
     municipalityId?: string;
+    scope?: UserScope;
     sub?: string;
     error?: string;
   }
@@ -74,6 +80,7 @@ async function refreshAccessToken(token: JWT, env: AuthEnv): Promise<JWT> {
       idToken: data.id_token ?? token.idToken,
       expiresAt: Math.floor(Date.now() / 1000) + (data.expires_in ?? 300),
       roles: extractRoles(payload, env.keycloak.clientId),
+      scope: extractScope(payload),
       error: undefined,
     };
   } catch {
@@ -132,6 +139,7 @@ function buildKeycloakConfig(env: AuthEnv, Keycloak: typeof KeycloakProvider): N
             idToken: account.id_token,
             expiresAt: account.expires_at ?? Math.floor(Date.now() / 1000) + 300,
             roles: extractRoles(payload, env.keycloak.clientId),
+            scope: extractScope(payload),
             municipalityId:
               typeof payload.municipality_id === 'string' ? payload.municipality_id : undefined,
             sub: typeof payload.sub === 'string' ? payload.sub : token.sub,
@@ -149,6 +157,7 @@ function buildKeycloakConfig(env: AuthEnv, Keycloak: typeof KeycloakProvider): N
           ...session.user,
           id: token.sub ?? '',
           municipalityId: token.municipalityId,
+          ...token.scope,
         };
         return session;
       },
@@ -216,6 +225,9 @@ function createKeycloakAuth(env: AuthEnv): SusAuth {
         name: session.user.name ?? session.user.email ?? 'Usuário',
         email: session.user.email ?? undefined,
         municipalityId: session.user.municipalityId,
+        cnes: session.user.cnes,
+        teams: session.user.teams,
+        microareas: session.user.microareas,
       },
       roles: session.roles,
       expires: session.expires,
@@ -250,6 +262,9 @@ export function createMockSession(env: AuthEnv): ServerSession {
       name: env.mock.user,
       email: env.mock.email,
       municipalityId: env.mock.municipalityId,
+      cnes: env.mock.cnes,
+      teams: env.mock.teams,
+      microareas: env.mock.microareas,
     },
     roles: env.mock.roles,
     expires: new Date(Date.now() + 8 * 3600 * 1000).toISOString(),

@@ -32,4 +32,12 @@ export const coreKeys = {
   exams: () => [...coreKeys.all, 'exams'] as const,
   examOrders: (params: object) => [...coreKeys.exams(), 'orders', params] as const,
   examOrder: (id: string) => [...coreKeys.exams(), 'order', id] as const,
+  hospital: () => [...coreKeys.all, 'hospital'] as const,
+  hospitalEpisodes: (params: object) => [...coreKeys.hospital(), 'episodes', params] as const,
+  hospitalEpisode: (id: string) => [...coreKeys.hospital(), 'episode', id] as const,
+  careplan: () => [...coreKeys.all, 'careplan'] as const,
+  carePlans: (params: object) => [...coreKeys.careplan(), 'plans', params] as const,
+  carePlan: (id: string) => [...coreKeys.careplan(), 'plan', id] as const,
+  careGaps: (params: object) => [...coreKeys.careplan(), 'gaps', params] as const,
+  protocols: (params: object) => [...coreKeys.careplan(), 'protocols', params] as const,
 };

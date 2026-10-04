@@ -4,12 +4,27 @@ export interface AuthEnv {
   mode: AuthMode;
   secret: string;
   keycloak: { clientId: string; clientSecret: string; issuer: string };
-  mock: { user: string; email: string; roles: string[]; municipalityId: string };
+  mock: {
+    user: string;
+    email: string;
+    roles: string[];
+    municipalityId: string;
+    cnes: string[];
+    teams: string[];
+    microareas: string[];
+  };
   /** Cookies `Secure` (sempre em produção). */
   secureCookies: boolean;
 }
 
 export type EnvSource = Record<string, string | undefined>;
+
+function list(value: string): string[] {
+  return value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
 
 export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
   const mode: AuthMode = env.AUTH_MODE === 'mock' ? 'mock' : 'keycloak';
@@ -37,6 +52,9 @@ export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
         .map((r) => r.trim())
         .filter(Boolean),
       municipalityId: env.AUTH_MOCK_MUNICIPALITY ?? 'ibge_3143302',
+      cnes: list(env.AUTH_MOCK_CNES ?? '2126672'),
+      teams: list(env.AUTH_MOCK_TEAMS ?? ''),
+      microareas: list(env.AUTH_MOCK_MICROAREAS ?? ''),
     },
     secureCookies: isProd || env.AUTH_SECURE_COOKIES === 'true',
   };

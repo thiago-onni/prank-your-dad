@@ -4,8 +4,6 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import {
-  useCitizen,
-  useHealthUnits,
   useProviderCapacity,
   useRegulationRequest,
   type RegulationRequest,
@@ -15,7 +13,6 @@ import {
   Button,
   Card,
   CardHeader,
-  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -24,7 +21,6 @@ import {
   TableRow,
 } from '@sus-nexus/design-system';
 import {
-  CitizenHeader,
   TaskSLAIndicator,
   formatDateTime,
   regulationIssueKindLabels,
@@ -32,33 +28,13 @@ import {
   regulationPriorityLabels,
   regulationStatusLabels,
 } from '@sus-nexus/domain-components';
+import { CitizenBlock } from '@/components/CitizenBlock';
 import { PageHeader } from '@/components/PageHeader';
 import { PurposeRequired } from '@/components/PurposeRequired';
 import { QueryState } from '@/components/QueryState';
-import { describeError } from '@/lib/problem';
 import { t } from '@/i18n';
 import { AddIssueDialog } from './AddIssueDialog';
 import { slaTask } from './RegulationCockpit';
-
-function CitizenBlock({ citizenId }: { citizenId: string }) {
-  const citizen = useCitizen(citizenId);
-  const units = useHealthUnits({ limit: 100 });
-  if (citizen.isLoading) return <Skeleton className="h-32 w-full" label={t.app.loading} />;
-  if (citizen.error || !citizen.data) {
-    const { message } = describeError(citizen.error);
-    return (
-      <p role="alert" className="rounded-md border border-danger bg-danger-subtle p-3 text-sm">
-        {t.citizen.notFound} {message}
-      </p>
-    );
-  }
-  return (
-    <CitizenHeader
-      citizen={citizen.data}
-      healthUnitName={units.data?.items.find((u) => u.cnes === citizen.data.health_unit_cnes)?.name}
-    />
-  );
-}
 
 function StatusTimeline({ request }: { request: RegulationRequest }) {
   const history = [...(request.status_history ?? [])].sort((a, b) =>

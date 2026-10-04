@@ -28,6 +28,8 @@ export * from './hooks/reference';
 export * from './hooks/appointments';
 export * from './hooks/regulation';
 export * from './hooks/exams';
+export * from './hooks/hospital';
+export * from './hooks/careplans';
 export * from './ai/types';
 export {
   createAiClient,

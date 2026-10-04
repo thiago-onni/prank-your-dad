@@ -8,10 +8,24 @@ import { PurposeRequired } from '@/components/PurposeRequired';
 import { QueryState } from '@/components/QueryState';
 import { t } from '@/i18n';
 import { RevealIdentifierDialog } from './RevealIdentifierDialog';
+import { CarePlansTab } from './CarePlansTab';
 import { SummaryPanel } from './SummaryPanel';
 import { TimelineTab } from './TimelineTab';
 
-export function CitizenPage({ citizenId }: { citizenId: string }) {
+export const CITIZEN_TABS = ['resumo', 'timeline', 'plano'] as const;
+export type CitizenTab = (typeof CITIZEN_TABS)[number];
+
+export function isCitizenTab(value: unknown): value is CitizenTab {
+  return typeof value === 'string' && (CITIZEN_TABS as readonly string[]).includes(value);
+}
+
+export function CitizenPage({
+  citizenId,
+  initialTab = 'resumo',
+}: {
+  citizenId: string;
+  initialTab?: CitizenTab;
+}) {
   const query = useCitizen(citizenId);
   const units = useHealthUnits({ limit: 100 });
   const [revealTarget, setRevealTarget] = useState<MaskedIdentifier | null>(null);
@@ -44,16 +58,20 @@ export function CitizenPage({ citizenId }: { citizenId: string }) {
                 },
               ]}
             />
-            <Tabs defaultValue="resumo">
+            <Tabs defaultValue={initialTab}>
               <TabsList aria-label={t.citizen.title}>
                 <TabsTrigger value="resumo">{t.citizen.summary}</TabsTrigger>
                 <TabsTrigger value="timeline">{t.citizen.timeline}</TabsTrigger>
+                <TabsTrigger value="plano">{t.carePlan.tab}</TabsTrigger>
               </TabsList>
               <TabsContent value="resumo">
                 <SummaryPanel citizen={citizen} />
               </TabsContent>
               <TabsContent value="timeline">
                 <TimelineTab citizenId={citizen.id} />
+              </TabsContent>
+              <TabsContent value="plano">
+                <CarePlansTab citizen={citizen} />
               </TabsContent>
             </Tabs>
             <RevealIdentifierDialog

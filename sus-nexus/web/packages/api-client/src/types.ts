@@ -77,6 +77,52 @@ export type ExamCycleTimes = NonNullable<ExamOrder['cycle_times']>;
 export type ExamResultDocument =
   operations['getExamResultDocument']['responses'][200]['content']['application/json'];
 
+// ---------- hospital (HOS) ----------
+export type HospitalEpisode = Schemas['HospitalEpisode'];
+export type HospitalEpisodeStatus = Schemas['HospitalEpisodeStatus'];
+export type HospitalEpisodeClass = HospitalEpisode['episode_class'];
+export type HospitalRiskLevel = NonNullable<HospitalEpisode['risk_level']>;
+export type HospitalFollowup = NonNullable<HospitalEpisode['followup']>;
+export type HospitalMovement = NonNullable<HospitalEpisode['movements']>[number];
+export type FollowupStatus = NonNullable<
+  NonNullable<operations['listHospitalEpisodes']['parameters']['query']>['followup_status']
+>;
+export type DischargeFollowupInput = NonNullable<
+  operations['registerDischargeFollowup']['requestBody']
+>['content']['application/json'];
+export type DischargeFollowupOutcome = DischargeFollowupInput['outcome'];
+
+// ---------- plano de cuidado / lacunas / protocolos (CUI) ----------
+export type CarePlan = Schemas['CarePlan'];
+export type CarePlanItem = Schemas['CarePlanItem'];
+export type CarePlanCreate = Schemas['CarePlanCreate'];
+export type CarePlanStatus = CarePlan['status'];
+export type CarePlanItemStatus = CarePlanItem['status'];
+export type CarePlanItemKind = CarePlanItem['kind'];
+export type CarePlanOriginKind = NonNullable<NonNullable<CarePlan['origin']>['kind']>;
+export type CarePlanItemUpdate = NonNullable<
+  operations['updateCarePlanItem']['requestBody']
+>['content']['application/json'];
+export type CarePlanCloseInput = NonNullable<
+  operations['closeCarePlan']['requestBody']
+>['content']['application/json'];
+export type CareGap = Schemas['CareGap'];
+export type CareGapKind = Schemas['CareGapKind'];
+export type CareGapStatus = CareGap['status'];
+export type CareGapResolveInput = NonNullable<
+  operations['resolveCareGap']['requestBody']
+>['content']['application/json'];
+export type CareGapResolution = CareGapResolveInput['resolution'];
+export type Protocol = Schemas['Protocol'];
+export type ProtocolCreate = Schemas['ProtocolCreate'];
+export type ProtocolItemRule = Schemas['ProtocolItemRule'];
+export type ProtocolStatus = Protocol['status'];
+export type ProtocolItemPriority = NonNullable<ProtocolItemRule['priority']>;
+export type ProtocolTransitionInput = NonNullable<
+  operations['transitionProtocolVersion']['requestBody']
+>['content']['application/json'];
+export type ProtocolTransitionAction = ProtocolTransitionInput['action'];
+
 /** Página paginada por cursor opaco. */
 export interface Page<T> {
   items: T[];

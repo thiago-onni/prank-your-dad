@@ -20,6 +20,9 @@
         "AUTH_KEYCLOAK_ISSUER",
         "AUTH_MOCK_ROLES",
         "AUTH_MOCK_USER",
+        "AUTH_MOCK_CNES",
+        "AUTH_MOCK_TEAMS",
+        "AUTH_MOCK_MICROAREAS",
         "AUTH_URL",
         "CORE_API_URL",
         "NEXT_PUBLIC_API_MOCK"
