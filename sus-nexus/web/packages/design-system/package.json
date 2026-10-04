@@ -4,7 +4,9 @@
   "private": true,
   "description": "Design system do SUS Nexus — tokens inspirados no Padrão Digital de Governo e componentes acessíveis (Radix UI + Tailwind CSS 4)",
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/tokens.css"

@@ -19,6 +19,7 @@ export default tseslint.config(
       '**/next-env.d.ts',
       '**/public/mockServiceWorker.js',
       '**/.turbo/**',
+      '**/.storybook/**',
       '**/coverage/**',
     ],
   },
@@ -40,13 +41,20 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { attributes: false } }],
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
+      ],
       '@typescript-eslint/consistent-type-definitions': 'off',
       '@typescript-eslint/array-type': 'off',
       '@typescript-eslint/no-empty-function': 'off',
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
-      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true, allowBoolean: true }],
+      '@typescript-eslint/restrict-template-expressions': [
+        'error',
+        { allowNumber: true, allowBoolean: true },
+      ],
       '@typescript-eslint/no-unnecessary-type-parameters': 'off',
+      '@typescript-eslint/non-nullable-type-assertion-style': 'off',
     },
   },
   {
@@ -69,6 +77,7 @@ export default tseslint.config(
     rules: {
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
+      '@next/next/no-html-link-for-pages': 'off',
     },
   },
   {

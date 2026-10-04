@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@sus-nexus/design-system/styles.css';
+
+/* Tailwind 4 precisa enxergar as classes usadas pelos pacotes do monorepo. */
+@source '../../../../packages/design-system/src';
+@source '../../../../packages/domain-components/src';
